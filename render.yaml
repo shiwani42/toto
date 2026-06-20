@@ -1,0 +1,29 @@
+# Render Blueprint for Toto.
+# Pick "New" → "Blueprint" in the Render dashboard and choose this repo;
+# the dashboard reads this file and pre-fills the service config.
+
+services:
+  - type: web
+    name: toto
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+
+    envVars:
+      # We do NOT commit the license key. Render's UI prompts for the
+      # value during the first apply; it stays in Render, not in the repo.
+      - key: VITE_SCANDIT_LICENSE_KEY
+        sync: false
+
+    # SPA fallback: any unknown path serves /index.html, so query-string
+    # routes like /?screen=map keep working on direct loads.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    # Sensible cache headers for the hashed Vite assets.
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
