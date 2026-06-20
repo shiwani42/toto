@@ -484,15 +484,38 @@ button, .primary { font: inherit; cursor: pointer; }
 }
 
 .zone-row {
+  display: block;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px;
   box-shadow: var(--shadow-sm);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+.zone-row:active { transform: scale(0.99); }
+@media (hover: hover) {
+  .zone-row:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  }
 }
 .zone-row--first { border-color: var(--accent); background: var(--accent-bg); }
 
-.zone-row__head { display: flex; align-items: center; gap: 12px; }
+.zone-row__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.zone-row__chev {
+  margin-left: auto;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--muted-fg);
+  font-weight: 400;
+  flex-shrink: 0;
+}
 .zone-row__letter {
   width: 40px;
   height: 40px;
