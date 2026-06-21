@@ -130,65 +130,121 @@ export function renderPlan(root: HTMLElement) {
     extra: "",
   };
 
-  track("wizard_start", { initial_steps: 1 });
+  // Step-by-step wizard, but kept light: 4 short steps, all optional,
+  // visible progress and Back. The result UI further down is unchanged.
+  type Step = "activity" | "location" | "when" | "extra";
+  const STEPS: Step[] = ["activity", "location", "when", "extra"];
+  let stepIdx = 0;
+
+  track("wizard_start", { initial_steps: STEPS.length });
+
+  function advance() {
+    if (stepIdx >= STEPS.length - 1) {
+      const prefs = getPrefs();
+      track("wizard_complete", {
+        purpose: answers.purpose,
+        activity: answers.activity?.key ?? null,
+        gender: prefs.gender,
+        age: prefs.age,
+        experience: prefs.experience,
+        shopping_for: prefs.shoppingFor,
+        family_count: prefs.familyCount,
+        has_dates: Boolean(answers.startDate),
+        has_extra: answers.extra.length > 0,
+      });
+      runPlanner();
+      return;
+    }
+    stepIdx++;
+    render();
+  }
+  function back() {
+    if (stepIdx === 0) { window.location.href = "?screen=home"; return; }
+    stepIdx--;
+    render();
+  }
 
   function render() {
     const today = todayIso();
+    const step = STEPS[stepIdx];
+    const stepBody = step === "activity" ? `
+      <h1 class="wizard__q">${t("plan.q.activity")}</h1>
+      <div class="plan-one__chips" id="activity-chips">
+        ${ACTIVITY_OPTIONS.map((o) => `
+          <button class="plan-one__chip ${answers.activity?.key === o.key ? "plan-one__chip--on" : ""}"
+                  type="button" data-activity="${o.key}">${escapeHTML(o.label)}</button>
+        `).join("")}
+      </div>
+    ` : step === "location" ? `
+      <h1 class="wizard__q">${t("plan.q.location")}</h1>
+      <div class="loc-search">
+        <input id="loc-input" type="search" autocomplete="off" placeholder="Any place, anywhere…" />
+        <ul id="loc-results" class="loc-results"></ul>
+      </div>
+      <p class="plan-one__chosen" id="loc-chosen">${answers.location ? `✓ ${escapeHTML(answers.location)}` : ""}</p>
+    ` : step === "when" ? `
+      <h1 class="wizard__q">${t("plan.q.when")}</h1>
+      <div class="wizard__date-grid">
+        <label class="wizard__date-label">
+          <span>Start</span>
+          <input id="start-date" type="date" min="${today}" value="${answers.startDate ?? ""}" />
+        </label>
+        <label class="wizard__date-label">
+          <span>End <small class="muted">(optional)</small></span>
+          <input id="end-date" type="date" min="${today}" value="${answers.endDate ?? ""}" />
+        </label>
+      </div>
+      <p class="wizard__peek" id="peek"></p>
+    ` : /* extra */ `
+      <h1 class="wizard__q">${t("plan.q.purpose")}</h1>
+      <p class="tag">${t("plan.skip")}</p>
+      <textarea id="extra" rows="3" placeholder="'first time skiing', 'wife and two kids', 'I run hot'…">${escapeHTML(answers.extra)}</textarea>
+    `;
+
+    const isLast = stepIdx === STEPS.length - 1;
     root.innerHTML = `
       <main class="screen-plan plan-one">
+        <div class="plan-one__progress" aria-label="Step ${stepIdx + 1} of ${STEPS.length}">
+          ${STEPS.map((_, i) => `<span class="plan-one__dot ${i <= stepIdx ? "plan-one__dot--on" : ""}"></span>`).join("")}
+        </div>
         <header class="plan-one__head">
-          <a class="wizard__back" href="?screen=home" aria-label="Home">‹</a>
-          <h1>Plan a trip</h1>
-          <p class="tag">Tell me what you can. Skip anything you don't know.</p>
+          <button class="wizard__back" id="back" aria-label="Back">‹</button>
         </header>
-
-        <section class="plan-one__field">
-          <label class="plan-one__label">What kind of trip</label>
-          <div class="plan-one__chips" id="activity-chips">
-            ${ACTIVITY_OPTIONS.map((o) => `<button class="plan-one__chip" type="button" data-activity="${o.key}">${escapeHTML(o.label)}</button>`).join("")}
-          </div>
+        <section class="plan-one__step">
+          ${stepBody}
         </section>
-
-        <section class="plan-one__field">
-          <label class="plan-one__label" for="loc-input">Where to</label>
-          <div class="loc-search">
-            <input id="loc-input" type="search" autocomplete="off" placeholder="Any place, anywhere…" />
-            <ul id="loc-results" class="loc-results"></ul>
-          </div>
-          <p class="plan-one__chosen" id="loc-chosen"></p>
-        </section>
-
-        <section class="plan-one__field">
-          <label class="plan-one__label">When</label>
-          <div class="wizard__date-grid">
-            <label class="wizard__date-label">
-              <span>Start</span>
-              <input id="start-date" type="date" min="${today}" />
-            </label>
-            <label class="wizard__date-label">
-              <span>End <small class="muted">(optional)</small></span>
-              <input id="end-date" type="date" min="${today}" />
-            </label>
-          </div>
-          <p class="wizard__peek" id="peek"></p>
-        </section>
-
-        <section class="plan-one__field">
-          <label class="plan-one__label" for="extra">Anything else</label>
-          <textarea id="extra" rows="2" placeholder="In your own words. E.g. 'first time skiing', 'wife and two kids', 'I run hot'…"></textarea>
-        </section>
-
-        <button class="primary plan-one__go" id="plan-go">Show me what to bring</button>
-
-        <a class="link-btn plan-one__alt" href="?screen=browse">Or just browse the store ›</a>
+        <div class="plan-one__actions">
+          <button class="wizard__skip" id="skip" type="button">${t("plan.skip")}</button>
+          <button class="primary plan-one__go" id="next" type="button">
+            ${isLast ? t("plan.continue") : "Next ›"}
+          </button>
+        </div>
+        ${stepIdx === 0 ? `<a class="link-btn plan-one__alt" href="?screen=browse">Or just browse the store ›</a>` : ""}
       </main>
     `;
 
-    mountLocation();
-    wireActivityChips();
-    wireDates();
-    wireExtra();
-    wireSubmit();
+    // Wire step-specific behavior + nav buttons.
+    if (step === "activity") wireActivityChips();
+    if (step === "location") mountLocation();
+    if (step === "when")     wireDates();
+    if (step === "extra")    wireExtra();
+
+    (root.querySelector("#back")  as HTMLButtonElement).addEventListener("click", back);
+    (root.querySelector("#skip")  as HTMLButtonElement).addEventListener("click", advance);
+    (root.querySelector("#next")  as HTMLButtonElement).addEventListener("click", () => {
+      // Capture date / extra values at next-press if not already.
+      if (step === "when") {
+        const s = (root.querySelector("#start-date") as HTMLInputElement | null)?.value || null;
+        const e = (root.querySelector("#end-date")   as HTMLInputElement | null)?.value || null;
+        answers.startDate = s;
+        answers.endDate = e && (!s || e >= s) ? e : null;
+      }
+      if (step === "extra") {
+        const ex = (root.querySelector("#extra") as HTMLTextAreaElement | null)?.value.trim() ?? "";
+        answers.extra = ex;
+      }
+      advance();
+    });
   }
 
   function wireActivityChips() {
@@ -200,9 +256,8 @@ export function renderPlan(root: HTMLElement) {
       const found = ACTIVITY_OPTIONS.find((o) => o.key === key);
       if (!found) return;
       answers.activity = found;
-      host.querySelectorAll<HTMLButtonElement>("[data-activity]").forEach((b) => {
-        b.classList.toggle("plan-one__chip--on", b === btn);
-      });
+      // Auto-advance once the user picks a chip. Tap once, move on.
+      advance();
     });
   }
 
@@ -223,25 +278,6 @@ export function renderPlan(root: HTMLElement) {
   function wireExtra() {
     const el = root.querySelector("#extra") as HTMLTextAreaElement;
     el.addEventListener("input", () => { answers.extra = el.value.trim(); });
-  }
-
-  function wireSubmit() {
-    const btn = root.querySelector("#plan-go") as HTMLButtonElement;
-    btn.addEventListener("click", () => {
-      const prefs = getPrefs();
-      track("wizard_complete", {
-        purpose: answers.purpose,
-        activity: answers.activity?.key ?? null,
-        gender: prefs.gender,
-        age: prefs.age,
-        experience: prefs.experience,
-        shopping_for: prefs.shoppingFor,
-        family_count: prefs.familyCount,
-        has_dates: Boolean(answers.startDate),
-        has_extra: answers.extra.length > 0,
-      });
-      runPlanner();
-    });
   }
 
   // ─── Location autocomplete ─────────────────────────────────────────────────
@@ -286,16 +322,8 @@ export function renderPlan(root: HTMLElement) {
       if (!btn) return;
       try {
         const r = JSON.parse(btn.dataset.loc!) as Geocode;
-        // Store the plain name. Open-Meteo geocodes 'Chamonix' more reliably
-        // than 'Chamonix, Auvergne-Rhône-Alpes'.
         answers.location = r.name;
-        // Show what was picked, hide the dropdown, also fire weather peek
-        // if a start date is set.
-        const chosen = root.querySelector("#loc-chosen") as HTMLParagraphElement | null;
-        if (chosen) chosen.textContent = `✓ ${r.name}${r.country ? `, ${r.country}` : ""}`;
-        input.value = "";
-        list.innerHTML = "";
-        if (answers.startDate) runPeek(answers.startDate);
+        advance();
       } catch {
         return;
       }

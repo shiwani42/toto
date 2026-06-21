@@ -18,136 +18,130 @@ function escapeHTML(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
+// A small list of friendly host names. If the user doesn't type one, we
+// pick from these so the session immediately has personality.
+const FRIENDLY_NAMES = ["Alpine", "Trail", "Summit", "River", "Pine", "Fox", "Wren", "Wolf", "Cedar", "Stone"];
+function defaultName(): string {
+  const a = FRIENDLY_NAMES[Math.floor(Math.random() * FRIENDLY_NAMES.length)];
+  const b = Math.floor(Math.random() * 90 + 10);
+  return `${a} ${b}`;
+}
+
 export function renderConnect(root: HTMLElement) {
   const existing = loadSession();
-  const joinCode =
-    new URLSearchParams(location.search).get("code")?.toUpperCase() ?? "";
+  const initialCode = new URLSearchParams(location.search).get("code")?.toUpperCase() ?? "";
 
+  // Two simple choices. Tap one and the form for it slides in inline.
+  // Default mode is "family" — most realistic case for in-store shopping.
+  // The partner / at-home mode is reachable via a quiet toggle once you tap Start.
   root.innerHTML = `
     <header>
       <h1>${t("connect.title")}</h1>
     </header>
-    <main class="screen-connect">
+    <main class="screen-connect connect-v2">
       ${!supabaseConfigured ? `
-      <div class="alert-card alert-card--amber" style="margin-bottom:2px">
-        <p style="font-size:13px;font-weight:600;margin:0">Live sessions aren't available here yet.</p>
-      </div>
+        <div class="connect-v2__notice">${escapeHTML("Live sessions aren't available here yet.")}</div>
       ` : ""}
-      ${
-        existing
-          ? `
-        <div class="connect-banner">
-          You're in <strong>${escapeHTML(existing.code)}</strong> as
-          <strong>${escapeHTML(existing.me.emoji)} ${escapeHTML(existing.me.name)}</strong>
-          (${escapeHTML(existing.mode)})
-          <a class="primary" style="padding:8px 16px;font-size:13px" href="?screen=connected">Open ›</a>
-          <button class="link-btn" id="leave">Leave</button>
-        </div>
-      `
-          : ""
-      }
 
-      <section class="card-section">
-        <h2>${t("connect.start")}</h2>
-        <p class="tag">${t("connect.start.sub")}</p>
-        <div class="row-group">
-          <label>${t("connect.your_name")} <input id="create-name" type="text" placeholder="e.g. Shiwani" /></label>
-        </div>
-        <p class="section-label">Where is everyone?</p>
-        <div class="mode-cards">
-          <label class="mode-card mode-card--active" id="mode-family-card">
-            <input type="radio" name="mode" value="family" checked style="display:none" />
-            <span class="mode-card__icon">${icon("store", 22)}</span>
-            <span class="mode-card__title">${t("connect.mode.family")}</span>
-            <span class="mode-card__sub">${t("connect.mode.family.sub")}</span>
-          </label>
-          <label class="mode-card" id="mode-partner-card">
-            <input type="radio" name="mode" value="partner" style="display:none" />
-            <span class="mode-card__icon">${icon("home", 22)}</span>
-            <span class="mode-card__title">${t("connect.mode.partner")}</span>
-            <span class="mode-card__sub">${t("connect.mode.partner.sub")}</span>
-          </label>
-        </div>
-        <button id="create-btn" class="primary" style="margin-top:14px">${t("connect.start")}</button>
-      </section>
+      ${existing ? `
+        <a class="connect-v2__resume" href="?screen=connected">
+          <span class="connect-v2__resume-icon">${escapeHTML(existing.me.emoji)}</span>
+          <span class="connect-v2__resume-body">
+            <span class="connect-v2__resume-title">${escapeHTML(existing.me.name)}</span>
+            <span class="connect-v2__resume-sub">${escapeHTML(existing.code)}</span>
+          </span>
+          <span class="connect-v2__resume-cta">${t("home.banner.open")} ›</span>
+        </a>
+      ` : ""}
 
-      <section class="card-section">
-        <h2>${t("connect.join")}</h2>
-        <div class="row-group">
-          <label>${t("connected.code")} <input id="join-code" type="text" placeholder="${escapeHTML(t("connect.join.placeholder"))}" value="${escapeHTML(joinCode)}" autocapitalize="characters" /></label>
-          <label>${t("connect.your_name")} <input id="join-name" type="text" /></label>
-        </div>
-        <button id="join-btn" class="primary">${t("connect.join.btn")}</button>
-      </section>
+      <div class="connect-v2__choices">
+        <button type="button" class="connect-v2__choice" id="choice-start">
+          <span class="connect-v2__choice-icon">${icon("users", 28)}</span>
+          <span class="connect-v2__choice-title">${t("connect.start")}</span>
+        </button>
+        <button type="button" class="connect-v2__choice" id="choice-join">
+          <span class="connect-v2__choice-icon">${icon("compass", 28)}</span>
+          <span class="connect-v2__choice-title">${t("connect.join")}</span>
+        </button>
+      </div>
 
-      <a class="link-btn" href="?screen=list">${t("connect.back")}</a>
+      <div class="connect-v2__panel" id="start-panel" hidden>
+        <input id="create-name" class="connect-v2__input" type="text" placeholder="${escapeHTML(t("connect.your_name"))}" />
+        <div class="connect-v2__mode" id="mode-toggle">
+          <button type="button" class="connect-v2__mode-btn connect-v2__mode-btn--on" data-mode="family">
+            <span class="connect-v2__mode-icon">${icon("store", 18)}</span>
+            ${t("connect.mode.family")}
+          </button>
+          <button type="button" class="connect-v2__mode-btn" data-mode="partner">
+            <span class="connect-v2__mode-icon">${icon("home", 18)}</span>
+            ${t("connect.mode.partner")}
+          </button>
+        </div>
+        <button id="create-btn" class="primary connect-v2__go">${t("connect.start")}</button>
+      </div>
+
+      <div class="connect-v2__panel" id="join-panel" hidden>
+        <input id="join-code" class="connect-v2__input connect-v2__input--code" type="text"
+               placeholder="FAM-A4T7" autocapitalize="characters" maxlength="8"
+               value="${escapeHTML(initialCode)}" />
+        <button id="join-btn" class="primary connect-v2__go">${t("connect.join.btn")}</button>
+      </div>
+
+      <a class="link-btn connect-v2__back" href="?screen=list">${t("connect.back")}</a>
     </main>
   `;
 
+  const startPanel = root.querySelector("#start-panel") as HTMLDivElement;
+  const joinPanel = root.querySelector("#join-panel") as HTMLDivElement;
+  const choiceStart = root.querySelector("#choice-start") as HTMLButtonElement;
+  const choiceJoin = root.querySelector("#choice-join") as HTMLButtonElement;
   const createBtn = root.querySelector("#create-btn") as HTMLButtonElement;
   const joinBtn = root.querySelector("#join-btn") as HTMLButtonElement;
-  const leaveBtn = root.querySelector("#leave") as HTMLButtonElement | null;
-  const modeFamilyCard = root.querySelector("#mode-family-card") as HTMLLabelElement | null;
-  const modePartnerCard = root.querySelector("#mode-partner-card") as HTMLLabelElement | null;
 
-  // Mode card visual toggle (radio inputs are hidden)
-  function syncModeCards() {
-    const checked = (root.querySelector('input[name="mode"]:checked') as HTMLInputElement)?.value;
-    modeFamilyCard?.classList.toggle("mode-card--active", checked === "family");
-    modePartnerCard?.classList.toggle("mode-card--active", checked === "partner");
+  function openPanel(which: "start" | "join") {
+    startPanel.hidden = which !== "start";
+    joinPanel.hidden = which !== "join";
+    choiceStart.classList.toggle("connect-v2__choice--on", which === "start");
+    choiceJoin.classList.toggle("connect-v2__choice--on", which === "join");
+    const input = (which === "start" ? root.querySelector("#create-name") : root.querySelector("#join-code")) as HTMLInputElement | null;
+    input?.focus();
   }
-  modeFamilyCard?.addEventListener("click", () => { setTimeout(syncModeCards, 0); });
-  modePartnerCard?.addEventListener("click", () => { setTimeout(syncModeCards, 0); });
+  choiceStart.addEventListener("click", () => openPanel("start"));
+  choiceJoin.addEventListener("click", () => openPanel("join"));
+
+  // Mode toggle inside the start panel.
+  const modeToggle = root.querySelector("#mode-toggle") as HTMLDivElement;
+  modeToggle.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-mode]");
+    if (!btn) return;
+    modeToggle.querySelectorAll<HTMLButtonElement>("[data-mode]").forEach((b) => {
+      b.classList.toggle("connect-v2__mode-btn--on", b === btn);
+    });
+  });
 
   createBtn.addEventListener("click", () => {
-    if (!supabaseConfigured) {
-      alert("Live sessions aren't available here yet.");
-      return;
-    }
-    const name =
-      (root.querySelector("#create-name") as HTMLInputElement).value.trim() ||
-      "Host";
-    const mode =
-      ((root.querySelector('input[name="mode"]:checked') as HTMLInputElement)
-        ?.value as Mode) ?? "family";
+    if (!supabaseConfigured) { alert("Live sessions aren't available here yet."); return; }
+    const nameRaw = (root.querySelector("#create-name") as HTMLInputElement).value.trim();
+    const name = nameRaw || defaultName();
+    const activeMode = modeToggle.querySelector(".connect-v2__mode-btn--on") as HTMLButtonElement | null;
+    const mode: Mode = (activeMode?.dataset.mode as Mode) ?? "family";
     const code = newCode(mode === "family" ? "FAM" : "PAR");
-    saveSession({
-      code,
-      mode,
-      me: { id: randomId(), name, emoji: randomEmoji() },
-    });
+    saveSession({ code, mode, me: { id: randomId(), name, emoji: randomEmoji() } });
     location.href = "?screen=connected";
   });
 
   joinBtn.addEventListener("click", () => {
-    if (!supabaseConfigured) {
-      alert("Live sessions aren't available here yet.");
-      return;
-    }
-    let code = (
-      root.querySelector("#join-code") as HTMLInputElement
-    ).value
-      .trim()
-      .toUpperCase();
+    if (!supabaseConfigured) { alert("Live sessions aren't available here yet."); return; }
+    const code = (root.querySelector("#join-code") as HTMLInputElement).value.trim().toUpperCase();
     if (!/^(FAM|PAR)-[A-Z0-9]{4}$/.test(code)) {
-      alert("That code doesn't look right. It should be like FAM-A4T7 or PAR-J2KP.");
+      alert(t("connected.invalid_code"));
       return;
     }
-    const name =
-      (root.querySelector("#join-name") as HTMLInputElement).value.trim() ||
-      "Guest";
     const mode: Mode = code.startsWith("PAR") ? "partner" : "family";
-    saveSession({
-      code,
-      mode,
-      me: { id: randomId(), name, emoji: randomEmoji() },
-    });
+    saveSession({ code, mode, me: { id: randomId(), name: defaultName(), emoji: randomEmoji() } });
     location.href = "?screen=connected";
   });
 
-  leaveBtn?.addEventListener("click", () => {
-    if (!confirm("Leave this session? You can rejoin with the same code.")) return;
-    sessionStorage.removeItem("toto.session");
-    location.reload();
-  });
+  // If a deep-link arrived with ?code=... we auto-open the join panel.
+  if (initialCode) openPanel("join");
 }

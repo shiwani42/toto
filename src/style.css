@@ -98,9 +98,9 @@ a { color: inherit; }
 /* ─── Header ─────────────────────────────────────────────────────────────── */
 header {
   /* Right padding leaves room for the language pill (top-right);
-     left padding clears the floating Toto avatar (top-left, 60px + 12px).
-     The home screen's own header has different padding overrides this. */
-  padding: 24px 56px 14px 84px;
+     left padding clears the floating Toto avatar + mic chip
+     (12 + 60 + 8 + 40 = 120 px wide). */
+  padding: 24px 56px 14px 132px;
 }
 /* Home screen has its own centered greeting; no need for the side padding. */
 .screen-home header,
@@ -1576,14 +1576,53 @@ button, .primary { font: inherit; cursor: pointer; }
   top: calc(env(safe-area-inset-top) + 10px);
   left: 12px;
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   z-index: 50;
   pointer-events: none;
+  /* Cap width so the bubble never extends past the screen edge. */
+  max-width: calc(100vw - 24px);
+}
+.toto-companion__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
 }
 .toto-companion__bubble,
-.toto-companion__avatar {
+.toto-companion__avatar,
+.toto-companion__mic {
   pointer-events: auto;
+}
+
+/* Mic chip — sits to the right of the avatar. Voice mode toggle. */
+.toto-companion__mic {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f1e8 100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--accent-strong);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s, color 0.15s, background 0.15s;
+  padding: 0;
+}
+.toto-companion__mic:hover { transform: scale(1.06); }
+.toto-companion__mic:active { transform: scale(0.94); }
+.toto-companion--listening .toto-companion__mic {
+  background: #dc2626;
+  color: #fff;
+  border-color: #fff;
+  animation: toto-mic-recording 1.0s ease-in-out infinite;
+}
+@keyframes toto-mic-recording {
+  0%, 100% { box-shadow: 0 2px 10px rgba(220, 38, 38, 0.4); }
+  50%      { box-shadow: 0 2px 20px rgba(220, 38, 38, 0.8); }
 }
 
 /* The avatar button is the visible body of Toto. */
@@ -1676,10 +1715,11 @@ button, .primary { font: inherit; cursor: pointer; }
   50%      { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 0 0 6px rgba(46, 204, 113, 0.0); }
 }
 
-/* Speech bubble. Hidden by default, spring-in on open. */
+/* Speech bubble. Drops DOWN from the avatar so it never overlaps the
+   page header text. Hidden by default, spring-in on open. */
 .toto-companion__bubble {
   position: relative;
-  max-width: 240px;
+  max-width: min(280px, calc(100vw - 32px));
   padding: 12px 16px;
   background: var(--card);
   border: 1px solid var(--border);
@@ -1691,28 +1731,27 @@ button, .primary { font: inherit; cursor: pointer; }
   text-align: left;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
   opacity: 0;
-  transform: translateX(-8px) scale(0.92);
-  transform-origin: 0% 50%;
+  transform: translateY(-6px) scale(0.94);
+  transform-origin: 18px 0;
   transition: opacity 0.18s ease, transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
   pointer-events: none;
-  margin-top: 8px;
   cursor: pointer;
 }
 .toto-companion--open .toto-companion__bubble {
   opacity: 1;
-  transform: translateX(0) scale(1);
+  transform: translateY(0) scale(1);
   pointer-events: auto;
 }
-/* Pointer triangle on the LEFT side of the bubble, pointing at the avatar. */
+/* Pointer triangle on TOP of the bubble, pointing UP at the avatar. */
 .toto-companion__bubble::before {
   content: "";
   position: absolute;
-  top: 18px;
-  left: -7px;
+  top: -7px;
+  left: 18px;
   width: 12px;
   height: 12px;
   background: var(--card);
-  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
   border-left: 1px solid var(--border);
   transform: rotate(45deg);
 }
@@ -1776,12 +1815,6 @@ button, .primary { font: inherit; cursor: pointer; }
 }
 .toto-companion__not-now:hover { color: var(--fg); }
 
-/* On small screens, bubble can grow up to most of the screen width. */
-@media (max-width: 419px) {
-  .toto-companion__bubble {
-    max-width: calc(100vw - 100px);
-  }
-}
 
 .toto-companion__avatar {
   width: 48px;
@@ -2349,16 +2382,31 @@ button, .primary { font: inherit; cursor: pointer; }
 /* ─── Plan screen ────────────────────────────────────────────────────────── */
 .screen-plan { gap: 12px; }
 
-/* ─── Single-screen plan form ──────────────────────────────────────────────── */
+/* ─── Step-by-step plan wizard ─────────────────────────────────────────────── */
 .plan-one {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   padding: 0;
 }
+.plan-one__progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.plan-one__dot {
+  width: 28px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--panel-strong);
+  transition: background 0.25s ease;
+}
+.plan-one__dot--on { background: var(--accent); }
 .plan-one__head {
   position: relative;
-  padding: 8px 0 4px;
+  padding: 4px 0 0;
 }
 .plan-one__head h1 {
   font-size: 22px;
@@ -2367,6 +2415,42 @@ button, .primary { font: inherit; cursor: pointer; }
   margin: 0;
 }
 .plan-one__head .tag { margin-top: 4px; }
+.plan-one__step {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 18px 18px 22px;
+  min-height: 320px;
+}
+.plan-one__step .wizard__q {
+  margin: 0 0 14px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.plan-one__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+}
+.plan-one__actions .wizard__skip {
+  background: transparent;
+  border: none;
+  color: var(--muted-fg);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 4px;
+}
+.plan-one__actions .plan-one__go {
+  flex: 1;
+  max-width: 240px;
+  margin: 0;
+  padding: 12px 18px;
+  font-size: 14px;
+}
 .plan-one__field {
   display: flex;
   flex-direction: column;
@@ -2679,6 +2763,157 @@ button, .primary { font: inherit; cursor: pointer; }
 
 /* ─── Connect / Connected ────────────────────────────────────────────────── */
 .screen-connect, .screen-connected { gap: 14px; }
+
+/* ─── Connect screen v2 (visual, low-text) ────────────────────────────────── */
+.connect-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 6px 0 0;
+}
+.connect-v2__notice {
+  padding: 10px 14px;
+  background: #fff4d4;
+  border: 1px solid #f5d76e;
+  border-radius: 14px;
+  color: #8a5a00;
+  font-size: 13px;
+}
+.connect-v2__resume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent);
+  border-radius: 18px;
+  text-decoration: none;
+  color: var(--fg);
+  transition: transform 0.1s;
+}
+.connect-v2__resume:active { transform: scale(0.99); }
+.connect-v2__resume-icon { font-size: 28px; }
+.connect-v2__resume-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.connect-v2__resume-title { font-size: 15px; font-weight: 600; }
+.connect-v2__resume-sub { font-size: 12.5px; color: var(--muted-fg); font-feature-settings: "tnum"; }
+.connect-v2__resume-cta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+
+.connect-v2__choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.connect-v2__choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 12px;
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: 18px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s, background 0.15s;
+  font: inherit;
+  color: var(--fg);
+}
+.connect-v2__choice:active { transform: scale(0.98); }
+.connect-v2__choice--on {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.connect-v2__choice-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--panel-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-strong);
+}
+.connect-v2__choice--on .connect-v2__choice-icon { background: var(--accent); color: #fff; }
+.connect-v2__choice-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.connect-v2__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  animation: connect-panel-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes connect-panel-in {
+  0%   { opacity: 0; transform: translateY(-6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.connect-v2__input {
+  font: inherit;
+  font-size: 15px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--fg);
+  width: 100%;
+  box-sizing: border-box;
+}
+.connect-v2__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.connect-v2__input--code {
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  font-feature-settings: "tnum";
+}
+.connect-v2__mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.connect-v2__mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.connect-v2__mode-icon { display: inline-flex; }
+.connect-v2__mode-btn--on {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+.connect-v2__go {
+  width: 100%;
+  margin-top: 4px;
+}
+.connect-v2__back {
+  align-self: center;
+  margin-top: 4px;
+}
 
 /* Session code hero */
 .session-code-hero {

@@ -141,15 +141,30 @@ export function mountCompanion(screen: Screen) {
     ? `<button type="button" class="toto-companion__not-now" data-dismiss-id="${escapeHTML(suggestion.id)}">${escapeHTML(t("toto.not_now"))}</button>`
     : "";
 
+  const voiceAvailable = isVoiceSupported().stt;
+
   const root = document.createElement("div");
   root.id = "toto-companion";
   root.className = `toto-companion ${open ? "toto-companion--open" : ""} ${isSuggestion ? "toto-companion--suggesting" : ""}`;
   root.innerHTML = `
-    <button type="button" class="toto-companion__avatar" id="toto-companion-avatar"
-            aria-label="${escapeHTML(t("toto.tap_hint"))}" title="${escapeHTML(t("toto.tap_hint"))}">
-      <span class="toto-companion__breath">${totoAvatar(56)}</span>
-      <span class="toto-companion__dot" aria-hidden="true"></span>
-    </button>
+    <div class="toto-companion__row">
+      <button type="button" class="toto-companion__avatar" id="toto-companion-avatar"
+              aria-label="${escapeHTML(t("toto.tap_hint"))}" title="${escapeHTML(t("toto.tap_hint"))}">
+        <span class="toto-companion__breath">${totoAvatar(56)}</span>
+        <span class="toto-companion__dot" aria-hidden="true"></span>
+      </button>
+      ${voiceAvailable ? `
+        <button type="button" class="toto-companion__mic" id="toto-companion-mic"
+                aria-label="${escapeHTML(t("toto.mic_label"))}" title="${escapeHTML(t("toto.mic_label"))}">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="3" width="6" height="12" rx="3"/>
+            <path d="M5 11a7 7 0 0 0 14 0"/>
+            <path d="M12 18v3"/>
+          </svg>
+        </button>
+      ` : ""}
+    </div>
     <div class="toto-companion__bubble" id="toto-bubble" role="status" aria-live="polite">
       <span class="toto-companion__text">${escapeHTML(phrase)}</span>
       ${ctaHTML}
@@ -334,4 +349,13 @@ export function mountCompanion(screen: Screen) {
 
   // Allow tapping the bubble to dismiss.
   bubble.addEventListener("click", () => { if (!voiceActive) setOpen(false); });
+
+  // Dedicated mic chip (shown only when voice is supported).
+  const micBtn = root.querySelector("#toto-companion-mic") as HTMLButtonElement | null;
+  if (micBtn) {
+    micBtn.addEventListener("click", () => {
+      if (voiceActive) endVoice();
+      else startVoice();
+    });
+  }
 }
