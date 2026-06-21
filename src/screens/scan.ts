@@ -4,6 +4,7 @@ import { announce } from "../lib/prefs";
 import { track } from "../lib/analytics";
 import { startScanner, type DecodedBarcode, type ScannerHandle } from "../lib/scanner";
 import { cameraErrorMessage } from "../lib/camera-errors";
+import { t } from "../lib/i18n";
 
 const FOUND_KEY = "toto.found";
 
@@ -31,7 +32,7 @@ export function renderScan(root: HTMLElement) {
 
   root.innerHTML = `
     <header>
-      <h1>${zoneParam ? `You're at Zone ${escapeHTML(zoneParam)}.` : "Ready to scan."}</h1>
+      <h1>${zoneParam ? `${t("scan.zoneTitle")} ${escapeHTML(zoneParam)}.` : t("scan.title")}</h1>
     </header>
     <main class="screen-scan">
       <div id="status" class="status" style="display:none"></div>
@@ -69,14 +70,14 @@ export function renderScan(root: HTMLElement) {
           <div class="scan-start-ripple"></div>
           <button id="start-scan-btn" class="scan-start-btn">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-            Open the camera
+            ${t("scan.openCamera")}
           </button>
         </div>
       </div>
       <div id="carousel" class="find-carousel" aria-label="Items to find"></div>
       <div class="find-controls">
-        <button id="finish" class="btn-primary" disabled>I'm done</button>
-        <a class="link-btn" href="?screen=map">‹ Back to the map</a>
+        <button id="finish" class="btn-primary" disabled>${t("scan.done")}</button>
+        <a class="link-btn" href="?screen=map">${t("scan.back_to_map")}</a>
       </div>
     </main>
   `;
@@ -123,7 +124,7 @@ export function renderScan(root: HTMLElement) {
     carouselEl.innerHTML = cards;
     const allFound = found.size === list.length;
     finishBtn.disabled = found.size === 0;
-    finishBtn.textContent = allFound ? "All found, finish" : `I'm done (${found.size} of ${list.length})`;
+    finishBtn.textContent = allFound ? t("scan.done") : `${t("scan.done")} (${found.size} / ${list.length})`;
   }
   renderCarousel();
 
@@ -278,7 +279,7 @@ export function renderScan(root: HTMLElement) {
   let handle: ScannerHandle | null = null;
 
   async function boot(): Promise<void> {
-    setStatus("Warming up the camera…");
+    setStatus(t("scan.warming"));
     try {
       // If the camera is running but no barcodes have been seen after a
       // few seconds of frames, nudge the user. Most "doesn't work" cases
@@ -289,7 +290,7 @@ export function renderScan(root: HTMLElement) {
         if (droughtArmed) return;
         droughtArmed = true;
         droughtTimer = window.setTimeout(() => {
-          if (found.size === 0) setStatus("Hold the phone closer to a barcode.");
+          if (found.size === 0) setStatus(t("scan.hold_closer"));
         }, 4000);
       }
       function disarmDroughtNudge() {
@@ -341,7 +342,7 @@ export function renderScan(root: HTMLElement) {
       fitOverlay();
       window.addEventListener("resize", fitOverlay);
 
-      setStatus(`Looking for ${list.length} thing${list.length > 1 ? "s" : ""}. Sweep along the shelf.`);
+      setStatus(`${t("scan.looking")} ${list.length} · ${list.length === 1 ? "item" : "items"}`);
 
       // Set up zoom controls if the device supports them.
       const range = handle.getZoomRange();
@@ -414,7 +415,7 @@ export function renderScan(root: HTMLElement) {
 
   camSwitchBtn.addEventListener("click", async () => {
     if (!handle) return;
-    setStatus("Switching camera…");
+    setStatus(t("scan.switching"));
     try {
       await handle.switchCamera();
       setStatus("");

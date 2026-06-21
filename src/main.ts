@@ -20,6 +20,8 @@ import { renderAdmin } from "./screens/admin";
 import { loadSession, initGlobalSession } from "./lib/session";
 import { initProfileSync } from "./lib/profile";
 import { initAnalytics } from "./lib/analytics";
+import { LANGUAGES, getLang, setLang, type Language } from "./lib/i18n";
+import { setPrefs } from "./lib/prefs";
 const VALID_SCREENS: Screen[] = [
   "home",
   "list",
@@ -114,6 +116,61 @@ function mountTabBar() {
   document.body.appendChild(bar);
 }
 
+// ─── Global language picker (visible on every screen) ───────────────────────
+
+function mountLangPicker() {
+  if (document.getElementById("lang-picker")) return;
+  const current = getLang();
+  const currentLabel = LANGUAGES.find((l) => l.code === current)?.code.toUpperCase() ?? "EN";
+
+  const root = document.createElement("div");
+  root.id = "lang-picker";
+  root.className = "lang-fab";
+  root.innerHTML = `
+    <button type="button" class="lang-fab__btn" id="lang-fab-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Language">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M2 12h20"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+      <span class="lang-fab__label">${currentLabel}</span>
+    </button>
+    <ul class="lang-fab__menu" id="lang-fab-menu" role="listbox" hidden>
+      ${LANGUAGES.map((l) => `
+        <li>
+          <button type="button" role="option" data-lang="${l.code}"
+                  class="lang-fab__opt ${current === l.code ? "lang-fab__opt--active" : ""}"
+                  aria-selected="${current === l.code}">
+            <span class="lang-fab__opt-native">${l.native}</span>
+            <span class="lang-fab__opt-en">${l.label}</span>
+          </button>
+        </li>
+      `).join("")}
+    </ul>
+  `;
+  document.body.appendChild(root);
+
+  const btn = root.querySelector("#lang-fab-btn") as HTMLButtonElement;
+  const menu = root.querySelector("#lang-fab-menu") as HTMLUListElement;
+  function close() { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); }
+  function open()  { menu.hidden = false; btn.setAttribute("aria-expanded", "true"); }
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (menu.hidden) open(); else close();
+  });
+  document.addEventListener("click", (e) => {
+    if (!root.contains(e.target as Node)) close();
+  });
+  menu.querySelectorAll<HTMLButtonElement>("[data-lang]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const lang = b.dataset.lang as Language;
+      setLang(lang);
+      setPrefs({ language: lang });
+      window.location.reload();
+    });
+  });
+}
 
 // ─── Screen router ───────────────────────────────────────────────────────────
 
@@ -172,6 +229,7 @@ function mount() {
 
   // Mount tab bar AFTER screen render so session state is up-to-date
   mountTabBar();
+  mountLangPicker();
   mountCompanion(currentScreen());
 }
 

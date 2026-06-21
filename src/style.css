@@ -1773,14 +1773,14 @@ button, .primary { font: inherit; cursor: pointer; }
 .screen-scan { gap: 10px; }
 
 .scan-viewport {
-  /* flex-basis: 0 + grow: 1 forces this element to claim all leftover
-     space in the column after the other items (status, carousel,
-     controls) take what they need. Without this the explicit height
-     gets ignored or the video's intrinsic aspect ratio leaks through
-     and the bottom of the viewport ends up black. */
-  flex: 1 1 0;
-  min-height: 240px;
+  /* Explicit viewport height — predictable across browsers. svh on
+     phones so the URL bar doesn't move it. flex:0 keeps siblings from
+     squashing it. */
   position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  height: 60svh;
+  min-height: 320px;
   border-radius: var(--radius);
   overflow: hidden;
   background: #000;
@@ -1792,7 +1792,8 @@ button, .primary { font: inherit; cursor: pointer; }
     width: 100vw;
     margin-left: calc(-50vw + 50%);
     border-radius: 0;
-    min-height: 360px;
+    height: 70vh;
+    min-height: 400px;
   }
 }
 
@@ -2560,7 +2561,64 @@ button, .primary { font: inherit; cursor: pointer; }
   display: block;
 }
 
-/* ─── Language picker ─────────────────────────────────────────────────────── */
+/* ─── Floating language picker (top-right of every screen) ───────────────── */
+.lang-fab {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 10px);
+  right: 12px;
+  z-index: 200;
+}
+.lang-fab__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.15s, transform 0.1s;
+}
+.lang-fab__btn:active { transform: scale(0.96); }
+.lang-fab__label { line-height: 1; }
+
+.lang-fab__menu {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  min-width: 160px;
+  position: absolute;
+  right: 0;
+}
+.lang-fab__opt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 8px 12px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--fg);
+}
+.lang-fab__opt:hover { background: var(--panel-strong); }
+.lang-fab__opt--active { background: var(--accent-bg); }
+.lang-fab__opt-native { font-size: 14px; font-weight: 600; }
+.lang-fab__opt-en { font-size: 11.5px; color: var(--muted-fg); }
+
+/* ─── Language picker (in settings, kept for affordance redundancy) ──────── */
 .lang-picker {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

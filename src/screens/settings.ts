@@ -75,14 +75,14 @@ export function renderSettings(root: HTMLElement) {
 
   root.innerHTML = `
     <header>
-      <h1>Your preferences</h1>
+      <h1>${t("settings.title")}</h1>
     </header>
     <main class="screen-settings">
       <div id="account-slot"></div>
 
       <section class="card-section" aria-labelledby="you-h">
-        <h2 id="you-h">You</h2>
-        <p class="tag">Helps me pick the right cut, size, and difficulty.</p>
+        <h2 id="you-h">${t("settings.you")}</h2>
+        <p class="tag">${t("settings.you.help")}</p>
 
         <div class="row-group">
           <label>I am
@@ -130,7 +130,7 @@ export function renderSettings(root: HTMLElement) {
       </section>
 
       <section class="card-section" aria-labelledby="a11y-h">
-        <h2 id="a11y-h">Accessibility</h2>
+        <h2 id="a11y-h">${t("settings.access")}</h2>
 
         <label class="toggle">
           <input type="checkbox" id="hc" ${p.highContrast ? "checked" : ""} />
@@ -156,7 +156,7 @@ export function renderSettings(root: HTMLElement) {
       </section>
 
       <section class="card-section" aria-labelledby="size-h">
-        <h2 id="size-h">Your sizes</h2>
+        <h2 id="size-h">${t("settings.sizes")}</h2>
         <p class="tag">
           Or just <a class="inline-link" href="?screen=fit">snap a photo</a>.
         </p>

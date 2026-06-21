@@ -3,6 +3,7 @@ import { addToList, getList } from "../lib/list";
 import { startScanner, type ScannerHandle } from "../lib/scanner";
 import { cameraErrorMessage } from "../lib/camera-errors";
 import type { Product } from "../lib/types";
+import { t } from "../lib/i18n";
 
 function escapeHTML(s: string): string {
   return s
@@ -36,7 +37,7 @@ function productCard(p: Product, alreadyOnList: boolean): string {
       ${p.temp_rating_c != null ? `<p class="browse-card__detail"><span class="browse-card__label">Comfortable to</span> ${p.temp_rating_c}°C</p>` : ""}
       ${p.description ? `<p class="browse-card__desc">${escapeHTML(p.description)}</p>` : ""}
       <button class="primary browse-card__add" data-code="${escapeHTML(p.product_code)}" ${alreadyOnList ? "disabled" : ""}>
-        ${alreadyOnList ? "Already on your list" : "Add to my list"}
+        ${alreadyOnList ? t("browse.already") : t("browse.add")}
       </button>
       <div class="browse-card__more">
         <a class="browse-card__more-chip" href="?screen=compare&a=${escapeHTML(p.product_code)}">
@@ -55,7 +56,7 @@ function productCard(p: Product, alreadyOnList: boolean): string {
           Repair vs replace
         </a>
       </div>
-      <a class="link-btn browse-card__again" href="#">Scan another</a>
+      <a class="link-btn browse-card__again" href="#">${t("browse.scan_another")}</a>
     </article>
   `;
 }
@@ -63,13 +64,13 @@ function productCard(p: Product, alreadyOnList: boolean): string {
 export function renderBrowse(root: HTMLElement) {
   root.innerHTML = `
     <header>
-      <h1>Just look around</h1>
+      <h1>${t("browse.title")}</h1>
     </header>
     <main class="screen-browse">
       <div id="status" class="status" hidden></div>
       <div id="capture-view" class="browse-cam"></div>
       <div id="result"></div>
-      <a class="link-btn" href="?screen=home">‹ Back home</a>
+      <a class="link-btn" href="?screen=home">${t("browse.back")}</a>
     </main>
   `;
 
@@ -100,7 +101,7 @@ export function renderBrowse(root: HTMLElement) {
           if (paused) return;
           const product = getProduct(code.text);
           if (!product) {
-            setStatus(`I don't recognise '${code.text}'. Try another barcode.`);
+            setStatus(t("browse.unknown"));
             return;
           }
           if ("vibrate" in navigator) navigator.vibrate(60);
@@ -112,7 +113,7 @@ export function renderBrowse(root: HTMLElement) {
         },
       });
       captureViewEl.classList.add("browse-cam--active");
-      setStatus("Point at any barcode in the store.");
+      setStatus(t("browse.hint"));
     } catch (err) {
       console.error("Browse boot failed:", err);
       setStatus(cameraErrorMessage(err));
@@ -137,7 +138,7 @@ export function renderBrowse(root: HTMLElement) {
       resultEl.innerHTML = "";
       paused = false;
       captureViewEl.classList.add("browse-cam--active");
-      setStatus("Point at any barcode in the store.");
+      setStatus(t("browse.hint"));
     }
   });
 

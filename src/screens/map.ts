@@ -2,6 +2,7 @@ import storeMapUrl from "../../data/store-map.png";
 import { getList } from "../lib/list";
 import { getProduct, zonesForCodes } from "../lib/catalog";
 import type { Product } from "../lib/types";
+import { t } from "../lib/i18n";
 
 // Pin positions on the store-map.png, as percentages of width/height.
 // Map layout (3 columns):
@@ -111,7 +112,7 @@ export function renderMap(root: HTMLElement) {
   // Current location: a zone code the user last tapped, or null = entry.
   const currentLoc = sessionStorage.getItem(CURRENT_LOC_KEY);
   const startPt = currentLoc && ZONE_POS[currentLoc] ? ZONE_POS[currentLoc] : ENTRY;
-  const startLabel = currentLoc && ZONE_POS[currentLoc] ? `Zone ${currentLoc}` : "entry";
+  const startLabel = currentLoc && ZONE_POS[currentLoc] ? `Zone ${currentLoc}` : t("map.entry");
 
   const zoneAgg = zonesForCodes(list);
   const routeNodes = zoneAgg
@@ -174,7 +175,7 @@ export function renderMap(root: HTMLElement) {
                 <div class="zone-row__name">Zone ${zone} · ${escapeHTML(zone_name)}</div>
                 <div class="zone-row__sub">${count} item${count > 1 ? "s" : ""}</div>
               </div>
-              ${i === 0 ? `<span class="zone-row__step">NEXT</span>` : ""}
+              ${i === 0 ? `<span class="zone-row__step">${t("map.suggested")}</span>` : ""}
               <span class="zone-row__chev" aria-hidden="true">›</span>
             </div>
             <ul class="zone-items">
@@ -196,8 +197,8 @@ export function renderMap(root: HTMLElement) {
 
   root.innerHTML = `
     <header>
-      <h1>Here's the plan</h1>
-      <p class="tag">${list.length} thing${list.length > 1 ? "s" : ""} across ${zones.length} zone${zones.length > 1 ? "s" : ""}. Shortest walk from ${escapeHTML(startLabel)} to checkout, about ${pathDistance} m.</p>
+      <h1>${t("map.title")}</h1>
+      <p class="tag">${list.length} ${list.length === 1 ? "item" : "items"} · ${pathDistance} m · ${t("map.from")} ${escapeHTML(startLabel)}</p>
     </header>
     <main class="screen-map">
       <div class="map-wrap">
@@ -210,13 +211,13 @@ export function renderMap(root: HTMLElement) {
         <div class="pin-layer">${pins}</div>
       </div>
 
-      <p class="map-hint">Tap a zone pin to set it as your current location — the route will redraw.</p>
+      <p class="map-hint">${t("map.hint")}</p>
 
       <ul class="zone-list">${rows}</ul>
 
       <div class="map-actions">
-        ${currentLoc ? `<button type="button" id="reset-loc" class="link-btn">Start from entry</button>` : ""}
-        <a class="link-btn" href="?screen=list">‹ Tweak the list</a>
+        ${currentLoc ? `<button type="button" id="reset-loc" class="link-btn">${t("map.from_entry")}</button>` : ""}
+        <a class="link-btn" href="?screen=list">${t("map.tweak")}</a>
       </div>
     </main>
   `;
