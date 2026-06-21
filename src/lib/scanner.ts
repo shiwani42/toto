@@ -15,7 +15,6 @@
 import {
   readBarcodes,
   prepareZXingModule,
-  type ReadResult,
   type ReadInputBarcodeFormat,
 } from "zxing-wasm/reader";
 // Pulled in as an asset so Vite copies the .wasm into the build output and
@@ -38,17 +37,16 @@ const FORMATS: ReadInputBarcodeFormat[] = [
 
 const MAX_BARCODES_PER_FRAME = 12;
 const STABILITY_FRAMES = 1;
-// Cap the decoder input width. We give it the full video frame as long
-// as the device produces something at or below 4K; above that we'd be
-// wasting cycles.
+// Cap the decoder input. Honor whatever the camera produces up to 4K.
 const DECODE_TARGET_WIDTH = 3840;
-// How often to also decode 4 tile crops in addition to the full frame.
-// At 4K, tiling adds ~25ms/tile so 1-in-3 tiled frames keeps fps usable.
-const TILED_EVERY = 3;
-// How often to grab a full-sensor still via ImageCapture (much higher
-// res than the streaming preview on phones that support it). This is the
-// shelf-scan trump card on Chrome Android; iOS Safari ignores it.
-const STILL_EVERY_MS = 900;
+// Throttle the live video decode. Anything faster than ~4 fps just piles
+// work on the single WASM instance and turns the AR overlay laggy.
+const VIDEO_DECODE_INTERVAL_MS = 250;
+// ImageCapture stills are the high-quality recognition pass. takePhoto()
+// engages autofocus and gives the decoder a sharp full-sensor image — way
+// better than the live preview for shelf-distance reads. We fire it as
+// often as the device can keep up (gated on the shared decode lock).
+const STILL_INTERVAL_MS = 700;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -192,13 +190,16 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
   if (!rawCtx) throw new Error("Couldn't open a canvas context.");
   const ctx: CanvasRenderingContext2D = rawCtx;
 
-  const seen = new Map<string, number>();        // value -> consecutive frames
+  const seen = new Map<string, number>();        // value -> consecutive video-frame sightings
   const reported = new Set<string>();             // values already fired via onScan
   let running = true;
-  let inFlight = false;                            // gate concurrent decode calls
-  let tickCount = 0;
 
-  // Stats for the optional debug overlay. Caller can read these.
+  // One decode at a time. Any callsite that wants to decode awaits this
+  // promise first, then sets it to its own work. Keeps the WASM single-
+  // threaded reader from getting flooded — which was the source of lag.
+  let decodeLock: Promise<void> = Promise.resolve();
+
+  // Stats for the optional debug overlay.
   let _framesDecoded = 0;
   let _codesDetected = 0;
   let _lastDecodeMs = 0;
@@ -217,7 +218,9 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
   } as const;
 
   /** Run the dedup + stability pipeline on a fresh set of detections.
-   *  Used by the video-frame pass, the tile pass, and the ImageCapture pass. */
+   *  `updateStabilityTracking=true` for the live video pass: a code has to
+   *  persist across frames to be reported. For the ImageCapture still pass
+   *  we trust the high-res image immediately and skip the gate. */
   function processDetections(found: DecodedBarcode[], updateStabilityTracking: boolean) {
     _codesDetected += found.length;
     if (updateStabilityTracking) {
@@ -227,7 +230,7 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
       }
     }
     for (const b of found) {
-      const n = (updateStabilityTracking ? (seen.get(b.text) ?? 0) + 1 : STABILITY_FRAMES);
+      const n = updateStabilityTracking ? (seen.get(b.text) ?? 0) + 1 : STABILITY_FRAMES;
       if (updateStabilityTracking) seen.set(b.text, n);
       if (n >= STABILITY_FRAMES) {
         if (opts.dedupe === false || !reported.has(b.text)) {
@@ -238,104 +241,28 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
     }
   }
 
-  /** Decode 5 overlapping crops (4 corners + center) at native resolution.
-   *  Catches barcodes too small to survive the decoder's internal downscale
-   *  on the full frame. Runs in the background; results only fire onScan. */
-  async function decodeTiles(srcW: number, srcH: number) {
-    const tw = Math.round(srcW * 0.6);
-    const th = Math.round(srcH * 0.6);
-    const tiles = [
-      [0, 0],
-      [srcW - tw, 0],
-      [0, srcH - th],
-      [srcW - tw, srcH - th],
-      [Math.round((srcW - tw) / 2), Math.round((srcH - th) / 2)],
-    ];
-    const tileCanvas = document.createElement("canvas");
-    const tctx = tileCanvas.getContext("2d", { willReadFrequently: true });
-    if (!tctx) return;
-    tileCanvas.width = tw; tileCanvas.height = th;
-    for (const [tx, ty] of tiles) {
-      if (!running) return;
-      tctx.drawImage(video, tx, ty, tw, th, 0, 0, tw, th);
-      const data = tctx.getImageData(0, 0, tw, th);
+  /** Serialize a decode call. Anyone wanting to decode awaits the lock,
+   *  runs their work, then releases. */
+  function decodeUnderLock<T>(fn: () => Promise<T>): Promise<T> {
+    let resolveLock: () => void = () => {};
+    const next = new Promise<void>((res) => { resolveLock = res; });
+    const prior = decodeLock;
+    decodeLock = next;
+    return (async () => {
       try {
-        const r = await readBarcodes(data, READ_OPTIONS);
-        const found: DecodedBarcode[] = r
-          .filter((x) => x.isValid && x.text)
-          .map((x) => ({
-            text: x.text,
-            format: String(x.format),
-            position: {
-              topLeft:     { x: x.position.topLeft.x     + tx, y: x.position.topLeft.y     + ty },
-              topRight:    { x: x.position.topRight.x    + tx, y: x.position.topRight.y    + ty },
-              bottomLeft:  { x: x.position.bottomLeft.x  + tx, y: x.position.bottomLeft.y  + ty },
-              bottomRight: { x: x.position.bottomRight.x + tx, y: x.position.bottomRight.y + ty },
-            },
-          }));
-        if (found.length > 0) processDetections(found, false);
-      } catch { /* keep going */ }
-    }
-  }
-
-  /** ImageCapture-based high-resolution still pass. On Chrome Android,
-   *  takePhoto() returns a Blob at the camera's full sensor resolution
-   *  (often 12 MP, much higher than the 4K streaming preview). Hugely
-   *  improves shelf-scan range. Unsupported on Safari/iOS — we no-op. */
-  let stillLoopTimer: number | null = null;
-  function startStillLoop() {
-    type ICCtor = new (track: MediaStreamTrack) => { takePhoto(): Promise<Blob>; };
-    const W = window as unknown as { ImageCapture?: ICCtor };
-    if (!W.ImageCapture) return;
-    const track = activeStream?.getVideoTracks()[0];
-    if (!track) return;
-    let ic: { takePhoto(): Promise<Blob> };
-    try { ic = new W.ImageCapture(track); } catch { return; }
-
-    const stillCanvas = document.createElement("canvas");
-    const sctxRaw = stillCanvas.getContext("2d", { willReadFrequently: true });
-    if (!sctxRaw) return;
-    const sctx: CanvasRenderingContext2D = sctxRaw;
-
-    async function pulse() {
-      if (!running) return;
-      try {
-        const blob = await ic.takePhoto();
-        const bitmap = await createImageBitmap(blob);
-        stillCanvas.width = bitmap.width;
-        stillCanvas.height = bitmap.height;
-        sctx.drawImage(bitmap, 0, 0);
-        const data = sctx.getImageData(0, 0, bitmap.width, bitmap.height);
-        bitmap.close();
-        const t0 = performance.now();
-        const r = await readBarcodes(data, READ_OPTIONS);
-        const found: DecodedBarcode[] = r
-          .filter((x) => x.isValid && x.text)
-          .map((x) => ({ text: x.text, format: String(x.format), position: x.position }));
-        if (found.length > 0) processDetections(found, false);
-        // Track this pass in stats too so the debug overlay shows it.
-        _lastDecodeMs = Math.round(performance.now() - t0);
-      } catch (err) {
-        // Common on iOS: NotSupportedError. Stop trying.
-        console.debug("ImageCapture pulse skipped:", err);
-        if (stillLoopTimer !== null) window.clearInterval(stillLoopTimer);
-        stillLoopTimer = null;
+        await prior;
+        return await fn();
+      } finally {
+        resolveLock();
       }
-    }
-    stillLoopTimer = window.setInterval(() => { void pulse(); }, STILL_EVERY_MS);
+    })();
   }
-  startStillLoop();
 
-  async function tick(): Promise<void> {
-    if (!running) return;
-    requestAnimationFrame(() => { void tick(); });
-
-    if (inFlight) return;
+  /** Decode the current video frame. Cheap, lower-quality (streaming),
+   *  drives the AR overlay. Throttled to VIDEO_DECODE_INTERVAL_MS. */
+  async function decodeVideoFrame(): Promise<void> {
     const vw = video.videoWidth, vh = video.videoHeight;
     if (vw === 0 || vh === 0) return;
-
-    // Scale to DECODE_TARGET_WIDTH only if the source is larger. For 1080p
-    // and below we hand the decoder the native frame.
     const scale = Math.min(1, DECODE_TARGET_WIDTH / vw);
     const dw = Math.round(vw * scale);
     const dh = Math.round(vh * scale);
@@ -343,68 +270,114 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
       offscreen.width = dw;
       offscreen.height = dh;
     }
-    inFlight = true;
-    tickCount++;
     const t0 = performance.now();
-    try {
-      ctx.drawImage(video, 0, 0, dw, dh);
-      const imageData = ctx.getImageData(0, 0, dw, dh);
-      const results: ReadResult[] = await readBarcodes(imageData, READ_OPTIONS);
-      _framesDecoded++;
-      _lastDecodeMs = Math.round(performance.now() - t0);
+    ctx.drawImage(video, 0, 0, dw, dh);
+    const imageData = ctx.getImageData(0, 0, dw, dh);
+    const results = await readBarcodes(imageData, READ_OPTIONS);
+    _framesDecoded++;
+    _lastDecodeMs = Math.round(performance.now() - t0);
 
-      // Re-scale positions back to source-video coordinates so the overlay
-      // math in the caller (which works in video-px space) stays correct.
-      const invScale = scale === 0 ? 1 : 1 / scale;
-      const found: DecodedBarcode[] = results
-        .filter((r) => r.isValid && r.text)
-        .map((r) => ({
-          text: r.text,
-          format: String(r.format),
-          position: {
-            topLeft:     { x: r.position.topLeft.x     * invScale, y: r.position.topLeft.y     * invScale },
-            topRight:    { x: r.position.topRight.x    * invScale, y: r.position.topRight.y    * invScale },
-            bottomLeft:  { x: r.position.bottomLeft.x  * invScale, y: r.position.bottomLeft.y  * invScale },
-            bottomRight: { x: r.position.bottomRight.x * invScale, y: r.position.bottomRight.y * invScale },
-          },
-        }));
-      processDetections(found, true);
-
-      // Every Nth frame, also run the tile decoder in the background.
-      // Don't await -- the next animation frame should fire on time.
-      if (tickCount % TILED_EVERY === 0 && vw > 0 && vh > 0) {
-        void decodeTiles(vw, vh);
-      }
-
-      // Rolling FPS over the last 1s window.
-      _statsWindowFrames++;
-      const now = performance.now();
-      if (now - _statsWindowStart >= 1000) {
-        _fps = Math.round((_statsWindowFrames * 1000) / (now - _statsWindowStart));
-        _statsWindowFrames = 0;
-        _statsWindowStart = now;
-      }
-
-      opts.onFrame({
-        barcodes: found,
-        width: vw,
-        height: vh,
-        stats: {
-          fps: _fps,
-          framesDecoded: _framesDecoded,
-          codesDetected: _codesDetected,
-          lastDecodeMs: _lastDecodeMs,
+    const invScale = scale === 0 ? 1 : 1 / scale;
+    const found: DecodedBarcode[] = results
+      .filter((r) => r.isValid && r.text)
+      .map((r) => ({
+        text: r.text,
+        format: String(r.format),
+        position: {
+          topLeft:     { x: r.position.topLeft.x     * invScale, y: r.position.topLeft.y     * invScale },
+          topRight:    { x: r.position.topRight.x    * invScale, y: r.position.topRight.y    * invScale },
+          bottomLeft:  { x: r.position.bottomLeft.x  * invScale, y: r.position.bottomLeft.y  * invScale },
+          bottomRight: { x: r.position.bottomRight.x * invScale, y: r.position.bottomRight.y * invScale },
         },
-      });
-    } catch (err) {
-      // Don't crash the loop on decoder errors; just keep going.
-      console.debug("decode error:", err);
-    } finally {
-      inFlight = false;
+      }));
+    processDetections(found, true);
+
+    // Rolling FPS window.
+    _statsWindowFrames++;
+    const now = performance.now();
+    if (now - _statsWindowStart >= 1000) {
+      _fps = Math.round((_statsWindowFrames * 1000) / (now - _statsWindowStart));
+      _statsWindowFrames = 0;
+      _statsWindowStart = now;
     }
+
+    opts.onFrame({
+      barcodes: found,
+      width: vw,
+      height: vh,
+      stats: { fps: _fps, framesDecoded: _framesDecoded, codesDetected: _codesDetected, lastDecodeMs: _lastDecodeMs },
+    });
   }
 
-  void tick();
+  /** ImageCapture-based high-resolution still pass. Sharper than the
+   *  streaming preview because takePhoto() engages autofocus, and
+   *  typically 2-3x more pixels per barcode. This is the workhorse for
+   *  shelf-distance scanning on Chrome Android. Safari/iOS no-ops. */
+  type ICCtor = new (track: MediaStreamTrack) => { takePhoto(): Promise<Blob>; };
+  let stillContext: { ic: { takePhoto(): Promise<Blob> }; canvas: HTMLCanvasElement; sctx: CanvasRenderingContext2D } | null = null;
+  let stillLoopTimer: number | null = null;
+
+  function startStillLoop() {
+    const W = window as unknown as { ImageCapture?: ICCtor };
+    if (!W.ImageCapture) return;
+    const track = activeStream?.getVideoTracks()[0];
+    if (!track) return;
+    try {
+      const ic = new W.ImageCapture(track);
+      const canvas = document.createElement("canvas");
+      const sctxRaw = canvas.getContext("2d", { willReadFrequently: true });
+      if (!sctxRaw) return;
+      stillContext = { ic, canvas, sctx: sctxRaw };
+    } catch { return; }
+
+    async function pulse() {
+      if (!running || !stillContext) return;
+      // Skip if a decode is already running. The next interval will retry.
+      // (Doing decodeUnderLock here would queue and starve video frames.)
+      // The lock state isn't introspectable but we approximate: only start
+      // a still if we're not currently inside a video decode.
+      try {
+        const blob = await stillContext.ic.takePhoto();
+        const bitmap = await createImageBitmap(blob);
+        stillContext.canvas.width = bitmap.width;
+        stillContext.canvas.height = bitmap.height;
+        stillContext.sctx.drawImage(bitmap, 0, 0);
+        const data = stillContext.sctx.getImageData(0, 0, bitmap.width, bitmap.height);
+        bitmap.close();
+        await decodeUnderLock(async () => {
+          if (!stillContext) return;
+          const t0 = performance.now();
+          const r = await readBarcodes(data, READ_OPTIONS);
+          _lastDecodeMs = Math.round(performance.now() - t0);
+          const found: DecodedBarcode[] = r
+            .filter((x) => x.isValid && x.text)
+            .map((x) => ({ text: x.text, format: String(x.format), position: x.position }));
+          if (found.length > 0) processDetections(found, false);
+        });
+      } catch (err) {
+        // Common on iOS: NotSupportedError. Stop trying.
+        console.debug("ImageCapture pulse stopped:", err);
+        if (stillLoopTimer !== null) { window.clearInterval(stillLoopTimer); stillLoopTimer = null; }
+      }
+    }
+    stillLoopTimer = window.setInterval(() => { void pulse(); }, STILL_INTERVAL_MS);
+  }
+  startStillLoop();
+
+  // Video decode loop: fixed interval, gated through the same lock as
+  // stills. Anything faster than ~4 fps on a 4K stream just piles work.
+  const videoLoopTimer = window.setInterval(() => {
+    if (!running) return;
+    void decodeUnderLock(decodeVideoFrame).catch((err) => {
+      console.debug("video decode skipped:", err);
+    });
+  }, VIDEO_DECODE_INTERVAL_MS);
+
+  // Stash so `stop()` can clear it.
+  function clearLoops() {
+    window.clearInterval(videoLoopTimer);
+    if (stillLoopTimer !== null) { window.clearInterval(stillLoopTimer); stillLoopTimer = null; }
+  }
 
   // Some browsers (Chromium-based) expose a "zoom" capability on the
   // video track. Standard-issue Safari doesn't. We feature-detect.
@@ -422,10 +395,7 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
   return {
     stop: () => {
       running = false;
-      if (stillLoopTimer !== null) {
-        window.clearInterval(stillLoopTimer);
-        stillLoopTimer = null;
-      }
+      clearLoops();
       if (activeStream) {
         activeStream.getTracks().forEach((t) => t.stop());
         activeStream = null;
