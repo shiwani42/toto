@@ -49,11 +49,12 @@ function resultCard(p: Product, alreadyOnList: boolean): string {
     ? (p.price_chf * (1 - p.discount_pct / 100)).toFixed(0)
     : p.price_chf.toFixed(0);
   return `
-    <li class="result-card" data-code="${p.product_code}">
+    <li class="result-card${alreadyOnList ? " result-card--on" : ""}" data-code="${p.product_code}">
       <div class="result-card__row">
         <h3 class="result-card__name">${escapeHTML(p.name)}</h3>
-        <button class="result-card__add" ${alreadyOnList ? "disabled" : ""} aria-label="${alreadyOnList ? "On your list" : "Add to list"}">
-          ${alreadyOnList ? "On list ✓" : "Add"}
+        <button class="result-card__add${alreadyOnList ? " result-card__add--remove" : ""}"
+                aria-label="${alreadyOnList ? "Remove from list" : "Add to list"}">
+          ${alreadyOnList ? "Remove" : "Add"}
         </button>
       </div>
       <p class="result-card__brand">${escapeHTML(p.brand)} · ${escapeHTML(p.color)} · size ${escapeHTML(p.size)}</p>
@@ -69,21 +70,39 @@ function resultCard(p: Product, alreadyOnList: boolean): string {
   `;
 }
 
-function cartBar(items: Product[]): string {
+function cartBar(items: Product[], expanded: boolean): string {
   if (items.length === 0) return "";
   const thumbs = items.slice(0, 3).map((p) => `
     <span class="cart-bar__thumb" style="background:${colorSwatch(p.color)}" title="${escapeHTML(p.name)}"></span>
   `).join("");
   const extra = items.length > 3 ? `<span class="cart-bar__more">+${items.length - 3}</span>` : "";
   return `
-    <a class="cart-bar" href="?screen=map" id="cart-bar">
-      <span class="cart-bar__thumbs">
-        ${thumbs}
-        ${extra}
-      </span>
-      <span class="cart-bar__count">${items.length} on your list</span>
-      <span class="cart-bar__cta">Find them ›</span>
-    </a>
+    <div class="cart-wrap${expanded ? " cart-wrap--open" : ""}">
+      ${expanded ? `
+        <ul class="cart-list">
+          ${items.map((p) => `
+            <li class="cart-list__item">
+              <span class="cart-list__swatch" style="background:${colorSwatch(p.color)}"></span>
+              <div class="cart-list__body">
+                <span class="cart-list__name">${escapeHTML(p.name)}</span>
+                <span class="cart-list__sub">${escapeHTML(p.brand)} · ${escapeHTML(p.size)}</span>
+              </div>
+              <button class="cart-list__remove" data-remove="${p.product_code}" aria-label="Remove">×</button>
+            </li>
+          `).join("")}
+        </ul>
+      ` : ""}
+      <div class="cart-bar" id="cart-bar">
+        <button type="button" class="cart-bar__main" id="cart-bar-toggle" aria-expanded="${expanded}">
+          <span class="cart-bar__thumbs">
+            ${thumbs}
+            ${extra}
+          </span>
+          <span class="cart-bar__count">${items.length} on your list</span>
+        </button>
+        <a class="cart-bar__cta" href="?screen=map">Find them ›</a>
+      </div>
+    </div>
   `;
 }
 
@@ -109,6 +128,7 @@ export function renderListBuilder(root: HTMLElement) {
   const qEl = root.querySelector("#q") as HTMLInputElement;
   const resultsEl = root.querySelector("#results") as HTMLUListElement;
   const cartMount = root.querySelector("#cart-bar-mount") as HTMLDivElement;
+  let cartExpanded = false;
 
   function listProducts(): Product[] {
     return getList()
@@ -117,8 +137,28 @@ export function renderListBuilder(root: HTMLElement) {
   }
 
   function refreshCartBar() {
-    cartMount.innerHTML = cartBar(listProducts());
+    const items = listProducts();
+    if (items.length === 0) cartExpanded = false;
+    cartMount.innerHTML = cartBar(items, cartExpanded);
   }
+
+  cartMount.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    const removeBtn = target.closest<HTMLButtonElement>("[data-remove]");
+    if (removeBtn) {
+      e.stopPropagation();
+      removeFromList(removeBtn.dataset.remove!);
+      refreshCartBar();
+      refreshResults();
+      return;
+    }
+    const toggle = target.closest("#cart-bar-toggle");
+    if (toggle) {
+      cartExpanded = !cartExpanded;
+      refreshCartBar();
+      return;
+    }
+  });
 
   function refreshResults() {
     const q = qEl.value;
@@ -146,9 +186,7 @@ export function renderListBuilder(root: HTMLElement) {
     if (!li) return;
     const code = li.dataset.code;
     if (!code) return;
-    const btn = li.querySelector(".result-card__add") as HTMLButtonElement;
-    if (btn.disabled) {
-      // Tapping an already-added item removes it.
+    if (li.classList.contains("result-card--on")) {
       removeFromList(code);
     } else {
       addToList(code);

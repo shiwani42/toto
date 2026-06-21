@@ -9,6 +9,7 @@ import {
   type Geocode,
 } from "../integrations/weather";
 import { getPrefs, setPrefs, type Gender, type Experience, type Prefs } from "../lib/prefs";
+import { icon } from "../lib/icons";
 import { illustrationForCategory } from "../lib/product-art";
 
 function escapeHTML(s: string): string {
@@ -21,10 +22,17 @@ function escapeHTML(s: string): string {
 
 // ─── Static option lists ─────────────────────────────────────────────────────
 
-const GENDER_OPTIONS: Array<{ key: Gender; label: string }> = [
-  { key: "man", label: "Man" },
-  { key: "woman", label: "Woman" },
-  { key: "other", label: "Other" },
+type Purpose = "trip" | "general" | "browse";
+const PURPOSE_OPTIONS: Array<{ key: Purpose; label: string; sub: string }> = [
+  { key: "trip",    label: "Planning a trip",    sub: "Specific place and dates" },
+  { key: "general", label: "Just everyday gear", sub: "No trip in particular" },
+  { key: "browse",  label: "Just looking around", sub: "Skip the questions" },
+];
+
+const WHO_FOR_OPTIONS: Array<{ key: Gender; label: string; sub: string }> = [
+  { key: "man",   label: "A man",   sub: "Cut for men's bodies" },
+  { key: "woman", label: "A woman", sub: "Cut for women's bodies" },
+  { key: "other", label: "Unisex",  sub: "Doesn't matter to me" },
 ];
 
 const EXPERIENCE_OPTIONS: Array<{ key: Experience; label: string; sub: string }> = [
@@ -33,6 +41,9 @@ const EXPERIENCE_OPTIONS: Array<{ key: Experience; label: string; sub: string }>
   { key: "enthusiast", label: "Enthusiast", sub: "Out most weekends" },
   { key: "pro", label: "Pro", sub: "I do this all the time" },
 ];
+
+const SIZE_CHIPS: Array<NonNullable<Prefs["topSize"]>> = ["XS", "S", "M", "L", "XL"];
+const SHOE_CHIPS = [36, 37, 38, 39, 40, 41, 42, 43, 44, 45];
 
 type Activity =
   | { key: "day-hike"; label: "Day hike" }
@@ -43,12 +54,6 @@ type Activity =
   | { key: "skiing"; label: "Skiing or snowboarding" }
   | { key: "other"; label: string };
 
-type Duration =
-  | { key: "day"; label: "Day trip"; days: 1 }
-  | { key: "overnight"; label: "Overnight"; days: 2 }
-  | { key: "short"; label: "2 to 3 days"; days: 3 }
-  | { key: "long"; label: "4 or more days"; days: 5 };
-
 const ACTIVITY_OPTIONS: Activity[] = [
   { key: "day-hike", label: "Day hike" },
   { key: "multi-day", label: "Multi-day trek" },
@@ -58,21 +63,15 @@ const ACTIVITY_OPTIONS: Activity[] = [
   { key: "skiing", label: "Skiing or snowboarding" },
 ];
 
-const DURATION_OPTIONS: Duration[] = [
-  { key: "day", label: "Day trip", days: 1 },
-  { key: "overnight", label: "Overnight", days: 2 },
-  { key: "short", label: "2 to 3 days", days: 3 },
-  { key: "long", label: "4 or more days", days: 5 },
-];
-
 type Answers = {
+  purpose: Purpose | null;
   activity: Activity | null;
   location: string | null;
-  date: string | null;
-  duration: Duration | null;
+  startDate: string | null;
+  endDate: string | null; // null means single-day
 };
 
-type Step = "gender" | "experience" | "activity" | "location" | "date" | "duration";
+type Step = "purpose" | "whoFor" | "experience" | "activity" | "location" | "when" | "sizes";
 
 function todayIso(): string {
   const d = new Date();
@@ -121,30 +120,65 @@ function weatherCard(w: ForecastSummary): string {
   `;
 }
 
-function buildSteps(prefs: Prefs): Step[] {
-  const profile: Step[] = prefs.profileOffered ? [] : ["gender", "experience"];
-  return [...profile, "activity", "location", "date", "duration"];
+function sizesIncomplete(prefs: Prefs): boolean {
+  return !prefs.topSize || !prefs.bottomSize || !prefs.shoeSizeEU;
+}
+
+// Steps depend on the chosen purpose:
+//   trip     → who/experience (if new), activity, location, when, sizes
+//   general  → who/experience (if new), activity, sizes (no trip details)
+//   browse   → exit immediately
+//
+// Computed once per render so changing the purpose can rebuild the list.
+function buildSteps(prefs: Prefs, purpose: Purpose | null): Step[] {
+  if (purpose === null) return ["purpose"];
+  if (purpose === "browse") return ["purpose"]; // user exits after picking
+  const profile: Step[] = prefs.profileOffered ? [] : ["whoFor", "experience"];
+  const tripExtras: Step[] = purpose === "trip" ? ["location", "when"] : [];
+  const sizes: Step[] = sizesIncomplete(prefs) ? ["sizes"] : [];
+  return ["purpose", ...profile, "activity", ...tripExtras, ...sizes];
+}
+
+function daysBetween(start: string, end: string): number {
+  const a = new Date(start + "T12:00:00").getTime();
+  const b = new Date(end + "T12:00:00").getTime();
+  return Math.max(1, Math.round((b - a) / 86_400_000) + 1);
+}
+
+function durationLabelFor(startDate: string | null, endDate: string | null): string {
+  if (!startDate) return "a few days";
+  if (!endDate || endDate === startDate) return "day trip";
+  const d = daysBetween(startDate, endDate);
+  if (d === 2) return "overnight";
+  if (d <= 4) return `${d} days`;
+  return `${d} days`;
 }
 
 // ─── Wizard ──────────────────────────────────────────────────────────────────
 
 export function renderPlan(root: HTMLElement) {
-  const prefs = getPrefs();
-  const steps = buildSteps(prefs);
-  let i = 0;
+  const answers: Answers = {
+    purpose: null,
+    activity: null,
+    location: null,
+    startDate: null,
+    endDate: null,
+  };
 
-  const answers: Answers = { activity: null, location: null, date: null, duration: null };
+  let steps: Step[] = buildSteps(getPrefs(), null);
+  let i = 0;
 
   root.addEventListener("click", onTap);
 
   function current(): Step { return steps[i]; }
+  function rebuildSteps() {
+    steps = buildSteps(getPrefs(), answers.purpose);
+  }
 
   function advance() {
-    i++;
     // Mark profile as offered once we've moved past the last profile step.
-    if (i > 0 && steps[i - 1] === "experience") {
-      setPrefs({ profileOffered: true });
-    }
+    if (steps[i] === "experience") setPrefs({ profileOffered: true });
+    i++;
     if (i >= steps.length) { runPlanner(); return; }
     render();
   }
@@ -166,7 +200,20 @@ export function renderPlan(root: HTMLElement) {
   function applyPick(value: string) {
     const step = current();
     switch (step) {
-      case "gender": {
+      case "purpose": {
+        if (value === "trip" || value === "general" || value === "browse") {
+          answers.purpose = value;
+          rebuildSteps();
+          if (value === "browse") {
+            // Quietly head back home; the wizard isn't useful here.
+            window.location.href = "?screen=home";
+            return;
+          }
+          advance(); return;
+        }
+        return;
+      }
+      case "whoFor": {
         if (value === "skip") { advance(); return; }
         setPrefs({ gender: value as Gender });
         advance(); return;
@@ -192,17 +239,27 @@ export function renderPlan(root: HTMLElement) {
         // Location uses its own click handlers (see mountLocation).
         return;
       }
-      case "date": {
+      case "when": {
         if (value !== "continue") return;
-        const v = (root.querySelector("#when-date") as HTMLInputElement | null)?.value || todayIso();
-        answers.date = v;
+        const s = (root.querySelector("#start-date") as HTMLInputElement | null)?.value || todayIso();
+        const e = (root.querySelector("#end-date") as HTMLInputElement | null)?.value;
+        answers.startDate = s;
+        answers.endDate = e && e >= s ? e : null;
         advance(); return;
       }
-      case "duration": {
-        const found = DURATION_OPTIONS.find((o) => o.key === value);
-        if (!found) return;
-        answers.duration = found;
-        advance(); return;
+      case "sizes": {
+        if (value === "skip") { advance(); return; }
+        if (value === "continue") { advance(); return; }
+        if (value.startsWith("top:")) {
+          setPrefs({ topSize: value.slice(4) as Prefs["topSize"], sizeSource: "manual" });
+        } else if (value.startsWith("bot:")) {
+          setPrefs({ bottomSize: value.slice(4) as Prefs["bottomSize"], sizeSource: "manual" });
+        } else if (value.startsWith("shoe:")) {
+          setPrefs({ shoeSizeEU: Number(value.slice(5)), sizeSource: "manual" });
+        }
+        // Re-render the same step to reflect the new selection state.
+        render();
+        return;
       }
     }
   }
@@ -220,11 +277,10 @@ export function renderPlan(root: HTMLElement) {
       </main>
     `;
     if (current() === "location") mountLocation();
-    if (current() === "date") {
-      // Fire an initial peek for today's default value, so the line appears
-      // even if the user doesn't change the date input.
-      const dateInput = root.querySelector("#when-date") as HTMLInputElement | null;
-      if (dateInput) runPeek(dateInput.value);
+    if (current() === "when") {
+      // Fire an initial peek for today's default start date.
+      const startInput = root.querySelector("#start-date") as HTMLInputElement | null;
+      if (startInput) runPeek(startInput.value);
     }
   }
 
@@ -234,23 +290,40 @@ export function renderPlan(root: HTMLElement) {
 
   function renderStep(): string {
     const step = current();
-    if (step === "gender") {
+    if (step === "purpose") {
       return `
         <section class="wizard__step">
-          <h1 class="wizard__q">First, who am I packing for?</h1>
-          <p class="wizard__hint">This helps me suggest the right cut and size.</p>
+          <h1 class="wizard__q">What brings you in?</h1>
           <div class="wizard__list">
-            ${GENDER_OPTIONS.map((o) => `<button class="wizard__opt wizard__opt--row" data-pick="${o.key}">${o.label}</button>`).join("")}
+            ${PURPOSE_OPTIONS.map((o) => `
+              <button class="wizard__opt wizard__opt--row wizard__opt--two" data-pick="${o.key}">
+                <span class="wizard__opt-title">${escapeHTML(o.label)}</span>
+                <span class="wizard__opt-sub">${escapeHTML(o.sub)}</span>
+              </button>`).join("")}
+          </div>
+        </section>
+      `;
+    }
+    if (step === "whoFor") {
+      return `
+        <section class="wizard__step">
+          <h1 class="wizard__q">Who are we packing for?</h1>
+          <p class="wizard__hint">Helps me suggest the right cut.</p>
+          <div class="wizard__list">
+            ${WHO_FOR_OPTIONS.map((o) => `
+              <button class="wizard__opt wizard__opt--row wizard__opt--two" data-pick="${o.key}">
+                <span class="wizard__opt-title">${escapeHTML(o.label)}</span>
+                <span class="wizard__opt-sub">${escapeHTML(o.sub)}</span>
+              </button>`).join("")}
           </div>
           ${skipBtn("Prefer not to say")}
         </section>
       `;
     }
     if (step === "experience") {
-      const lead = leadFromPrefs();
       return `
         <section class="wizard__step">
-          <h1 class="wizard__q">${escapeHTML(lead)} How outdoorsy are you?</h1>
+          <h1 class="wizard__q">How outdoorsy are you?</h1>
           <div class="wizard__list">
             ${EXPERIENCE_OPTIONS.map((o) => `
               <button class="wizard__opt wizard__opt--row wizard__opt--two" data-pick="${o.key}">
@@ -263,9 +336,10 @@ export function renderPlan(root: HTMLElement) {
       `;
     }
     if (step === "activity") {
+      const lead = answers.purpose === "general" ? "Got it. What kind of gear?" : "What are you up to?";
       return `
         <section class="wizard__step">
-          <h1 class="wizard__q">${escapeHTML(transitionLead())} What are you up to?</h1>
+          <h1 class="wizard__q">${escapeHTML(lead)}</h1>
           <div class="wizard__grid">
             ${ACTIVITY_OPTIONS.map((o) => `<button class="wizard__opt" data-pick="${o.key}">${escapeHTML(o.label)}</button>`).join("")}
           </div>
@@ -282,55 +356,68 @@ export function renderPlan(root: HTMLElement) {
       return `
         <section class="wizard__step">
           <h1 class="wizard__q">${escapeHTML(lead)}. Where to?</h1>
-          <p class="wizard__hint">Type a place. I'll pull it from the world map.</p>
           <div class="loc-search">
-            <input id="loc-input" type="search" autocomplete="off" placeholder="e.g. Chamonix, Yosemite, Patagonia…" />
+            <input id="loc-input" type="search" autocomplete="off" placeholder="Type any place, anywhere…" />
             <ul id="loc-results" class="loc-results"></ul>
           </div>
           ${skipBtn()}
         </section>
       `;
     }
-    if (step === "date") {
+    if (step === "when") {
       const today = todayIso();
       const lead = answers.location ?? "Got it";
       return `
         <section class="wizard__step">
           <h1 class="wizard__q">${escapeHTML(lead)}. When?</h1>
-          <div class="wizard__date-row">
-            <input id="when-date" type="date" value="${today}" min="${today}" />
-            <button class="primary wizard__date-go" data-pick="continue">Continue</button>
+          <p class="wizard__hint">Pick a start. Add an end date if you're out for more than a day.</p>
+          <div class="wizard__date-grid">
+            <label class="wizard__date-label">
+              <span>Start</span>
+              <input id="start-date" type="date" value="${today}" min="${today}" />
+            </label>
+            <label class="wizard__date-label">
+              <span>End <small class="muted">(optional)</small></span>
+              <input id="end-date" type="date" min="${today}" />
+            </label>
           </div>
           <p class="wizard__peek" id="peek"></p>
+          <button class="primary" data-pick="continue">Continue</button>
           ${skipBtn()}
         </section>
       `;
     }
-    if (step === "duration") {
-      const dateLabel = answers.date ? friendlyDate(answers.date) : "Got it";
+    if (step === "sizes") {
+      const p = getPrefs();
+      const block = (label: string, prefix: string, options: Array<string | number>, selected: string | number | null) => `
+        <div class="sizes-block">
+          <p class="sizes-block__label">${label}</p>
+          <div class="wizard__chips">
+            ${options.map((s) => `<button class="wizard__chip ${selected === s ? "wizard__chip--on" : ""}" data-pick="${prefix}:${s}">${s}</button>`).join("")}
+          </div>
+        </div>
+      `;
       return `
         <section class="wizard__step">
-          <h1 class="wizard__q">${escapeHTML(dateLabel)}. How long are you out?</h1>
-          <div class="wizard__list">
-            ${DURATION_OPTIONS.map((o) => `<button class="wizard__opt wizard__opt--row" data-pick="${o.key}">${escapeHTML(o.label)}</button>`).join("")}
-          </div>
-          ${skipBtn()}
+          <h1 class="wizard__q">What size do you wear?</h1>
+          <p class="wizard__hint">Skip anything you don't know.</p>
+          ${!p.topSize    ? block("Top",   "top",  SIZE_CHIPS as Array<string|number>, p.topSize) : ""}
+          ${!p.bottomSize ? block("Bottom", "bot", SIZE_CHIPS as Array<string|number>, p.bottomSize) : ""}
+          ${!p.shoeSizeEU ? block("Shoe (EU)", "shoe", SHOE_CHIPS as Array<string|number>, p.shoeSizeEU) : ""}
+          <a class="fit-nudge fit-nudge--lite" href="?screen=fit">
+            <span class="fit-nudge__icon">${icon("ruler", 18)}</span>
+            <span class="fit-nudge__body">
+              <span class="fit-nudge__title">Or take a quick photo</span>
+              <span class="fit-nudge__sub">I'll guess your sizes from a single shot.</span>
+            </span>
+            <span class="fit-nudge__chev" aria-hidden="true">›</span>
+          </a>
+          <button class="primary" data-pick="continue">Continue</button>
+          ${skipBtn("I'll set sizes later")}
         </section>
       `;
     }
     return "";
-  }
-
-  function leadFromPrefs(): string {
-    const g = getPrefs().gender;
-    if (g === "man") return "Good to know.";
-    if (g === "woman") return "Good to know.";
-    if (g === "other") return "Got it.";
-    return "No worries.";
-  }
-  function transitionLead(): string {
-    // After profile (or skipped), start the trip questions warmly.
-    return getPrefs().profileOffered || i === 0 ? "Now, the trip." : "Got it.";
   }
 
   // ─── Location autocomplete ─────────────────────────────────────────────────
@@ -423,12 +510,11 @@ export function renderPlan(root: HTMLElement) {
     }
   }
 
-  // Re-fire the peek on commit (change), debounced. Listening to both 'input'
-  // and 'change' raced and clobbered each other; date pickers only need change.
+  // Re-fire the peek when start date changes (debounced).
   let peekDebounce: number | undefined;
   root.addEventListener("change", (e) => {
     const t = e.target as HTMLElement;
-    if (t.id !== "when-date") return;
+    if (t.id !== "start-date") return;
     const v = (t as HTMLInputElement).value;
     window.clearTimeout(peekDebounce);
     peekDebounce = window.setTimeout(() => runPeek(v), 200);
@@ -440,25 +526,36 @@ export function renderPlan(root: HTMLElement) {
     // The profile now goes into the system prompt directly; the trip text
     // stays focused on the trip itself.
     const a = answers.activity?.label ?? "An outdoor trip";
+    if (answers.purpose === "general") {
+      return `Everyday outdoor gear for ${a.toLowerCase()}, no specific trip.`;
+    }
     const loc = answers.location ?? "Swiss Alps";
-    const dateText = answers.date ? `on ${answers.date}` : "soon";
-    const dur = answers.duration?.label ?? "a few days";
-    return `${a} near ${loc} ${dateText}, lasting ${dur.toLowerCase()}.`;
+    const dateText = answers.startDate ? `starting ${answers.startDate}` : "soon";
+    const dur = answers.endDate
+      ? `for ${daysBetween(answers.startDate ?? answers.endDate, answers.endDate)} days`
+      : `for a day trip`;
+    return `${a} near ${loc} ${dateText}, ${dur}.`;
   }
 
   async function runPlanner() {
     // Build a personalized headline from the user's answers, so they feel heard.
     const activity = answers.activity?.label.toLowerCase() ?? "your trip";
+    const isGeneral = answers.purpose === "general";
     const loc = answers.location ?? "your spot";
-    const when = answers.date ? friendlyDate(answers.date) : "soon";
-    const dur = answers.duration?.label.toLowerCase() ?? "a few days";
+    const when = answers.startDate ? friendlyDate(answers.startDate) : "soon";
+    const dur = durationLabelFor(answers.startDate, answers.endDate);
+
+    const headline = isGeneral
+      ? `Picking everyday gear for <strong>${escapeHTML(activity)}</strong>.`
+      : `Curating gear for your ${escapeHTML(activity)} in <strong>${escapeHTML(loc)}</strong>.`;
+    const subline = isGeneral ? "" : `${escapeHTML(when)} · ${escapeHTML(dur)}`;
 
     root.innerHTML = `
       <main class="screen-plan wizard">
         <div class="wizard__loading">
-          <h1 class="wizard__q">Curating gear for your ${escapeHTML(activity)} in <strong>${escapeHTML(loc)}</strong>.</h1>
-          <p class="wizard__loading-sub">${escapeHTML(when)} · ${escapeHTML(dur)}</p>
-          <p class="wizard__progress-msg" id="progress">Pulling the forecast…</p>
+          <h1 class="wizard__q">${headline}</h1>
+          ${subline ? `<p class="wizard__loading-sub">${subline}</p>` : ""}
+          <p class="wizard__progress-msg" id="progress">${isGeneral ? "Thinking it over…" : "Pulling the forecast…"}</p>
           <div id="weather"></div>
         </div>
         <div id="result"></div>
