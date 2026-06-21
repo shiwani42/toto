@@ -166,11 +166,44 @@ export function renderScan(root: HTMLElement) {
     overlay.dataset.dpr = String(dpr);
   }
 
+  // Persistent buffer of recently-seen pins. The decoder runs at a few
+  // fps and individual frames sometimes miss codes that were visible a
+  // moment ago. Keeping each pin on screen for a short trailing window
+  // smooths over those gaps and makes multi-barcode views actually look
+  // like multi-barcode views.
+  type PinEntry = {
+    text: string;
+    position: DecodedBarcode["position"];
+    lastSeen: number;
+    inserted: number;
+  };
+  const PIN_TTL_MS = 600;
+  const PIN_FADE_AFTER_MS = 350;
+  const pinBuffer = new Map<string, PinEntry>();
+
   function drawOverlay(handle: ScannerHandle, barcodes: DecodedBarcode[], srcW: number, srcH: number) {
     const dpr = Number(overlay.dataset.dpr || "1");
     const ctx = overlay.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+    const now = performance.now();
+
+    // Update buffer with this frame's detections; refresh positions and
+    // timestamps for re-seen codes.
+    for (const b of barcodes) {
+      const existing = pinBuffer.get(b.text);
+      pinBuffer.set(b.text, {
+        text: b.text,
+        position: b.position,
+        lastSeen: now,
+        inserted: existing?.inserted ?? now,
+      });
+    }
+    // Evict pins that haven't been re-seen in a while.
+    for (const [k, e] of pinBuffer) {
+      if (now - e.lastSeen > PIN_TTL_MS) pinBuffer.delete(k);
+    }
 
     if (srcW === 0 || srcH === 0) return;
     // Object-fit: cover scaling — video fills the box, may be cropped.
@@ -187,24 +220,31 @@ export function renderScan(root: HTMLElement) {
       y: (pt.y * scale + offsetY) * dpr,
     });
 
-    for (const b of barcodes) {
-      const matched = wantedSet.has(b.text);
-      const already = found.has(b.text);
-      const cx = (b.position.topLeft.x + b.position.topRight.x + b.position.bottomLeft.x + b.position.bottomRight.x) / 4;
-      const cy = (b.position.topLeft.y + b.position.topRight.y + b.position.bottomLeft.y + b.position.bottomRight.y) / 4;
+    for (const pin of pinBuffer.values()) {
+      const matched = wantedSet.has(pin.text);
+      const already = found.has(pin.text);
+      const p = pin.position;
+      const cx = (p.topLeft.x + p.topRight.x + p.bottomLeft.x + p.bottomRight.x) / 4;
+      const cy = (p.topLeft.y + p.topRight.y + p.bottomLeft.y + p.bottomRight.y) / 4;
       const c = toCanvas({ x: cx, y: cy });
+
+      // Fade out as the pin gets stale.
+      const age = now - pin.lastSeen;
+      const alpha = age <= PIN_FADE_AFTER_MS
+        ? 1
+        : Math.max(0, 1 - (age - PIN_FADE_AFTER_MS) / (PIN_TTL_MS - PIN_FADE_AFTER_MS));
 
       // Color logic:
       //   green        – on the list, not yet checked
       //   green + ring – on the list, already found
       //   white        – not on the list
-      const color = matched ? "#2ecc71" : "rgba(255,255,255,0.85)";
-      const ring  = matched && already;
+      const fill = matched ? `rgba(46, 204, 113, ${alpha})` : `rgba(255, 255, 255, ${alpha * 0.85})`;
+      const ring = matched && already;
 
       ctx.beginPath();
       ctx.arc(c.x, c.y, 14 * dpr, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.shadowColor = "rgba(0,0,0,0.4)";
+      ctx.fillStyle = fill;
+      ctx.shadowColor = `rgba(0, 0, 0, ${alpha * 0.4})`;
       ctx.shadowBlur = 8 * dpr;
       ctx.fill();
       ctx.shadowBlur = 0;
@@ -212,16 +252,15 @@ export function renderScan(root: HTMLElement) {
       if (ring) {
         ctx.beginPath();
         ctx.arc(c.x, c.y, 22 * dpr, 0, Math.PI * 2);
-        ctx.strokeStyle = "#fff";
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.lineWidth = 3 * dpr;
         ctx.stroke();
 
-        // Draw a check inside the ring
         ctx.beginPath();
         ctx.moveTo(c.x - 6 * dpr, c.y);
         ctx.lineTo(c.x - 2 * dpr, c.y + 4 * dpr);
         ctx.lineTo(c.x + 6 * dpr, c.y - 4 * dpr);
-        ctx.strokeStyle = "#fff";
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.lineWidth = 3 * dpr;
         ctx.lineCap = "round";
         ctx.stroke();
