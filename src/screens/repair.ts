@@ -1,25 +1,8 @@
-import {
-  Camera,
-  CameraPosition,
-  CameraSwitchControl,
-  DataCaptureContext,
-  DataCaptureView,
-  FrameSourceState,
-  Feedback,
-} from "@scandit/web-datacapture-core";
-import {
-  barcodeCaptureLoader,
-  BarcodeCapture,
-  BarcodeCaptureSettings,
-  Symbology,
-} from "@scandit/web-datacapture-barcode";
 import { getProduct } from "../lib/catalog";
 import { repairProgramFor, type RepairProgram } from "../fixtures/repair-programs";
+import { startScanner, type ScannerHandle } from "../lib/scanner";
+import { cameraErrorMessage } from "../lib/camera-errors";
 import type { Product } from "../lib/types";
-
-const LICENSE_KEY = import.meta.env.VITE_SCANDIT_LICENSE_KEY as
-  | string
-  | undefined;
 
 function escapeHTML(s: string): string {
   return s
@@ -63,11 +46,9 @@ function repairCard(p: Product, prog: RepairProgram): string {
   }
   const { recommendation, reasoning } = decide(p, prog);
   const recColor =
-    recommendation === "Repair"
-      ? "var(--ok)"
-      : recommendation === "Replace"
-        ? "var(--bad)"
-        : "var(--warn)";
+    recommendation === "Repair"  ? "var(--ok)"
+  : recommendation === "Replace" ? "var(--bad)"
+  : "var(--warn)";
   return `
     <div class="diff-card">
       <h3>${escapeHTML(prog.programName)}</h3>
@@ -79,34 +60,12 @@ function repairCard(p: Product, prog: RepairProgram): string {
       </div>
 
       <ul class="diff-list">
-        <li>
-          <span class="diff-list__label">Minor (re-stitch / patch)</span>
-          <span class="diff-list__delta">~CHF ${prog.repairCostBands.minor}</span>
-        </li>
-        <li>
-          <span class="diff-list__label">Medium (zipper / lining / DWR)</span>
-          <span class="diff-list__delta">~CHF ${prog.repairCostBands.medium}</span>
-        </li>
-        <li>
-          <span class="diff-list__label">Major (membrane / sole / panel)</span>
-          <span class="diff-list__delta">~CHF ${prog.repairCostBands.major}</span>
-        </li>
-        <li>
-          <span class="diff-list__label">New one costs</span>
-          <span class="diff-list__delta">CHF ${p.price_chf.toFixed(0)}</span>
-        </li>
-        <li>
-          <span class="diff-list__label">Turnaround</span>
-          <span class="diff-list__delta">${escapeHTML(prog.turnaroundDays)} days</span>
-        </li>
-        ${
-          prog.perk
-            ? `<li>
-                <span class="diff-list__label">Perk</span>
-                <span class="diff-list__delta" style="color:var(--ok)">${escapeHTML(prog.perk)}</span>
-              </li>`
-            : ""
-        }
+        <li><span class="diff-list__label">Minor (re-stitch / patch)</span><span class="diff-list__delta">~CHF ${prog.repairCostBands.minor}</span></li>
+        <li><span class="diff-list__label">Medium (zipper / lining / DWR)</span><span class="diff-list__delta">~CHF ${prog.repairCostBands.medium}</span></li>
+        <li><span class="diff-list__label">Major (membrane / sole / panel)</span><span class="diff-list__delta">~CHF ${prog.repairCostBands.major}</span></li>
+        <li><span class="diff-list__label">New one costs</span><span class="diff-list__delta">CHF ${p.price_chf.toFixed(0)}</span></li>
+        <li><span class="diff-list__label">Turnaround</span><span class="diff-list__delta">${escapeHTML(prog.turnaroundDays)} days</span></li>
+        ${prog.perk ? `<li><span class="diff-list__label">Perk</span><span class="diff-list__delta" style="color:var(--ok)">${escapeHTML(prog.perk)}</span></li>` : ""}
       </ul>
 
       <a class="primary" href="${escapeHTML(prog.url)}" target="_blank" rel="noreferrer noopener">
@@ -114,6 +73,19 @@ function repairCard(p: Product, prog: RepairProgram): string {
       </a>
     </div>
   `;
+}
+
+function buildResultHTML(product: Product): string {
+  const prog = repairProgramFor(product.brand);
+  if (!prog) {
+    return `
+      <div class="diff-card">
+        <h3>No repair program on file for ${escapeHTML(product.brand)}.</h3>
+        <p class="diff-card__lead">A replacement would cost <strong>CHF ${product.price_chf.toFixed(0)}</strong>.</p>
+      </div>
+    `;
+  }
+  return repairCard(product, prog);
 }
 
 export function renderRepair(root: HTMLElement) {
@@ -140,115 +112,53 @@ export function renderRepair(root: HTMLElement) {
     statusEl.hidden = !msg;
   }
 
-  let initialized = false;
-  let barcodeCapture: BarcodeCapture | null = null;
+  let handle: ScannerHandle | null = null;
+  let paused = false;
 
-  async function initScanner() {
-    if (initialized) return;
-    if (!LICENSE_KEY) {
-      console.error("Scanner license not configured (VITE_SCANDIT_LICENSE_KEY missing).");
-      setStatus("The camera isn't ready right now.");
-      return;
-    }
-    setStatus("Warming up the camera…");
-    const context = await DataCaptureContext.forLicenseKey(LICENSE_KEY, {
-      libraryLocation:
-        "https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-barcode@8/sdc-lib/",
-      moduleLoaders: [barcodeCaptureLoader()],
-    });
-
-    const view = new DataCaptureView();
-    view.connectToElement(captureViewEl);
-    await view.setContext(context);
-    view.addControl(new CameraSwitchControl());
-
-    const camera = Camera.pickBestGuessForPosition(CameraPosition.WorldFacing);
-    await camera.applySettings(BarcodeCapture.recommendedCameraSettings);
-    await context.setFrameSource(camera);
-    await camera.switchToDesiredState(FrameSourceState.On);
-
-    const settings = new BarcodeCaptureSettings();
-    settings.enableSymbologies([
-      Symbology.EAN13UPCA,
-      Symbology.EAN8,
-      Symbology.UPCE,
-      Symbology.QR,
-      Symbology.Code128,
-      Symbology.Code39,
-      Symbology.DataMatrix,
-    ]);
-    barcodeCapture = await BarcodeCapture.forContext(context, settings);
-    const feedback = Feedback.defaultFeedback;
-
-    barcodeCapture.addListener({
-      didScan: async (_mode, session) => {
-        const barcode = session.newlyRecognizedBarcode;
-        if (!barcode || !barcodeCapture) return;
-        const code = barcode.data ?? "";
-        const product = getProduct(code);
+  async function ensureScanner(): Promise<void> {
+    if (handle) return;
+    handle = await startScanner({
+      host: captureViewEl,
+      onFrame: () => { /* no overlay */ },
+      onScan: (code) => {
+        if (paused) return;
+        const product = getProduct(code.text);
         if (!product) {
-          setStatus(`I don't have ‘${code}’ in the catalog. Try another barcode.`);
+          setStatus(`I don't have '${code.text}' in the catalog. Try another barcode.`);
           return;
         }
-        feedback.emit();
         if ("vibrate" in navigator) navigator.vibrate(60);
-        await barcodeCapture.setEnabled(false);
+        paused = true;
         captureViewEl.classList.remove("compare-cam--active");
         scanBtn.textContent = "Scan another";
-        setStatus(
-          `Got it: ${product.name}, ${product.brand}, size ${product.size}.`,
-        );
-        const prog = repairProgramFor(product.brand);
-        if (!prog) {
-          resultEl.innerHTML = `
-            <div class="diff-card">
-              <h3>No repair program on file for ${escapeHTML(product.brand)}.</h3>
-              <p class="diff-card__lead">A replacement would cost <strong>CHF ${product.price_chf.toFixed(0)}</strong>.</p>
-            </div>
-          `;
-          return;
-        }
-        resultEl.innerHTML = repairCard(product, prog);
+        setStatus(`Got it: ${product.name}, ${product.brand}, size ${product.size}.`);
+        resultEl.innerHTML = buildResultHTML(product);
       },
     });
-
-    initialized = true;
   }
 
   scanBtn.addEventListener("click", async () => {
+    setStatus("Warming up the camera…");
     try {
-      await initScanner();
-      if (!barcodeCapture) return;
+      await ensureScanner();
+      paused = false;
       captureViewEl.classList.add("compare-cam--active");
-      await barcodeCapture.setEnabled(true);
       setStatus("Point the camera at the barcode.");
     } catch (err) {
-      console.error("Repair scanner failed:", err, "hostname:", location.hostname);
-      void import("../lib/camera-errors").then(({ cameraErrorMessage }) => {
-        setStatus(cameraErrorMessage(err));
-      });
+      console.error("Repair scanner failed:", err);
+      setStatus(cameraErrorMessage(err));
     }
   });
 
-  // If we arrived with ?code=CODE (from a contextual prompt elsewhere),
-  // render the repair card immediately. No camera needed.
   const prefilled = new URLSearchParams(window.location.search).get("code");
   if (prefilled) {
     const product = getProduct(prefilled);
     if (product) {
       scanBtn.textContent = "Scan a different one";
       setStatus(`Looking at: ${product.name}, ${product.brand}.`);
-      const prog = repairProgramFor(product.brand);
-      if (!prog) {
-        resultEl.innerHTML = `
-          <div class="diff-card">
-            <h3>No repair program on file for ${escapeHTML(product.brand)}.</h3>
-            <p class="diff-card__lead">A replacement would cost <strong>CHF ${product.price_chf.toFixed(0)}</strong>.</p>
-          </div>
-        `;
-      } else {
-        resultEl.innerHTML = repairCard(product, prog);
-      }
+      resultEl.innerHTML = buildResultHTML(product);
     }
   }
+
+  window.addEventListener("pagehide", () => { handle?.stop(); }, { once: true });
 }

@@ -1,24 +1,7 @@
-import {
-  Camera,
-  CameraPosition,
-  CameraSwitchControl,
-  DataCaptureContext,
-  DataCaptureView,
-  FrameSourceState,
-  Feedback,
-} from "@scandit/web-datacapture-core";
-import {
-  barcodeCaptureLoader,
-  BarcodeCapture,
-  BarcodeCaptureSettings,
-  Symbology,
-} from "@scandit/web-datacapture-barcode";
 import { getProduct } from "../lib/catalog";
+import { startScanner, type ScannerHandle } from "../lib/scanner";
+import { cameraErrorMessage } from "../lib/camera-errors";
 import type { Product } from "../lib/types";
-
-const LICENSE_KEY = import.meta.env.VITE_SCANDIT_LICENSE_KEY as
-  | string
-  | undefined;
 
 function escapeHTML(s: string): string {
   return s
@@ -39,14 +22,10 @@ type Diff = {
 };
 
 function explain(a: Product, b: Product): Diff {
-  // Always frame cheaper -> pricier so the gap is positive.
-  const [cheaper, pricier] =
-    a.price_chf <= b.price_chf ? [a, b] : [b, a];
+  const [cheaper, pricier] = a.price_chf <= b.price_chf ? [a, b] : [b, a];
   const gap = pricier.price_chf - cheaper.price_chf;
-
   const reasons: { label: string; delta: string; weight: number }[] = [];
 
-  // Material — biggest single contributor when different
   if (pricier.material !== cheaper.material) {
     reasons.push({
       label: `Material: ${pricier.material} vs ${cheaper.material}`,
@@ -55,7 +34,6 @@ function explain(a: Product, b: Product): Diff {
     });
   }
 
-  // Waterproof rating — big number = expensive membranes
   const wpDelta = pricier.waterproof_rating_mm - cheaper.waterproof_rating_mm;
   if (Math.abs(wpDelta) >= 5000) {
     reasons.push({
@@ -65,9 +43,8 @@ function explain(a: Product, b: Product): Diff {
     });
   }
 
-  // Temp rating (lower = warmer = more fill / better insulation)
   if (pricier.temp_rating_c != null && cheaper.temp_rating_c != null) {
-    const tDelta = cheaper.temp_rating_c - pricier.temp_rating_c; // positive => pricier is warmer
+    const tDelta = cheaper.temp_rating_c - pricier.temp_rating_c;
     if (Math.abs(tDelta) >= 5) {
       reasons.push({
         label: `Temp rating: ${pricier.temp_rating_c}°C vs ${cheaper.temp_rating_c}°C`,
@@ -77,7 +54,6 @@ function explain(a: Product, b: Product): Diff {
     }
   }
 
-  // Weight (lighter = engineered = more expensive)
   const wDelta = pricier.weight_g - cheaper.weight_g;
   if (Math.abs(wDelta) >= 50) {
     reasons.push({
@@ -87,7 +63,6 @@ function explain(a: Product, b: Product): Diff {
     });
   }
 
-  // Tags-as-features the pricier has that the cheaper doesn't
   const cheaperTags = new Set(cheaper.tags);
   const extra = pricier.tags.filter((t) => !cheaperTags.has(t) && !["mens", "womens", "unisex", "kids", "demo-book"].includes(t));
   if (extra.length > 0) {
@@ -98,14 +73,12 @@ function explain(a: Product, b: Product): Diff {
     });
   }
 
-  // Brand premium = whatever's left
   const accountedRatio = reasons.reduce((s, r) => s + r.weight, 0);
   const brandPremium = Math.max(0, Math.round(gap * (1 - accountedRatio)));
   return { cheaper, pricier, gap, reasons, brandPremium };
 }
 
 function estimateMaterialCost(p: string, c: string, gap: number): string {
-  // Premium materials usually drive 30-50% of the gap.
   const premium = /gore[- ]?tex|merino|down|leather|3l/i.test(p);
   const cheap = !/gore[- ]?tex|merino|down|leather|3l/i.test(c);
   const ratio = premium && cheap ? 0.4 : 0.3;
@@ -225,7 +198,6 @@ export function renderCompare(root: HTMLElement) {
     renderDiff();
   }
 
-  // If we arrived with ?a=CODE (from a contextual prompt elsewhere), pre-fill A.
   const prefilledA = new URLSearchParams(window.location.search).get("a");
   if (prefilledA) {
     const p = getProduct(prefilledA);
@@ -236,63 +208,25 @@ export function renderCompare(root: HTMLElement) {
   }
   refreshAll();
 
-  // ----- Scanner setup -----
+  // ─── Scanner ─────────────────────────────────────────────────────────────
 
-  let initialized = false;
-  let barcodeCapture: BarcodeCapture | null = null;
+  let handle: ScannerHandle | null = null;
   let activeSlot: Slot | null = null;
 
-  async function initScanner() {
-    if (initialized) return;
-    if (!LICENSE_KEY) {
-      console.error("Scanner license not configured (VITE_SCANDIT_LICENSE_KEY missing).");
-      setStatus("The camera isn't ready right now.");
-      return;
-    }
-    setStatus("Warming up the camera…");
-    const context = await DataCaptureContext.forLicenseKey(LICENSE_KEY, {
-      libraryLocation:
-        "https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-barcode@8/sdc-lib/",
-      moduleLoaders: [barcodeCaptureLoader()],
-    });
-
-    const view = new DataCaptureView();
-    view.connectToElement(captureViewEl);
-    await view.setContext(context);
-    view.addControl(new CameraSwitchControl());
-
-    const camera = Camera.pickBestGuessForPosition(CameraPosition.WorldFacing);
-    await camera.applySettings(BarcodeCapture.recommendedCameraSettings);
-    await context.setFrameSource(camera);
-    await camera.switchToDesiredState(FrameSourceState.On);
-
-    const settings = new BarcodeCaptureSettings();
-    settings.enableSymbologies([
-      Symbology.EAN13UPCA,
-      Symbology.EAN8,
-      Symbology.UPCE,
-      Symbology.QR,
-      Symbology.Code128,
-      Symbology.Code39,
-      Symbology.DataMatrix,
-    ]);
-    barcodeCapture = await BarcodeCapture.forContext(context, settings);
-    const feedback = Feedback.defaultFeedback;
-
-    barcodeCapture.addListener({
-      didScan: async (_mode, session) => {
-        const barcode = session.newlyRecognizedBarcode;
-        if (!barcode || activeSlot == null || !barcodeCapture) return;
-        const code = barcode.data ?? "";
-        const product = getProduct(code);
+  async function ensureScanner(): Promise<void> {
+    if (handle) return;
+    handle = await startScanner({
+      host: captureViewEl,
+      onFrame: () => { /* no overlay */ },
+      onScan: (code) => {
+        if (activeSlot == null) return;
+        const product = getProduct(code.text);
         if (!product) {
-          setStatus(`I don't have ‘${code}’ in the catalog. Try another barcode.`);
+          setStatus(`I don't have '${code.text}' in the catalog. Try another barcode.`);
           return;
         }
         products[activeSlot] = product;
-        feedback.emit();
         if ("vibrate" in navigator) navigator.vibrate(60);
-        await barcodeCapture.setEnabled(false);
         activeSlot = null;
         captureViewEl.classList.remove("compare-cam--active");
         refreshAll();
@@ -303,32 +237,28 @@ export function renderCompare(root: HTMLElement) {
         );
       },
     });
-
-    initialized = true;
   }
 
   async function startScanning(slot: Slot) {
-    await initScanner();
-    if (!barcodeCapture) return;
+    setStatus("Warming up the camera…");
+    try {
+      await ensureScanner();
+    } catch (err) {
+      console.error("Compare scanner failed:", err);
+      setStatus(cameraErrorMessage(err));
+      return;
+    }
     activeSlot = slot;
     captureViewEl.classList.add("compare-cam--active");
-    await barcodeCapture.setEnabled(true);
     setStatus(`Point at a barcode for slot ${slot}.`);
   }
 
   root.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest(
-      ".slot__btn",
-    ) as HTMLButtonElement | null;
+    const btn = (e.target as HTMLElement).closest(".slot__btn") as HTMLButtonElement | null;
     if (!btn) return;
     const slot = btn.dataset.target as Slot | undefined;
     if (slot === "A" || slot === "B") {
-      startScanning(slot).catch((err: unknown) => {
-        console.error("Compare scanner failed:", err, "hostname:", location.hostname);
-        void import("../lib/camera-errors").then(({ cameraErrorMessage }) => {
-          setStatus(cameraErrorMessage(err));
-        });
-      });
+      void startScanning(slot);
     }
   });
 
@@ -338,4 +268,6 @@ export function renderCompare(root: HTMLElement) {
     refreshAll();
     setStatus(`Cleared.`);
   });
+
+  window.addEventListener("pagehide", () => { handle?.stop(); }, { once: true });
 }

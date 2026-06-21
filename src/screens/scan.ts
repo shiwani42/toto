@@ -1,31 +1,9 @@
-import {
-  Camera,
-  CameraSwitchControl,
-  Color,
-  DataCaptureContext,
-  DataCaptureView,
-  FrameSourceState,
-} from "@scandit/web-datacapture-core";
-import {
-  barcodeCaptureLoader,
-  BarcodeCapture,
-  BarcodeFind,
-  BarcodeFindItem,
-  BarcodeFindItemContent,
-  BarcodeFindItemSearchOptions,
-  BarcodeFindSettings,
-  BarcodeFindView,
-  BarcodeFindViewSettings,
-  Symbology,
-} from "@scandit/web-datacapture-barcode";
 import { getList } from "../lib/list";
 import { getProduct } from "../lib/catalog";
 import { announce } from "../lib/prefs";
 import { track } from "../lib/analytics";
-
-const LICENSE_KEY = import.meta.env.VITE_SCANDIT_LICENSE_KEY as
-  | string
-  | undefined;
+import { startScanner, type DecodedBarcode, type ScannerHandle } from "../lib/scanner";
+import { cameraErrorMessage } from "../lib/camera-errors";
 
 const FOUND_KEY = "toto.found";
 
@@ -57,6 +35,15 @@ export function renderScan(root: HTMLElement) {
       <div id="status" class="status" style="display:none"></div>
       <div class="scan-viewport">
         <div id="capture-view" class="scan-view"></div>
+        <canvas id="overlay" class="scan-overlay"></canvas>
+        <button id="cam-switch" class="scan-switch" title="Switch camera" aria-label="Switch camera">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/>
+            <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>
+          </svg>
+        </button>
         <div id="scan-start-overlay" class="scan-start-overlay">
           <div class="scan-start-ripple"></div>
           <button id="start-scan-btn" class="scan-start-btn">
@@ -65,139 +52,241 @@ export function renderScan(root: HTMLElement) {
           </button>
         </div>
       </div>
-      <a class="link-btn back-link" href="?screen=map">‹ Back to the map</a>
+      <div id="carousel" class="find-carousel" aria-label="Items to find"></div>
+      <div class="find-controls">
+        <button id="finish" class="btn-primary" disabled>I'm done</button>
+        <a class="link-btn" href="?screen=map">‹ Back to the map</a>
+      </div>
     </main>
   `;
 
-  const statusEl = root.querySelector("#status") as HTMLDivElement;
-  const captureViewEl = root.querySelector("#capture-view") as HTMLDivElement;
-  const startBtn = root.querySelector("#start-scan-btn") as HTMLButtonElement;
-  const overlay = root.querySelector("#scan-start-overlay") as HTMLDivElement;
+  const statusEl     = root.querySelector("#status") as HTMLDivElement;
+  const captureView  = root.querySelector("#capture-view") as HTMLDivElement;
+  const overlay      = root.querySelector("#overlay") as HTMLCanvasElement;
+  const startBtn     = root.querySelector("#start-scan-btn") as HTMLButtonElement;
+  const startOverlay = root.querySelector("#scan-start-overlay") as HTMLDivElement;
+  const camSwitchBtn = root.querySelector("#cam-switch") as HTMLButtonElement;
+  const carouselEl   = root.querySelector("#carousel") as HTMLDivElement;
+  const finishBtn    = root.querySelector("#finish") as HTMLButtonElement;
 
-  function setStatus(msg: string) {
-    statusEl.style.display = "";
-    statusEl.textContent = msg;
-    console.log("[scandit]", msg);
+  // ─── List state ───────────────────────────────────────────────────────────
+
+  const wantedSet = new Set(list);
+  const found = new Set<string>();
+
+  function renderCarousel() {
+    const cards = list.map((code) => {
+      const p = getProduct(code);
+      const isFound = found.has(code);
+      const name = p ? `${p.brand} · ${p.name}` : code;
+      const size = p ? `size ${p.size}` : "";
+      return `
+        <div class="find-card ${isFound ? "find-card--done" : ""}" data-code="${escapeHTML(code)}">
+          <div class="find-card__dot ${isFound ? "find-card__dot--done" : ""}">
+            ${isFound ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>` : ""}
+          </div>
+          <div class="find-card__body">
+            <div class="find-card__name">${escapeHTML(name)}</div>
+            <div class="find-card__sub">${escapeHTML(size)}</div>
+          </div>
+        </div>
+      `;
+    }).join("");
+    carouselEl.innerHTML = cards;
+    const allFound = found.size === list.length;
+    finishBtn.disabled = found.size === 0;
+    finishBtn.textContent = allFound ? "All found, finish" : `I'm done (${found.size} of ${list.length})`;
+  }
+  renderCarousel();
+
+  // ─── Audio + haptic feedback ──────────────────────────────────────────────
+
+  let audioCtx: AudioContext | null = null;
+  function beep(matched: boolean): void {
+    if (!audioCtx) {
+      const C = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext
+              ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!C) return;
+      audioCtx = new C();
+    }
+    const ctx = audioCtx;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = matched ? 880 : 440;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.12, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.2);
   }
 
-  async function boot() {
-    if (!LICENSE_KEY) {
-      console.error("Scanner license not configured (VITE_SCANDIT_LICENSE_KEY missing).");
-      setStatus("The camera isn't ready right now.");
-      startBtn.disabled = false;
-      return;
-    }
+  // ─── Overlay rendering ────────────────────────────────────────────────────
 
+  // The overlay canvas is sized to match the video element on screen. We
+  // scale incoming barcode positions from image pixels into CSS pixels
+  // (which match the canvas internal pixels at devicePixelRatio = 1).
+  function sizeOverlayTo(video: HTMLVideoElement) {
+    const rect = video.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    overlay.width = Math.round(rect.width * dpr);
+    overlay.height = Math.round(rect.height * dpr);
+    overlay.style.width = rect.width + "px";
+    overlay.style.height = rect.height + "px";
+    overlay.dataset.dpr = String(dpr);
+  }
+
+  function drawOverlay(handle: ScannerHandle, barcodes: DecodedBarcode[], srcW: number, srcH: number) {
+    const dpr = Number(overlay.dataset.dpr || "1");
+    const ctx = overlay.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+    if (srcW === 0 || srcH === 0) return;
+    // Object-fit: cover scaling — video fills the box, may be cropped.
+    const rect = handle.video.getBoundingClientRect();
+    const cssW = rect.width;
+    const cssH = rect.height;
+    const scale = Math.max(cssW / srcW, cssH / srcH);
+    const drawnW = srcW * scale;
+    const drawnH = srcH * scale;
+    const offsetX = (cssW - drawnW) / 2;
+    const offsetY = (cssH - drawnH) / 2;
+    const toCanvas = (pt: { x: number; y: number }) => ({
+      x: (pt.x * scale + offsetX) * dpr,
+      y: (pt.y * scale + offsetY) * dpr,
+    });
+
+    for (const b of barcodes) {
+      const matched = wantedSet.has(b.text);
+      const already = found.has(b.text);
+      const cx = (b.position.topLeft.x + b.position.topRight.x + b.position.bottomLeft.x + b.position.bottomRight.x) / 4;
+      const cy = (b.position.topLeft.y + b.position.topRight.y + b.position.bottomLeft.y + b.position.bottomRight.y) / 4;
+      const c = toCanvas({ x: cx, y: cy });
+
+      // Color logic:
+      //   green        – on the list, not yet checked
+      //   green + ring – on the list, already found
+      //   white        – not on the list
+      const color = matched ? "#2ecc71" : "rgba(255,255,255,0.85)";
+      const ring  = matched && already;
+
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 14 * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.shadowColor = "rgba(0,0,0,0.4)";
+      ctx.shadowBlur = 8 * dpr;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      if (ring) {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 22 * dpr, 0, Math.PI * 2);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3 * dpr;
+        ctx.stroke();
+
+        // Draw a check inside the ring
+        ctx.beginPath();
+        ctx.moveTo(c.x - 6 * dpr, c.y);
+        ctx.lineTo(c.x - 2 * dpr, c.y + 4 * dpr);
+        ctx.lineTo(c.x + 6 * dpr, c.y - 4 * dpr);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3 * dpr;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
+    }
+  }
+
+  // ─── Status + boot ─────────────────────────────────────────────────────────
+
+  function setStatus(msg: string) {
+    statusEl.style.display = msg ? "" : "none";
+    statusEl.textContent = msg;
+  }
+
+  let handle: ScannerHandle | null = null;
+
+  async function boot(): Promise<void> {
     setStatus("Warming up the camera…");
+    try {
+      handle = await startScanner({
+        host: captureView,
+        onFrame: ({ barcodes, width, height }) => {
+          if (!handle) return;
+          if (overlay.width === 0) sizeOverlayTo(handle.video);
+          drawOverlay(handle, barcodes, width, height);
+        },
+        onScan: (code) => {
+          const matched = wantedSet.has(code.text);
+          if (matched && !found.has(code.text)) {
+            found.add(code.text);
+            beep(true);
+            if ("vibrate" in navigator) navigator.vibrate([20, 40, 30]);
+            const p = getProduct(code.text);
+            const label = p ? `Found: ${p.brand} ${p.name}` : `Found: ${code.text}`;
+            announce(label);
+            track("scan_found", { code: code.text, in_list: true });
+            renderCarousel();
+          } else if (matched) {
+            // Already-found re-detection: gentle beep, no log.
+            beep(true);
+          } else {
+            // Off-list barcode: low beep, log for analytics.
+            beep(false);
+            track("scan_found", { code: code.text, in_list: false });
+          }
+        },
+      });
+      track("scan_started", { list_size: list.length });
 
-    const context = await DataCaptureContext.forLicenseKey(LICENSE_KEY, {
-      libraryLocation:
-        "https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-barcode@8/sdc-lib/",
-      moduleLoaders: [barcodeCaptureLoader()],
-    });
+      // Size overlay once video metadata is loaded; resize on window resize.
+      const fitOverlay = () => { if (handle) sizeOverlayTo(handle.video); };
+      fitOverlay();
+      window.addEventListener("resize", fitOverlay);
 
-    const dataCaptureView = new DataCaptureView();
-    dataCaptureView.connectToElement(captureViewEl);
-    await dataCaptureView.setContext(context);
-
-    // Camera switch toggle (front <-> back) lives in the top-right corner.
-    dataCaptureView.addControl(new CameraSwitchControl());
-
-    // Same camera setup as smoke.ts — proven to work.
-    const camera = Camera.pickBestGuess();
-    await camera.applySettings(BarcodeCapture.recommendedCameraSettings);
-    await context.setFrameSource(camera);
-    await camera.switchToDesiredState(FrameSourceState.On);
-
-
-    const settings = new BarcodeFindSettings();
-    settings.enableSymbologies([
-      Symbology.EAN13UPCA,
-      Symbology.EAN8,
-      Symbology.UPCE,
-      Symbology.QR,
-      Symbology.Code128,
-      Symbology.Code39,
-      Symbology.DataMatrix,
-    ]);
-
-    const barcodeFind = await BarcodeFind.forSettings(settings);
-
-    // Build BarcodeFindItem[] from the shopper's list.
-    const items: BarcodeFindItem[] = [];
-    for (const code of list) {
-      const p = getProduct(code);
-      if (!p) continue;
-      items.push(
-        new BarcodeFindItem(
-          new BarcodeFindItemSearchOptions(code),
-          new BarcodeFindItemContent(
-            p.name,
-            `${p.brand} · ${p.color} · size ${p.size}`,
-            undefined,
-          ),
-        ),
-      );
+      setStatus(`Looking for ${list.length} thing${list.length > 1 ? "s" : ""}.`);
+    } catch (err) {
+      console.error("Scan boot failed:", err);
+      setStatus(cameraErrorMessage(err));
+      startOverlay.style.display = "";
+      startBtn.disabled = false;
     }
-
-    const viewSettings = new BarcodeFindViewSettings(
-      Color.fromHex("#2ecc71"), // in-list pin (green)
-      Color.fromHex("#ff5a5a"), // not-in-list pin (red)
-      true, // sound
-      true, // haptics
-    );
-
-    // Workaround for Scandit 8.4.0 bug: createWithSettings() does NOT register
-    // the <scandit-barcode-find-view> custom element (create() does). Without
-    // registration, document.createElement(tag) returns a bare HTMLElement
-    // missing methods like setTorchAvailable, causing "setTorchAvailable is not
-    // a function" at runtime. Calling register() first fixes it.
-    (BarcodeFindView as unknown as { register?: () => void }).register?.();
-
-    const view = await BarcodeFindView.createWithSettings(
-      dataCaptureView,
-      context,
-      barcodeFind,
-      viewSettings,
-    );
-
-    // IMPORTANT: setItemList must be called AFTER createWithSettings.
-    // createWithSettings internally calls addBarcodeFindToContext which wires
-    // the BarcodeFind instance into the scanning pipeline. Any setItemList call
-    // before this point is on an unconnected instance and is silently discarded.
-    await barcodeFind.setItemList(items);
-
-    view.setListener({
-      didTapFinishButton: async (foundItems: BarcodeFindItem[]) => {
-        const codes = foundItems.map((it) => it.searchOptions.barcodeData);
-        sessionStorage.setItem(FOUND_KEY, JSON.stringify(codes));
-        track("scan_completed", { list_size: items.length, found_count: codes.length });
-        announce(`Found ${codes.length} of ${items.length}. All done.`);
-        const url = new URL(window.location.href);
-        url.searchParams.set("screen", "done");
-        url.searchParams.delete("zone");
-        window.location.href = url.toString();
-      },
-    });
-
-    track("scan_started", { list_size: items.length });
-    await view.startSearching();
-    setStatus(`Looking for ${items.length} thing${items.length > 1 ? "s" : ""}.`);
-
-
-  } // end boot()
+  }
 
   startBtn.addEventListener("click", () => {
-    overlay.style.display = "none";
-    boot().catch((err: unknown) => {
-      console.error("Scan boot failed:", err, "hostname:", location.hostname);
-      // Show the actual reason so deployment / license issues are visible.
-      // Imported lazily to keep the existing import block tight.
-      void import("../lib/camera-errors").then(({ cameraErrorMessage }) => {
-        setStatus(cameraErrorMessage(err));
-      });
-      overlay.style.display = "";
-      startBtn.disabled = false;
-    });
+    startOverlay.style.display = "none";
+    startBtn.disabled = true;
+    void boot();
   });
+
+  camSwitchBtn.addEventListener("click", async () => {
+    if (!handle) return;
+    setStatus("Switching camera…");
+    try {
+      await handle.switchCamera();
+      setStatus("");
+    } catch (err) {
+      console.warn("camera switch failed:", err);
+      setStatus("Couldn't switch camera.");
+    }
+  });
+
+  finishBtn.addEventListener("click", () => {
+    const codes = Array.from(found);
+    sessionStorage.setItem(FOUND_KEY, JSON.stringify(codes));
+    track("scan_completed", { list_size: list.length, found_count: codes.length });
+    announce(`Found ${codes.length} of ${list.length}. All done.`);
+    handle?.stop();
+    const url = new URL(window.location.href);
+    url.searchParams.set("screen", "done");
+    url.searchParams.delete("zone");
+    window.location.href = url.toString();
+  });
+
+  // Stop the scanner when the user navigates away (popstate / link click).
+  window.addEventListener("pagehide", () => { handle?.stop(); }, { once: true });
 }

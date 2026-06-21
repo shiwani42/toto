@@ -1,24 +1,21 @@
-// Camera failure diagnostics. Most camera-boot failures fall into a few
-// recognizable buckets. This helper returns an actionable message so the
-// developer can see WHY the camera isn't opening on a given deploy.
+// Camera failure diagnostics. Maps the most common boot failures from
+// getUserMedia + the WASM scanner to friendly messages.
 
 export function cameraErrorMessage(err: unknown): string {
   const msg = (err as Error)?.message ?? String(err);
-  const host = typeof location !== "undefined" ? location.hostname : "this host";
+  const name = (err as Error)?.name ?? "";
 
-  if (/license|bundle|domain|origin|forbidden|403/i.test(msg)) {
-    return `The Scandit license doesn't cover ${host}. Add this hostname to the license bundle (and to localhost.localdomain for local dev), then reload.`;
-  }
-  if (/notallowed|permission|denied/i.test(msg)) {
+  if (/notallowed|permission|denied/i.test(msg + name)) {
     return "Camera permission was denied. Allow camera access in your browser and reload.";
   }
-  if (/notfound|no\s*camera|nomedia/i.test(msg)) {
+  if (/notfound|no\s*camera|nomedia/i.test(msg + name)) {
     return "No camera available on this device.";
   }
-  if (/wasm|module|fetch|network/i.test(msg)) {
-    return "Couldn't load the scanner module over the network. Check the connection and reload.";
+  if (/notreadable|inuse|track|hardware/i.test(msg + name)) {
+    return "The camera is busy with another app. Close it and try again.";
   }
-  // Fallback: include a short slice of the raw message so the developer
-  // can see what's actually wrong, without dumping a stack trace.
+  if (/wasm|module|fetch|network/i.test(msg)) {
+    return "Couldn't load the scanner over the network. Check the connection and reload.";
+  }
   return `Camera failed to start: ${msg.slice(0, 160)}`;
 }

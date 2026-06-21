@@ -1,25 +1,8 @@
-import {
-  Camera,
-  CameraPosition,
-  CameraSwitchControl,
-  DataCaptureContext,
-  DataCaptureView,
-  FrameSourceState,
-  Feedback,
-} from "@scandit/web-datacapture-core";
-import {
-  barcodeCaptureLoader,
-  BarcodeCapture,
-  BarcodeCaptureSettings,
-  Symbology,
-} from "@scandit/web-datacapture-barcode";
 import { getProduct } from "../lib/catalog";
 import { addToList, getList } from "../lib/list";
+import { startScanner, type ScannerHandle } from "../lib/scanner";
+import { cameraErrorMessage } from "../lib/camera-errors";
 import type { Product } from "../lib/types";
-
-const LICENSE_KEY = import.meta.env.VITE_SCANDIT_LICENSE_KEY as
-  | string
-  | undefined;
 
 function escapeHTML(s: string): string {
   return s
@@ -99,80 +82,50 @@ export function renderBrowse(root: HTMLElement) {
     statusEl.hidden = !msg;
   }
 
+  let handle: ScannerHandle | null = null;
+  let paused = false;
+
   function showResult(html: string) {
     resultEl.innerHTML = html;
   }
 
-  let barcodeCapture: BarcodeCapture | null = null;
-
   async function boot() {
-    if (!LICENSE_KEY) {
-      console.error("Scanner license not configured (VITE_SCANDIT_LICENSE_KEY missing).");
-      setStatus("The camera isn't ready right now.");
-      return;
+    setStatus("Warming up the camera…");
+    try {
+      handle = await startScanner({
+        host: captureViewEl,
+        // dedupe is on by default, so the same code won't fire repeatedly
+        onFrame: () => { /* no overlay on browse */ },
+        onScan: (code) => {
+          if (paused) return;
+          const product = getProduct(code.text);
+          if (!product) {
+            setStatus(`I don't recognise '${code.text}'. Try another barcode.`);
+            return;
+          }
+          if ("vibrate" in navigator) navigator.vibrate(60);
+          paused = true;
+          captureViewEl.classList.remove("browse-cam--active");
+          const onList = getList().includes(product.product_code);
+          showResult(productCard(product, onList));
+          setStatus("");
+        },
+      });
+      captureViewEl.classList.add("browse-cam--active");
+      setStatus("Point at any barcode in the store.");
+    } catch (err) {
+      console.error("Browse boot failed:", err);
+      setStatus(cameraErrorMessage(err));
     }
-
-    const context = await DataCaptureContext.forLicenseKey(LICENSE_KEY, {
-      libraryLocation:
-        "https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-barcode@8/sdc-lib/",
-      moduleLoaders: [barcodeCaptureLoader()],
-    });
-
-    const view = new DataCaptureView();
-    view.connectToElement(captureViewEl);
-    await view.setContext(context);
-    view.addControl(new CameraSwitchControl());
-
-    const camera = Camera.pickBestGuessForPosition(CameraPosition.WorldFacing);
-    await camera.applySettings(BarcodeCapture.recommendedCameraSettings);
-    await context.setFrameSource(camera);
-    await camera.switchToDesiredState(FrameSourceState.On);
-
-    const settings = new BarcodeCaptureSettings();
-    settings.enableSymbologies([
-      Symbology.EAN13UPCA,
-      Symbology.EAN8,
-      Symbology.UPCE,
-      Symbology.QR,
-      Symbology.Code128,
-      Symbology.Code39,
-      Symbology.DataMatrix,
-    ]);
-    barcodeCapture = await BarcodeCapture.forContext(context, settings);
-    const feedback = Feedback.defaultFeedback;
-
-    barcodeCapture.addListener({
-      didScan: async (_mode, session) => {
-        const barcode = session.newlyRecognizedBarcode;
-        if (!barcode || !barcodeCapture) return;
-        const code = barcode.data ?? "";
-        const product = getProduct(code);
-        if (!product) {
-          setStatus(`I don't recognise ‘${code}’. Try another barcode.`);
-          return;
-        }
-        feedback.emit();
-        if ("vibrate" in navigator) navigator.vibrate(60);
-        await barcodeCapture.setEnabled(false);
-        captureViewEl.classList.remove("browse-cam--active");
-        const onList = getList().includes(product.product_code);
-        showResult(productCard(product, onList));
-        setStatus("");
-      },
-    });
-
-    captureViewEl.classList.add("browse-cam--active");
-    await barcodeCapture.setEnabled(true);
-    setStatus("Point at any barcode in the store.");
   }
 
-  resultEl.addEventListener("click", async (e) => {
+  resultEl.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
     const addBtn = target.closest(".browse-card__add") as HTMLButtonElement | null;
     if (addBtn && !addBtn.disabled) {
       const code = addBtn.dataset.code;
       if (code) {
-        addToList(code);
+        addToList(code, "browse");
         addBtn.disabled = true;
         addBtn.textContent = "Added";
       }
@@ -182,18 +135,12 @@ export function renderBrowse(root: HTMLElement) {
     if (again) {
       e.preventDefault();
       resultEl.innerHTML = "";
-      if (barcodeCapture) {
-        captureViewEl.classList.add("browse-cam--active");
-        await barcodeCapture.setEnabled(true);
-        setStatus("");
-      }
+      paused = false;
+      captureViewEl.classList.add("browse-cam--active");
+      setStatus("Point at any barcode in the store.");
     }
   });
 
-  boot().catch((err: unknown) => {
-    console.error("Browse boot failed:", err, "hostname:", location.hostname);
-    void import("../lib/camera-errors").then(({ cameraErrorMessage }) => {
-      setStatus(cameraErrorMessage(err));
-    });
-  });
+  void boot();
+  window.addEventListener("pagehide", () => { handle?.stop(); }, { once: true });
 }

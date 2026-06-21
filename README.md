@@ -3,7 +3,7 @@
 # Toto
 
 ### In-store AI concierge for a Swiss outdoor retailer
-#### Built on Scandit BarcodeFind · No install · Open from a QR code
+#### Open-source camera + AR scanner · No install · Open from a QR code
 
 </div>
 
@@ -36,7 +36,7 @@ App shows which zones to visit  (A–G on the store map)
         ↓
 Point camera at the shelf
         ↓
-Items on your list glow green  (Scandit BarcodeFind)
+Items on your list glow green  (camera AR overlay)
         ↓
 Done — tap Finish, see summary
 ```
@@ -67,7 +67,7 @@ Print `data/sample-barcodes.pdf` (or open it on a second screen) and point the c
 |---|---|---|
 | **List builder** | Search 249 SKUs by name, brand, or size — click to add. Shows stock status (in-store / in back / out of stock). Demo list auto-fills 8 items guaranteed in the sample PDF. | Client-side fuzzy search over `products.json` |
 | **Zone navigator** | Resolves your list to zones A–G with pulsing pins on the floor plan, sorted by the store's recommended walking order. Per-zone item cards below the map. | `zone` field from catalog + `store-map.png` overlay |
-| **BarcodeFind scanner** | Scandit camera UI: AR dots over every barcode in frame simultaneously, green = on your list; carousel auto-ticks items as found; sound + haptic on each hit; camera-switch button. | `BarcodeFind` + `BarcodeFindView` (Scandit 8.4.0) |
+| **Camera scanner with AR** | Live camera viewport with dots over every barcode in the frame simultaneously, green = on your list, white = not. Carousel auto-ticks items as found; Web Audio beep + vibrate on each hit; camera-switch button. | Built on `zxing-wasm` (Apache 2.0) with a custom canvas overlay and carousel |
 | **Done screen** | Found vs still-missing summary with product details. | — |
 
 **Symbologies:** EAN-13, EAN-8, UPC-E, QR, Code 128, Code 39, Data Matrix.
@@ -103,16 +103,15 @@ High contrast, larger text (+25%), reduce motion, speak-scan-results (TTS on fin
 
 ---
 
-## Why Scandit is the right foundation
+## Scanning stack
 
-| Scandit capability | How we use it |
+| Capability | How it works |
 |---|---|
-| **BarcodeFind** (MatrixScan Find) | Pre-built camera view, AR dot overlays on every barcode in frame simultaneously, item carousel with auto-tick, sound + haptic feedback — we compose this, not rebuild it |
-| **Multi-barcode tracking** | Reads an entire shelf in one camera frame — no need to scan items one by one |
-| **Web SDK (WASM)** | Runs in a mobile browser — no App Store, no install, no account. QR → app in under 3 seconds |
-| **EAN-13 + QR + Code128** | Covers the full demo-book dataset and the main catalog barcodes |
-
-> **Key design principle:** *don't reinvent the wheel.* BarcodeFind already ships the camera preview, dot overlays, sound/haptics, and the "items still to find" carousel. We wire it up to real product data and a navigation step. That's the whole v1.
+| **Multi-barcode AR overlay** | Each animation frame is drawn to a canvas and handed to `zxing-wasm`. Decoded barcodes come back with corner-polygon positions; we paint a coloured dot per match on an overlay canvas. Up to 12 codes per frame. |
+| **Find-list state** | Codes on the shopper's list draw green; everything else draws white. Once a list item is found, a check ring is added. The carousel below the viewport ticks the item off. |
+| **Feedback** | Web Audio sine beep (works on iOS Safari, where `navigator.vibrate` is silently ignored). Android Chrome also vibrates. |
+| **Symbologies** | EAN-13, EAN-8, UPC-A, UPC-E, QR, Code 128, Code 39, Data Matrix. |
+| **License** | None. `zxing-wasm` is Apache 2.0. No allow-list, no per-domain registration. Runs anywhere. |
 
 ---
 
@@ -129,7 +128,7 @@ Browser (Vite + TypeScript, vanilla DOM)
 │   ├── screens/
 │   │   ├── list-builder.ts   → search + build checklist → sessionStorage
 │   │   ├── map.ts            → zone resolver + store-map.png overlay
-│   │   ├── scan.ts           → BarcodeFind wire-up (THE CORE FEATURE)
+│   │   ├── scan.ts           → list-based scanner with AR + carousel (THE CORE FEATURE)
 │   │   ├── done.ts           → found / still-missing summary
 │   │   └── plan.ts           → v2 trip plan input → Claude API
 │   └── style.css             → Inter font, forest-green design tokens, mobile-first
@@ -176,16 +175,12 @@ shipping to real users.
 ```bash
 git clone --recurse-submodules <repo-url>
 cd Toto
-cp .env.example .env
-# Paste your Scandit license key:
-# VITE_SCANDIT_LICENSE_KEY=your_key_here
+cp .env.example .env       # optional: only needed for Supabase / Anthropic
 npm install
 npm run dev
 ```
 
-Open **http://localhost:5173** (or the network URL shown in the terminal, for phone testing on the same WiFi).
-
-**Note on the Scandit license.** The HerCode hackathon key only covers the origins the organizers added to it (typically `localhost`). If you deploy to a host the organizers don't know about (Render's random subdomain, Vercel, etc.) you'll see "license doesn't cover this host" in the browser. Email the organizers with the deploy hostname to have it added to the allow list, or demo from `localhost`.
+Open **http://localhost:5173** (or the network URL shown in the terminal, for phone testing on the same WiFi). The scanner needs HTTPS for camera access; `localhost` is allowed without HTTPS.
 
 > If you cloned without `--recurse-submodules`: `git submodule update --init --recursive`
 
@@ -203,7 +198,7 @@ Toto/
 ├── render.yaml                  ← Render Static Site blueprint
 ├── index.html                   ← Vite entry
 ├── package.json, tsconfig.json, vite.config.ts
-├── .env.example                 ← copy to .env, set VITE_SCANDIT_LICENSE_KEY
+├── .env.example                 ← optional env vars (Supabase, Anthropic)
 ├── public/                      ← static assets (favicon, icons)
 ├── src/
 │   ├── main.ts                  ← query-string router + tab bar
@@ -238,7 +233,7 @@ Toto/
 │   ├── sample-barcodes.pdf      ← 3 scannable demo-book pages
 │   └── store-map.png            ← store floor plan, zones A–G
 ├── docs/
-│   ├── scandit-web-sdk.md       ← indexed Scandit Web SDK reference
+│   ├── barcode-sdk-alternatives.md ← research notes on the open-source switch
 │   └── ideas-bank.md            ← original direction-setting writeups
 ├── body-measurements/           ← submodule for future Fit Translator feature
 └── frontend-reference/          ← design reference (React/Tailwind prototype)
