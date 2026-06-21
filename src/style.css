@@ -1709,8 +1709,13 @@ button, .primary { font: inherit; cursor: pointer; }
 .screen-scan { gap: 10px; }
 
 .scan-viewport {
-  flex: 1;
-  min-height: 70vh;
+  flex: 1 1 auto;
+  /* Size for the camera frame minus the rest of the chrome on each side:
+     header (~60px) + carousel (~88px) + controls (~52px) + tab bar (72px)
+     + safe area. We use svh on phones so the URL bar doesn't push it
+     around when scrolling. */
+  height: calc(100svh - 60px - 88px - 52px - var(--tab-h) - env(safe-area-inset-bottom));
+  min-height: 280px;
   position: relative;
   border-radius: var(--radius);
   overflow: hidden;
@@ -1718,30 +1723,30 @@ button, .primary { font: inherit; cursor: pointer; }
   box-shadow: var(--shadow-md);
 }
 
-/* Mobile: push the viewport to fill all space between header and tab bar so
-   Scandit's internal pause layout has maximum room and the black gap shrinks. */
-@media (max-width: 449px) {
-  .scan-viewport {
-    min-height: calc(100svh - 160px);
-  }
-}
-
 @media (min-width: 450px) {
   .scan-viewport {
     width: 100vw;
     margin-left: calc(-50vw + 50%);
     border-radius: 0;
-    min-height: 80vh;
+    height: calc(100vh - 60px - 88px - 52px - var(--tab-h) - env(safe-area-inset-bottom));
+    min-height: 360px;
   }
 }
 
-.scan-view { width: 100%; height: 100%; position: absolute; inset: 0; }
+.scan-view {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
 
 .scanner-video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  background: #000;
 }
 
 .scan-overlay {
