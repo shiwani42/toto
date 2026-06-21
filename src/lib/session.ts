@@ -1,26 +1,10 @@
-import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
+import { type RealtimeChannel } from "@supabase/supabase-js";
+import { getSupabase, supabaseConfigured } from "./supabase";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as
-  | string
-  | undefined;
+export { supabaseConfigured };
 
-export const supabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-
-let _client: SupabaseClient | null = null;
-function client(): SupabaseClient {
-  if (!supabaseConfigured) {
-    // Surfaced to the user as "Live sessions aren't available here yet." The
-    // full env-var hint stays in the console for the dev.
-    console.error("Live sessions not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY missing).");
-    throw new Error("Live sessions aren't available here yet.");
-  }
-  if (!_client) {
-    _client = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
-      auth: { persistSession: false },
-    });
-  }
-  return _client;
+function client() {
+  return getSupabase();
 }
 
 export type Mode = "partner" | "family";

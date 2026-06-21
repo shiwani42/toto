@@ -1,6 +1,6 @@
 import { getProduct } from "../lib/catalog";
 import { addToList, removeFromList, getList } from "../lib/list";
-import { planTrip, type PlanResult } from "../integrations/ai-planner";
+import { planTrip, type PlanResult, type PlanPick } from "../integrations/ai-planner";
 import {
   searchLocations,
   forecast,
@@ -661,9 +661,9 @@ export function renderPlan(root: HTMLElement) {
 }
 
 
-// ─── Result UI: category checklist → product picker ─────────────────────────
+// ─── Result UI: category checklist → tappable list → swipe deck per cat ────
 
-type FlowScreen = "categories" | "products";
+type FlowScreen = "categories" | "products" | "swipe";
 
 function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
   if (result.categories.length === 0) {
@@ -673,13 +673,24 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
 
   // All categories start checked. User unchecks what they don't need.
   const selected = new Set<string>(result.categories.map((c) => c.key));
+  // Track which categories the user has already opened (visited) so we can
+  // mark them done on the products screen.
+  const visited = new Set<string>();
   let screen: FlowScreen = "categories";
+  let activeCatKey: string | null = null;
+
+  function activeCategory() {
+    return result.categories.find((c) => c.key === activeCatKey) ?? null;
+  }
 
   function render() {
     if (screen === "categories") host.innerHTML = renderCategories();
-    else host.innerHTML = renderProducts();
+    else if (screen === "products") host.innerHTML = renderCategoryList();
+    else host.innerHTML = renderSwipe();
+    if (screen === "swipe") bindSwipe();
   }
 
+  // Screen 1: checklist
   function renderCategories(): string {
     const items = result.categories.map((c) => `
       <li>
@@ -707,52 +718,93 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
     `;
   }
 
-  function renderProducts(): string {
+  // Screen 2: tappable categories. Tap a category to open the swipe deck.
+  function renderCategoryList(): string {
     const chosen = result.categories.filter((c) => selected.has(c.key));
-    const sections = chosen.map((c) => `
-      <section class="prod-section">
-        <header class="prod-section__head">
-          <h3 class="prod-section__name">${escapeHTML(c.label)}</h3>
-          ${c.why ? `<p class="prod-section__why">${escapeHTML(c.why)}</p>` : ""}
-        </header>
-        <ul class="prod-section__items">
-          ${c.products.map((pick) => renderProductCard(pick.code, pick.why, c.key)).join("")}
-        </ul>
-      </section>
-    `).join("");
+    const rows = chosen.map((c) => {
+      const totalCount = c.products.length;
+      const addedCount = c.products.filter((p) => getList().includes(p.code)).length;
+      const isVisited = visited.has(c.key);
+      const isDone = addedCount > 0 || isVisited;
+      const status = addedCount > 0
+        ? `${addedCount} added`
+        : isVisited ? "Skipped" : `${totalCount} option${totalCount > 1 ? "s" : ""}`;
+      return `
+        <button type="button" class="cat-pick ${isDone ? "cat-pick--done" : ""}" data-open="${escapeHTML(c.key)}">
+          <span class="cat-pick__icon">${illustrationForCategory(productCategoryForKey(c.key) ?? c.key)}</span>
+          <span class="cat-pick__body">
+            <span class="cat-pick__name">${escapeHTML(c.label)}</span>
+            ${c.why ? `<span class="cat-pick__why">${escapeHTML(c.why)}</span>` : ""}
+            <span class="cat-pick__status">${escapeHTML(status)}</span>
+          </span>
+          <span class="cat-pick__chev" aria-hidden="true">›</span>
+        </button>
+      `;
+    }).join("");
+
+    const totalAdded = getList().length;
 
     return `
       <div class="cat-flow">
-        <button class="cat-flow__back" id="cat-back" aria-label="Back to list">‹ Back to list</button>
+        <button class="cat-flow__back" id="cat-back">‹ Back to the list</button>
         <h2 class="cat-flow__title">Pick what you want</h2>
-        <p class="cat-flow__hint">Tap Add on anything you'd like on your list.</p>
-        ${sections}
-        <a class="primary cat-flow__cta" href="?screen=map">Find them in the store ›</a>
+        <p class="cat-flow__hint">Tap a category to see options. Swipe right to add, left to skip.</p>
+        <div class="cat-picks">${rows}</div>
+        <a class="primary cat-flow__cta" href="?screen=map">${totalAdded > 0 ? `Find ${totalAdded} in the store ›` : "Find them in the store ›"}</a>
       </div>
     `;
   }
 
-  function renderProductCard(code: string, why: string, catKey: string): string {
-    const p = getProduct(code);
-    if (!p) return "";
-    const onList = getList().includes(code);
-    const price = p.discount_pct > 0
-      ? `<s>CHF ${p.price_chf.toFixed(0)}</s> <strong>CHF ${(p.price_chf * (1 - p.discount_pct / 100)).toFixed(0)}</strong>`
-      : `<strong>CHF ${p.price_chf.toFixed(0)}</strong>`;
+  // Screen 3: the swipe deck for one category
+  function renderSwipe(): string {
+    const cat = activeCategory();
+    if (!cat) return "";
     return `
-      <li class="prod-card ${onList ? "prod-card--on" : ""}" data-code="${escapeHTML(code)}" data-cat="${escapeHTML(catKey)}">
-        <div class="prod-card__art">${illustrationForCategory(p.category)}</div>
-        <div class="prod-card__body">
-          <div class="prod-card__name">${escapeHTML(p.name)}</div>
-          <div class="prod-card__sub">${escapeHTML(p.brand)} · ${escapeHTML(p.color)} · size ${escapeHTML(p.size)}</div>
-          <div class="prod-card__price">${price}</div>
-          ${why ? `<div class="prod-card__why">${escapeHTML(why)}</div>` : ""}
+      <div class="cat-flow">
+        <button class="cat-flow__back" id="swipe-back">‹ Back to categories</button>
+        <h2 class="cat-flow__title">${escapeHTML(cat.label)}</h2>
+        ${cat.why ? `<p class="cat-flow__hint">${escapeHTML(cat.why)}</p>` : ""}
+        <div class="deck-frame">
+          <div class="deck-progress" id="deck-progress"></div>
+          <div class="deck-stage" id="deck-stage"></div>
+          <button class="deck-undo-link" id="deck-undo" disabled
+                  title="Undo last" aria-label="Undo last">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                 stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 7v6h6"/>
+              <path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>
+            </svg>
+            Undo
+          </button>
         </div>
-        <button class="prod-card__add ${onList ? "prod-card__add--on" : ""}" data-code="${escapeHTML(code)}">
-          ${onList ? "On list ✓" : "Add"}
-        </button>
-      </li>
+      </div>
     `;
+  }
+
+  // Best-effort: try to derive the catalog category from a category key.
+  // Most of the time the key IS the catalog category (e.g. "rain-jacket").
+  function productCategoryForKey(key: string): string | null {
+    const cat = result.categories.find((c) => c.key === key);
+    if (!cat || cat.products.length === 0) return null;
+    const product = getProduct(cat.products[0].code);
+    return product?.category ?? key;
+  }
+
+  function bindSwipe() {
+    const cat = activeCategory();
+    if (!cat) return;
+    const stage = host.querySelector("#deck-stage") as HTMLDivElement;
+    const progress = host.querySelector("#deck-progress") as HTMLDivElement;
+    const undoBtn = host.querySelector("#deck-undo") as HTMLButtonElement;
+
+    mountSwipeDeck(stage, progress, undoBtn, cat.products, () => {
+      // When the deck finishes (cursor past the end), return to category list.
+      visited.add(cat.key);
+      screen = "products";
+      activeCatKey = null;
+      render();
+    });
   }
 
   host.addEventListener("change", (e) => {
@@ -760,7 +812,6 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
     if (t.matches("[data-key]")) {
       const key = t.dataset.key!;
       if (t.checked) selected.add(key); else selected.delete(key);
-      // Update only the CTA count without a full re-render.
       const cta = host.querySelector("#cat-go");
       if (cta) cta.textContent = `Show me the gear · ${selected.size} ${selected.size === 1 ? "category" : "categories"}`;
       const li = t.closest("label");
@@ -781,24 +832,192 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
       render();
       return;
     }
-    const addBtn = target.closest<HTMLButtonElement>(".prod-card__add");
-    if (addBtn) {
-      const code = addBtn.dataset.code!;
-      if (getList().includes(code)) {
-        removeFromList(code);
-      } else {
-        addToList(code);
-        if ("vibrate" in navigator) navigator.vibrate([10, 30, 12]);
-      }
-      // Toggle visual state on the affected card.
-      const card = addBtn.closest<HTMLElement>(".prod-card");
-      const onList = getList().includes(code);
-      addBtn.textContent = onList ? "On list ✓" : "Add";
-      addBtn.classList.toggle("prod-card__add--on", onList);
-      if (card) card.classList.toggle("prod-card--on", onList);
+    if (target.closest("#swipe-back")) {
+      visited.add(activeCatKey ?? "");
+      screen = "products";
+      activeCatKey = null;
+      render();
+      return;
+    }
+    const open = target.closest<HTMLButtonElement>("[data-open]");
+    if (open) {
+      activeCatKey = open.dataset.open!;
+      screen = "swipe";
+      render();
       return;
     }
   });
+
+  render();
+}
+
+// ─── Swipe deck (scoped to a single category's products) ────────────────────
+
+const SWIPE_THRESHOLD_PX = 110;
+type Decision = "add" | "skip";
+
+function mountSwipeDeck(
+  stage: HTMLDivElement,
+  progress: HTMLDivElement,
+  undoBtn: HTMLButtonElement,
+  picks: PlanPick[],
+  onFinish: () => void,
+): void {
+  const history: Decision[] = [];
+  let cursor = 0;
+
+  function render(isFreshSwipe = false) {
+    if (cursor >= picks.length) { onFinish(); return; }
+    progress.textContent = `${cursor + 1} of ${picks.length}`;
+    progress.style.visibility = "visible";
+    stage.innerHTML = renderCard(picks[cursor], cursor);
+    undoBtn.disabled = history.length === 0;
+    const top = stage.querySelector(`[data-card-index="${cursor}"]`) as HTMLElement | null;
+    if (top) {
+      bindCard(top);
+      if (isFreshSwipe) {
+        top.classList.add("deck-card--entering");
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => top.classList.remove("deck-card--entering"));
+        });
+      }
+    }
+  }
+
+  function renderCard(entry: PlanPick, index: number): string {
+    const p = getProduct(entry.code);
+    if (!p) return "";
+    const why = entry.why;
+    const priceBlock = p.discount_pct > 0
+      ? `<span class="deck-card__price--was">CHF ${p.price_chf.toFixed(0)}</span> CHF ${(p.price_chf * (1 - p.discount_pct / 100)).toFixed(0)}`
+      : `CHF ${p.price_chf.toFixed(0)}`;
+    return `
+      <article class="deck-card" data-card-index="${index}" tabindex="0">
+        <div class="deck-card__tint"></div>
+        <div class="deck-card__art">${illustrationForCategory(p.category)}</div>
+        <div class="deck-card__head">
+          <span class="deck-card__zone">Zone ${escapeHTML(p.zone)}</span>
+          <span class="deck-card__brand">${escapeHTML(p.brand)} · ${escapeHTML(p.color)} · size ${escapeHTML(p.size)}</span>
+        </div>
+        <h3 class="deck-card__name">${escapeHTML(p.name)}</h3>
+        <div class="deck-card__price">${priceBlock}</div>
+        ${why ? `<p class="deck-card__why">${escapeHTML(why)}</p>` : ""}
+        <div class="deck-card__meta">
+          ${p.weight_g ? `<span class="deck-card__meta-item">${p.weight_g} g</span>` : ""}
+          ${p.waterproof_rating_mm ? `<span class="deck-card__meta-item">${p.waterproof_rating_mm.toLocaleString()} mm</span>` : ""}
+          ${p.temp_rating_c != null ? `<span class="deck-card__meta-item">${p.temp_rating_c}°C</span>` : ""}
+          ${p.material ? `<span class="deck-card__meta-item">${escapeHTML(p.material)}</span>` : ""}
+        </div>
+        <div class="deck-card__hint">
+          <button type="button" class="deck-card__hint-chip deck-card__hint-chip--skip"
+                  data-action="skip" title="Skip" aria-label="Skip this one">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                 stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+          <button type="button" class="deck-card__hint-chip deck-card__hint-chip--add"
+                  data-action="add" title="Add to my list" aria-label="Add to list">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                 stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 6L9 17l-5-5"/>
+            </svg>
+          </button>
+        </div>
+      </article>
+    `;
+  }
+
+  function commit(decision: Decision, animateDir: "right" | "left") {
+    const top = stage.querySelector(`[data-card-index="${cursor}"]`) as HTMLElement | null;
+    if (!top) return;
+    top.classList.remove("deck-card--grabbing");
+    top.style.transform = "";
+    void top.offsetWidth;
+    top.classList.add(animateDir === "right" ? "deck-card--gone-right" : "deck-card--gone-left");
+    const entry = picks[cursor];
+    if (decision === "add") addToList(entry.code);
+    if ("vibrate" in navigator) navigator.vibrate(decision === "add" ? [10, 30, 12] : 18);
+    history.push(decision);
+    cursor++;
+    window.setTimeout(() => render(true), 320);
+  }
+
+  function undo() {
+    if (history.length === 0) return;
+    const last = history.pop()!;
+    cursor--;
+    if (last === "add") removeFromList(picks[cursor].code);
+    render();
+  }
+
+  function bindCard(card: HTMLElement) {
+    const tint = card.querySelector(".deck-card__tint") as HTMLDivElement | null;
+    let startX = 0;
+    let startY = 0;
+    let dragging = false;
+    let captured = false;
+
+    function setTransform(dx: number, dy: number) {
+      const x = Math.round(dx);
+      const y = Math.round(dy * 0.15);
+      const tiltSource = Math.abs(dx) < 8 ? 0 : (dx - Math.sign(dx) * 8);
+      const rotate = (tiltSource / 18).toFixed(2);
+      card.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${rotate}deg)`;
+      if (tint) {
+        const t = Math.min(1, Math.abs(dx) / SWIPE_THRESHOLD_PX);
+        tint.style.background = dx > 0
+          ? "linear-gradient(180deg, rgba(44,122,85,0), rgba(44,122,85,0.18))"
+          : "linear-gradient(180deg, rgba(185,28,28,0), rgba(185,28,28,0.14))";
+        tint.style.opacity = String(t * 0.85);
+      }
+    }
+    function resetTransform() {
+      card.classList.remove("deck-card--grabbing");
+      card.style.transform = "";
+      if (tint) tint.style.opacity = "0";
+    }
+
+    card.addEventListener("pointerdown", (e) => {
+      if (Number(card.dataset.cardIndex) !== cursor) return;
+      if ((e.target as HTMLElement).closest(".deck-card__hint-chip")) return;
+      dragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      card.classList.add("deck-card--grabbing");
+      try { card.setPointerCapture(e.pointerId); captured = true; } catch { /* ignore */ }
+    });
+    card.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      setTransform(e.clientX - startX, e.clientY - startY);
+    });
+    function finish(e: PointerEvent) {
+      if (!dragging) return;
+      dragging = false;
+      const dx = e.clientX - startX;
+      if (captured) {
+        try { card.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+        captured = false;
+      }
+      if (Math.abs(dx) >= SWIPE_THRESHOLD_PX) {
+        commit(dx > 0 ? "add" : "skip", dx > 0 ? "right" : "left");
+      } else {
+        resetTransform();
+      }
+    }
+    card.addEventListener("pointerup", finish);
+    card.addEventListener("pointercancel", finish);
+  }
+
+  stage.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest("[data-action]") as HTMLButtonElement | null;
+    if (!btn) return;
+    const action = btn.dataset.action as Decision;
+    if (cursor >= picks.length) return;
+    commit(action, action === "add" ? "right" : "left");
+  });
+
+  undoBtn.addEventListener("click", undo);
 
   render();
 }
