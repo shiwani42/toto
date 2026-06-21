@@ -1718,6 +1718,21 @@ button, .primary { font: inherit; cursor: pointer; }
 }
 .toto-companion__text { display: block; }
 
+/* Listening (voice input active): bright red pulsing ring around Toto.
+   Visually distinct from the green "I have a suggestion" pulse so the
+   user knows which mode they're in. */
+.toto-companion--listening .toto-companion__avatar {
+  box-shadow: 0 4px 20px rgba(220, 38, 38, 0.4),
+              0 0 0 4px rgba(220, 38, 38, 0.25);
+  animation: toto-listening-pulse 1.2s ease-in-out infinite;
+}
+@keyframes toto-listening-pulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(220, 38, 38, 0.4),
+                          0 0 0 4px rgba(220, 38, 38, 0.25); }
+  50%      { box-shadow: 0 4px 22px rgba(220, 38, 38, 0.55),
+                          0 0 0 12px rgba(220, 38, 38, 0); }
+}
+
 /* When Toto is offering a suggestion, give a soft attention ring around
    his avatar so the user notices something new. */
 .toto-companion--suggesting .toto-companion__avatar {

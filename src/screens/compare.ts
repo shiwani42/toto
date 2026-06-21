@@ -2,6 +2,7 @@ import { getProduct } from "../lib/catalog";
 import { startScanner, type ScannerHandle } from "../lib/scanner";
 import { cameraErrorMessage } from "../lib/camera-errors";
 import type { Product } from "../lib/types";
+import { t } from "../lib/i18n";
 
 function escapeHTML(s: string): string {
   return s
@@ -88,7 +89,7 @@ function estimateMaterialCost(p: string, c: string, gap: number): string {
 export function renderCompare(root: HTMLElement) {
   root.innerHTML = `
     <header>
-      <h1>Where does the price go?</h1>
+      <h1>${t("compare.title")}</h1>
     </header>
     <main class="screen-compare">
       <div id="status" class="status" hidden></div>
@@ -97,20 +98,20 @@ export function renderCompare(root: HTMLElement) {
       <div class="slots">
         <div class="slot" id="slot-A">
           <div class="slot__header">A</div>
-          <div class="slot__body">empty</div>
-          <button class="slot__btn" data-target="A">Scan slot A</button>
+          <div class="slot__body">${t("compare.empty")}</div>
+          <button class="slot__btn" data-target="A">${t("compare.scan_a")}</button>
         </div>
         <div class="slot" id="slot-B">
           <div class="slot__header">B</div>
-          <div class="slot__body">empty</div>
-          <button class="slot__btn" data-target="B">Scan slot B</button>
+          <div class="slot__body">${t("compare.empty")}</div>
+          <button class="slot__btn" data-target="B">${t("compare.scan_b")}</button>
         </div>
       </div>
 
       <div id="diff"></div>
 
-      <button id="reset" class="link-btn">Reset both</button>
-      <a class="link-btn" href="?screen=list">‹ Back</a>
+      <button id="reset" class="link-btn">${t("compare.reset")}</button>
+      <a class="link-btn" href="?screen=list">${t("compare.back")}</a>
     </main>
   `;
 
@@ -137,11 +138,11 @@ export function renderCompare(root: HTMLElement) {
         <div class="slot__sub">${escapeHTML(p.brand)} · ${escapeHTML(p.color)} · size ${escapeHTML(p.size)}</div>
         <div class="slot__price">CHF ${p.price_chf.toFixed(0)}</div>
       `;
-      btn.textContent = `Rescan slot ${slot}`;
+      btn.textContent = slot === "A" ? t("compare.rescan_a") : t("compare.rescan_b");
       slotEl.classList.add("slot--filled");
     } else {
-      body.textContent = "empty";
-      btn.textContent = `Scan slot ${slot}`;
+      body.textContent = t("compare.empty");
+      btn.textContent = slot === "A" ? t("compare.scan_a") : t("compare.scan_b");
       slotEl.classList.remove("slot--filled");
     }
   }
@@ -152,14 +153,14 @@ export function renderCompare(root: HTMLElement) {
       return;
     }
     if (products.A.product_code === products.B.product_code) {
-      diffEl.innerHTML = `<div class="status">That's the same product in both slots. Scan two different ones to compare.</div>`;
+      diffEl.innerHTML = `<div class="status">${t("compare.same")}</div>`;
       return;
     }
     const d = explain(products.A, products.B);
     if (d.gap === 0) {
       diffEl.innerHTML = `
         <div class="diff-card">
-          <h3>Same price, different gear.</h3>
+          <h3>${t("compare.same_price")}</h3>
           <p>${escapeHTML(d.pricier.name)} and ${escapeHTML(d.cheaper.name)} are both CHF ${d.pricier.price_chf.toFixed(0)}.</p>
           <ul>${d.reasons.map((r) => `<li>${escapeHTML(r.label)}</li>`).join("")}</ul>
         </div>
@@ -169,7 +170,7 @@ export function renderCompare(root: HTMLElement) {
     diffEl.innerHTML = `
       <div class="diff-card">
         <h3><strong>${escapeHTML(d.pricier.name)}</strong> costs <strong>CHF ${d.gap.toFixed(0)}</strong> more than ${escapeHTML(d.cheaper.name)}.</h3>
-        <p class="diff-card__lead">Here's where that goes:</p>
+        <p class="diff-card__lead">${t("compare.lead")}</p>
         <ul class="diff-list">
           ${d.reasons
             .map(
@@ -182,7 +183,7 @@ export function renderCompare(root: HTMLElement) {
           ${
             d.brandPremium > 0
               ? `<li>
-                  <span class="diff-list__label">Brand premium (${escapeHTML(d.pricier.brand)} vs ${escapeHTML(d.cheaper.brand)})</span>
+                  <span class="diff-list__label">${t("compare.brand_premium")} (${escapeHTML(d.pricier.brand)} vs ${escapeHTML(d.cheaper.brand)})</span>
                   <span class="diff-list__delta">+~CHF ${d.brandPremium}</span>
                 </li>`
               : ""
@@ -203,7 +204,7 @@ export function renderCompare(root: HTMLElement) {
     const p = getProduct(prefilledA);
     if (p) {
       products.A = p;
-      setStatus(`Slot A is ${p.name}. Now scan slot B to compare.`);
+      setStatus(`${t("compare.now_other")} (${p.name})`);
     }
   }
   refreshAll();
@@ -222,7 +223,7 @@ export function renderCompare(root: HTMLElement) {
         if (activeSlot == null) return;
         const product = getProduct(code.text);
         if (!product) {
-          setStatus(`I don't have '${code.text}' in the catalog. Try another barcode.`);
+          setStatus(t("compare.unknown"));
           return;
         }
         products[activeSlot] = product;
@@ -230,17 +231,13 @@ export function renderCompare(root: HTMLElement) {
         activeSlot = null;
         captureViewEl.classList.remove("compare-cam--active");
         refreshAll();
-        setStatus(
-          products.A && products.B
-            ? "Both in. Here's the breakdown."
-            : "Now scan the other one.",
-        );
+        setStatus(products.A && products.B ? t("compare.both_in") : t("compare.now_other"));
       },
     });
   }
 
   async function startScanning(slot: Slot) {
-    setStatus("Warming up the camera…");
+    setStatus(t("scan.warming"));
     try {
       await ensureScanner();
     } catch (err) {
@@ -250,7 +247,7 @@ export function renderCompare(root: HTMLElement) {
     }
     activeSlot = slot;
     captureViewEl.classList.add("compare-cam--active");
-    setStatus(`Point at a barcode for slot ${slot}.`);
+    setStatus(slot === "A" ? t("compare.aim_a") : t("compare.aim_b"));
   }
 
   root.addEventListener("click", (e) => {
@@ -266,7 +263,7 @@ export function renderCompare(root: HTMLElement) {
     products.A = null;
     products.B = null;
     refreshAll();
-    setStatus(`Cleared.`);
+    setStatus(t("compare.cleared"));
   });
 
   window.addEventListener("pagehide", () => { handle?.stop(); }, { once: true });

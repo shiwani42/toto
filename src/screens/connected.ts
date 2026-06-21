@@ -8,6 +8,7 @@ import {
   type Member,
   type SessionEvent,
 } from "../lib/session";
+import { t } from "../lib/i18n";
 
 function escapeHTML(s: string): string {
   return s
@@ -57,11 +58,9 @@ export function renderConnected(root: HTMLElement) {
     return;
   }
 
-  const isPartner = state.mode === "partner";
-
   root.innerHTML = `
     <header>
-      <h1>${isPartner ? "Live with your partner." : "Shopping together."}</h1>
+      <h1>${t("connected.title")}</h1>
     </header>
     <main class="screen-connected">
       <div class="session-code-hero">

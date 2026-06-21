@@ -17,6 +17,8 @@
 import { totoAvatar } from "./toto";
 import type { Screen } from "./types";
 import { t } from "./i18n";
+import { isVoiceSupported, startListening, speak, parseIntent, type ListenHandle } from "./voice";
+import { search } from "./catalog";
 
 // Map screens to their i18n key. Single source of truth. Add a screen
 // here when you want Toto present on it; omit to hide him.
@@ -219,13 +221,117 @@ export function mountCompanion(screen: Screen) {
   scheduleBlink();
   scheduleTwitch();
 
-  dog.addEventListener("click", () => {
-    setOpen(!open);
-    if ("vibrate" in navigator) navigator.vibrate(8);
-    // A small "noticed" reaction on tap, regardless of open/close.
-    breath.classList.add("toto-companion__breath--noticed");
-    window.setTimeout(() => breath.classList.remove("toto-companion__breath--noticed"), 350);
+  // Distinguish tap from long-press. Hold for >400ms starts voice mode;
+  // a quick tap toggles the bubble.
+  const LONG_PRESS_MS = 400;
+  let pressTimer: number | null = null;
+  let pressedAt = 0;
+  let voiceActive = false;
+  let listenHandle: ListenHandle | null = null;
+  const voiceCapable = isVoiceSupported().stt;
+
+  function bubbleText(text: string) {
+    const el = root.querySelector(".toto-companion__text") as HTMLSpanElement | null;
+    if (el) el.textContent = text;
+  }
+
+  function startVoice() {
+    voiceActive = true;
+    root.classList.add("toto-companion--listening");
+    setOpen(true);
+    bubbleText(t("toto.listening"));
+    if ("vibrate" in navigator) navigator.vibrate(20);
+    listenHandle = startListening(
+      (text) => { handleVoiceResult(text); },
+      (err)  => { bubbleText(t("toto.voice_error")); console.warn("voice:", err); endVoice(); },
+    );
+  }
+
+  function endVoice() {
+    voiceActive = false;
+    root.classList.remove("toto-companion--listening");
+    listenHandle?.stop();
+    listenHandle = null;
+  }
+
+  function handleVoiceResult(text: string) {
+    bubbleText(`"${text}"`);
+    const intent = parseIntent(text);
+    endVoice();
+    if (intent.kind === "go") {
+      const reply = t("toto.voice.ok");
+      speak(reply);
+      window.setTimeout(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.set("screen", intent.screen);
+        window.location.href = url.toString();
+      }, 400);
+      return;
+    }
+    if (intent.kind === "find") {
+      // Quick catalog search for what they're looking for.
+      const results = search(intent.query, 1);
+      if (results.length > 0) {
+        const p = results[0];
+        const reply = t("toto.voice.find_yes").replace("{name}", `${p.brand} ${p.name}`);
+        bubbleText(reply);
+        speak(reply);
+        window.setTimeout(() => {
+          const url = new URL(window.location.href);
+          url.searchParams.set("screen", "map");
+          window.location.href = url.toString();
+        }, 1200);
+      } else {
+        const reply = t("toto.voice.find_no");
+        bubbleText(reply);
+        speak(reply);
+      }
+      return;
+    }
+    // Unknown — leave the transcript visible, say a sorry line.
+    const sorry = t("toto.voice.sorry");
+    speak(sorry);
+    window.setTimeout(() => bubbleText(`${sorry} "${intent.transcript}"`), 100);
+  }
+
+  function pressStart() {
+    pressedAt = performance.now();
+    if (!voiceCapable) return;
+    pressTimer = window.setTimeout(() => {
+      pressTimer = null;
+      startVoice();
+    }, LONG_PRESS_MS);
+  }
+  function pressEnd() {
+    if (pressTimer !== null) {
+      window.clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+    const held = performance.now() - pressedAt;
+    if (voiceActive) {
+      endVoice();
+      // Slight delay so the result event has a chance to fire if it
+      // arrives within ~150 ms of release.
+      return;
+    }
+    if (held < LONG_PRESS_MS) {
+      // Short tap: toggle bubble.
+      setOpen(!open);
+      if ("vibrate" in navigator) navigator.vibrate(8);
+      breath.classList.add("toto-companion__breath--noticed");
+      window.setTimeout(() => breath.classList.remove("toto-companion__breath--noticed"), 350);
+    }
+  }
+
+  dog.addEventListener("pointerdown", pressStart);
+  dog.addEventListener("pointerup",   pressEnd);
+  dog.addEventListener("pointerleave", () => {
+    if (pressTimer !== null) {
+      window.clearTimeout(pressTimer);
+      pressTimer = null;
+    }
   });
-  // Allow tapping the bubble to dismiss as well.
-  bubble.addEventListener("click", () => { setOpen(false); });
+
+  // Allow tapping the bubble to dismiss.
+  bubble.addEventListener("click", () => { if (!voiceActive) setOpen(false); });
 }

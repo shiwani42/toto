@@ -3,6 +3,7 @@ import { repairProgramFor, type RepairProgram } from "../fixtures/repair-program
 import { startScanner, type ScannerHandle } from "../lib/scanner";
 import { cameraErrorMessage } from "../lib/camera-errors";
 import type { Product } from "../lib/types";
+import { t } from "../lib/i18n";
 
 function escapeHTML(s: string): string {
   return s
@@ -39,8 +40,8 @@ function repairCard(p: Product, prog: RepairProgram): string {
   if (!accepted) {
     return `
       <div class="diff-card">
-        <h3>${escapeHTML(prog.brand)} doesn't repair ${escapeHTML(p.category)} items.</h3>
-        <p class="diff-card__lead">${escapeHTML(prog.programName)} accepts: ${prog.acceptedCategories.map((c) => `<code>${escapeHTML(c)}</code>`).join(", ")}.</p>
+        <h3>${escapeHTML(prog.brand)} ${t("repair.no_category").replace("{category}", escapeHTML(p.category))}</h3>
+        <p class="diff-card__lead">${escapeHTML(prog.programName)} ${t("repair.accepts")} ${prog.acceptedCategories.map((c) => `<code>${escapeHTML(c)}</code>`).join(", ")}.</p>
       </div>
     `;
   }
@@ -49,27 +50,30 @@ function repairCard(p: Product, prog: RepairProgram): string {
     recommendation === "Repair"  ? "var(--ok)"
   : recommendation === "Replace" ? "var(--bad)"
   : "var(--warn)";
+  const recLabel = recommendation === "Repair"  ? t("repair.recommend")
+                 : recommendation === "Replace" ? t("repair.recommend.replace")
+                 : t("repair.recommend.either");
   return `
     <div class="diff-card">
       <h3>${escapeHTML(prog.programName)}</h3>
       <p class="diff-card__lead">${escapeHTML(prog.pitch)}</p>
 
       <div class="repair-rec" style="border-color:${recColor}">
-        <div class="repair-rec__label" style="color:${recColor}">${recommendation}</div>
+        <div class="repair-rec__label" style="color:${recColor}">${escapeHTML(recLabel)}</div>
         <div class="repair-rec__reasoning">${escapeHTML(reasoning)}</div>
       </div>
 
       <ul class="diff-list">
-        <li><span class="diff-list__label">Minor (re-stitch / patch)</span><span class="diff-list__delta">~CHF ${prog.repairCostBands.minor}</span></li>
-        <li><span class="diff-list__label">Medium (zipper / lining / DWR)</span><span class="diff-list__delta">~CHF ${prog.repairCostBands.medium}</span></li>
-        <li><span class="diff-list__label">Major (membrane / sole / panel)</span><span class="diff-list__delta">~CHF ${prog.repairCostBands.major}</span></li>
-        <li><span class="diff-list__label">New one costs</span><span class="diff-list__delta">CHF ${p.price_chf.toFixed(0)}</span></li>
-        <li><span class="diff-list__label">Turnaround</span><span class="diff-list__delta">${escapeHTML(prog.turnaroundDays)} days</span></li>
-        ${prog.perk ? `<li><span class="diff-list__label">Perk</span><span class="diff-list__delta" style="color:var(--ok)">${escapeHTML(prog.perk)}</span></li>` : ""}
+        <li><span class="diff-list__label">${t("repair.minor")}</span><span class="diff-list__delta">~CHF ${prog.repairCostBands.minor}</span></li>
+        <li><span class="diff-list__label">${t("repair.medium")}</span><span class="diff-list__delta">~CHF ${prog.repairCostBands.medium}</span></li>
+        <li><span class="diff-list__label">${t("repair.major")}</span><span class="diff-list__delta">~CHF ${prog.repairCostBands.major}</span></li>
+        <li><span class="diff-list__label">${t("repair.new_cost")}</span><span class="diff-list__delta">CHF ${p.price_chf.toFixed(0)}</span></li>
+        <li><span class="diff-list__label">${t("repair.turnaround")}</span><span class="diff-list__delta">${escapeHTML(prog.turnaroundDays)} ${t("repair.days")}</span></li>
+        ${prog.perk ? `<li><span class="diff-list__label">${t("repair.perk")}</span><span class="diff-list__delta" style="color:var(--ok)">${escapeHTML(prog.perk)}</span></li>` : ""}
       </ul>
 
       <a class="primary" href="${escapeHTML(prog.url)}" target="_blank" rel="noreferrer noopener">
-        Start a repair with ${escapeHTML(prog.brand)}
+        ${t("repair.start")} ${escapeHTML(prog.brand)}
       </a>
     </div>
   `;
@@ -80,8 +84,8 @@ function buildResultHTML(product: Product): string {
   if (!prog) {
     return `
       <div class="diff-card">
-        <h3>No repair program on file for ${escapeHTML(product.brand)}.</h3>
-        <p class="diff-card__lead">A replacement would cost <strong>CHF ${product.price_chf.toFixed(0)}</strong>.</p>
+        <h3>${t("repair.no_program")} ${escapeHTML(product.brand)}.</h3>
+        <p class="diff-card__lead">${t("repair.no_program.sub")} <strong>CHF ${product.price_chf.toFixed(0)}</strong>.</p>
       </div>
     `;
   }
@@ -91,14 +95,14 @@ function buildResultHTML(product: Product): string {
 export function renderRepair(root: HTMLElement) {
   root.innerHTML = `
     <header>
-      <h1>Fix it or replace it?</h1>
+      <h1>${t("repair.title")}</h1>
     </header>
     <main class="screen-compare">
       <div id="status" class="status" hidden></div>
       <div id="capture-view" class="compare-cam"></div>
-      <button class="primary" id="scan-btn">Scan a product</button>
+      <button class="primary" id="scan-btn">${t("repair.scan")}</button>
       <div id="result"></div>
-      <a class="link-btn" href="?screen=list">‹ Back</a>
+      <a class="link-btn" href="?screen=list">${t("compare.back")}</a>
     </main>
   `;
 
@@ -124,26 +128,26 @@ export function renderRepair(root: HTMLElement) {
         if (paused) return;
         const product = getProduct(code.text);
         if (!product) {
-          setStatus(`I don't have '${code.text}' in the catalog. Try another barcode.`);
+          setStatus(t("repair.unknown"));
           return;
         }
         if ("vibrate" in navigator) navigator.vibrate(60);
         paused = true;
         captureViewEl.classList.remove("compare-cam--active");
-        scanBtn.textContent = "Scan another";
-        setStatus(`Got it: ${product.name}, ${product.brand}, size ${product.size}.`);
+        scanBtn.textContent = t("repair.scan_another");
+        setStatus(`${t("repair.got_it")} ${product.name}, ${product.brand}, ${product.size}`);
         resultEl.innerHTML = buildResultHTML(product);
       },
     });
   }
 
   scanBtn.addEventListener("click", async () => {
-    setStatus("Warming up the camera…");
+    setStatus(t("scan.warming"));
     try {
       await ensureScanner();
       paused = false;
       captureViewEl.classList.add("compare-cam--active");
-      setStatus("Point the camera at the barcode.");
+      setStatus(t("repair.point"));
     } catch (err) {
       console.error("Repair scanner failed:", err);
       setStatus(cameraErrorMessage(err));
@@ -154,7 +158,7 @@ export function renderRepair(root: HTMLElement) {
   if (prefilled) {
     const product = getProduct(prefilled);
     if (product) {
-      scanBtn.textContent = "Scan a different one";
+      scanBtn.textContent = t("repair.scan_different");
       setStatus(`Looking at: ${product.name}, ${product.brand}.`);
       resultEl.innerHTML = buildResultHTML(product);
     }

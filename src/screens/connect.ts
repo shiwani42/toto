@@ -8,6 +8,7 @@ import {
   type Mode,
 } from "../lib/session";
 import { icon } from "../lib/icons";
+import { t } from "../lib/i18n";
 
 function escapeHTML(s: string): string {
   return s
@@ -24,7 +25,7 @@ export function renderConnect(root: HTMLElement) {
 
   root.innerHTML = `
     <header>
-      <h1>Shop with someone</h1>
+      <h1>${t("connect.title")}</h1>
     </header>
     <main class="screen-connect">
       ${!supabaseConfigured ? `
@@ -47,38 +48,39 @@ export function renderConnect(root: HTMLElement) {
       }
 
       <section class="card-section">
-        <h2>Start a session</h2>
+        <h2>${t("connect.start")}</h2>
+        <p class="tag">${t("connect.start.sub")}</p>
         <div class="row-group">
-          <label>Your name <input id="create-name" type="text" placeholder="e.g. Shiwani" /></label>
+          <label>${t("connect.your_name")} <input id="create-name" type="text" placeholder="e.g. Shiwani" /></label>
         </div>
         <p class="section-label">Where is everyone?</p>
         <div class="mode-cards">
           <label class="mode-card mode-card--active" id="mode-family-card">
             <input type="radio" name="mode" value="family" checked style="display:none" />
             <span class="mode-card__icon">${icon("store", 22)}</span>
-            <span class="mode-card__title">All in the store</span>
-            <span class="mode-card__sub">Shopping together, side by side</span>
+            <span class="mode-card__title">${t("connect.mode.family")}</span>
+            <span class="mode-card__sub">${t("connect.mode.family.sub")}</span>
           </label>
           <label class="mode-card" id="mode-partner-card">
             <input type="radio" name="mode" value="partner" style="display:none" />
             <span class="mode-card__icon">${icon("home", 22)}</span>
-            <span class="mode-card__title">One at home</span>
-            <span class="mode-card__sub">They watch the cart and vote</span>
+            <span class="mode-card__title">${t("connect.mode.partner")}</span>
+            <span class="mode-card__sub">${t("connect.mode.partner.sub")}</span>
           </label>
         </div>
-        <button id="create-btn" class="primary" style="margin-top:14px">Start the session</button>
+        <button id="create-btn" class="primary" style="margin-top:14px">${t("connect.start")}</button>
       </section>
 
       <section class="card-section">
-        <h2>Join one</h2>
+        <h2>${t("connect.join")}</h2>
         <div class="row-group">
-          <label>Code <input id="join-code" type="text" placeholder="FAM-A4T7" value="${escapeHTML(joinCode)}" autocapitalize="characters" /></label>
-          <label>Your name <input id="join-name" type="text" placeholder="e.g. Alex" /></label>
+          <label>${t("connected.code")} <input id="join-code" type="text" placeholder="${escapeHTML(t("connect.join.placeholder"))}" value="${escapeHTML(joinCode)}" autocapitalize="characters" /></label>
+          <label>${t("connect.your_name")} <input id="join-name" type="text" /></label>
         </div>
-        <button id="join-btn" class="primary">Join</button>
+        <button id="join-btn" class="primary">${t("connect.join.btn")}</button>
       </section>
 
-      <a class="link-btn" href="?screen=list">‹ Back to shopping</a>
+      <a class="link-btn" href="?screen=list">${t("connect.back")}</a>
     </main>
   `;
 
