@@ -216,12 +216,31 @@ export function renderScan(root: HTMLElement) {
   async function boot(): Promise<void> {
     setStatus("Warming up the camera…");
     try {
+      // If the camera is running but no barcodes have been seen after a
+      // few seconds of frames, nudge the user. Most "doesn't work" cases
+      // are the phone being too far from the barcode.
+      let droughtTimer: number | null = null;
+      let droughtArmed = false;
+      function armDroughtNudge() {
+        if (droughtArmed) return;
+        droughtArmed = true;
+        droughtTimer = window.setTimeout(() => {
+          if (found.size === 0) setStatus("Hold the phone closer to a barcode.");
+        }, 4000);
+      }
+      function disarmDroughtNudge() {
+        if (droughtTimer !== null) { window.clearTimeout(droughtTimer); droughtTimer = null; }
+        droughtArmed = false;
+      }
+
       handle = await startScanner({
         host: captureView,
         onFrame: ({ barcodes, width, height, stats }) => {
           if (!handle) return;
           if (overlay.width === 0) sizeOverlayTo(handle.video);
           drawOverlay(handle, barcodes, width, height);
+          if (stats.framesDecoded > 10 && stats.codesDetected === 0) armDroughtNudge();
+          else if (stats.codesDetected > 0) disarmDroughtNudge();
           if (debug) {
             const dbg = root.querySelector("#scan-debug") as HTMLDivElement | null;
             if (dbg) {

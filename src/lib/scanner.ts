@@ -37,8 +37,14 @@ const FORMATS: ReadInputBarcodeFormat[] = [
 ];
 
 const MAX_BARCODES_PER_FRAME = 8;
-const STABILITY_FRAMES = 1;       // report on first valid sighting; faster feedback
-const DECODE_TARGET_WIDTH = 720;  // downsample to this width before decoding
+const STABILITY_FRAMES = 1;        // report on first valid sighting; faster feedback
+// Don't downsample below 1280. Empirically (see _decode_test.mjs results),
+// zxing-wasm needs ~250+ pixels of barcode bar width to decode reliably.
+// A typical phone frame is 1280x720; if a small barcode fills 30% of the
+// frame, that's 384 pixels at full res — readable. Halving the frame turns
+// that into 192 pixels — below the threshold. 1280 wide decodes in ~20ms
+// per frame anyway, so there's nothing to gain by going lower.
+const DECODE_TARGET_WIDTH = 1280;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
