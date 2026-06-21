@@ -1709,13 +1709,13 @@ button, .primary { font: inherit; cursor: pointer; }
 .screen-scan { gap: 10px; }
 
 .scan-viewport {
-  flex: 1 1 auto;
-  /* Size for the camera frame minus the rest of the chrome on each side:
-     header (~60px) + carousel (~88px) + controls (~52px) + tab bar (72px)
-     + safe area. We use svh on phones so the URL bar doesn't push it
-     around when scrolling. */
-  height: calc(100svh - 60px - 88px - 52px - var(--tab-h) - env(safe-area-inset-bottom));
-  min-height: 280px;
+  /* flex-basis: 0 + grow: 1 forces this element to claim all leftover
+     space in the column after the other items (status, carousel,
+     controls) take what they need. Without this the explicit height
+     gets ignored or the video's intrinsic aspect ratio leaks through
+     and the bottom of the viewport ends up black. */
+  flex: 1 1 0;
+  min-height: 240px;
   position: relative;
   border-radius: var(--radius);
   overflow: hidden;
@@ -1728,7 +1728,6 @@ button, .primary { font: inherit; cursor: pointer; }
     width: 100vw;
     margin-left: calc(-50vw + 50%);
     border-radius: 0;
-    height: calc(100vh - 60px - 88px - 52px - var(--tab-h) - env(safe-area-inset-bottom));
     min-height: 360px;
   }
 }
@@ -1742,6 +1741,8 @@ button, .primary { font: inherit; cursor: pointer; }
 }
 
 .scanner-video {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -3472,7 +3473,11 @@ button, .primary { font: inherit; cursor: pointer; }
 
 .browse-cam {
   width: 100%;
-  min-height: 50vh;
+  /* Explicit height -- min-height combined with the child video's
+     height:100% resolved to 0 in some browsers, leaving the video
+     with weird intrinsic dimensions and a half-blank container. */
+  height: 50vh;
+  max-height: calc(100svh - 240px);
   background: #0a0a0a;
   border-radius: var(--radius);
   overflow: hidden;
