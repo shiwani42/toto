@@ -12,8 +12,15 @@ export type PlanPick = {
   why: string;
 };
 
+export type PlanCategory = {
+  key: string;        // catalog category id (e.g. "rain-jacket")
+  label: string;      // user-facing label (e.g. "Rain jacket")
+  why: string;        // one-line reasoning for why this category matters
+  products: PlanPick[]; // 1-3 product candidates from the catalog
+};
+
 export type PlanResult = {
-  picks: PlanPick[];
+  categories: PlanCategory[];
   source: "llm" | "heuristic";
   reasoning?: string;
   weather?: ForecastSummary;
@@ -23,7 +30,9 @@ export type PlanProgress = (msg: string, weather?: ForecastSummary) => void;
 
 export type PlannerProfile = {
   gender: "man" | "woman" | "other" | null;
+  age: "u20" | "20-30" | "30-45" | "45-60" | "60+" | null;
   experience: "new" | "comfortable" | "enthusiast" | "pro" | null;
+  shoppingFor: "self" | "someone" | "family" | null;
   topSize: "XS" | "S" | "M" | "L" | "XL" | null;
   bottomSize: "XS" | "S" | "M" | "L" | "XL" | null;
   shoeSizeEU: number | null;
@@ -31,7 +40,9 @@ export type PlannerProfile = {
 
 const EMPTY_PROFILE: PlannerProfile = {
   gender: null,
+  age: null,
   experience: null,
+  shoppingFor: null,
   topSize: null,
   bottomSize: null,
   shoeSizeEU: null,
@@ -56,11 +67,27 @@ export async function planTrip(
 
 function profileBlock(p: PlannerProfile): string {
   const lines: string[] = [];
+  if (p.shoppingFor) {
+    const who = p.shoppingFor === "self" ? "themselves"
+              : p.shoppingFor === "someone" ? "a specific other person"
+              : "their family / multiple people";
+    lines.push(`- Shopping for: ${who}.`);
+  }
   if (p.gender) {
     const cut = p.gender === "man" ? "men's cuts (prefer tags 'mens' or 'unisex')"
               : p.gender === "woman" ? "women's cuts (prefer tags 'womens' or 'unisex')"
               : "unisex when both options exist";
-    lines.push(`- Shopper is a ${p.gender}. Pick ${cut} when there's a choice.`);
+    lines.push(`- Wearer is a ${p.gender}. Pick ${cut} when there's a choice.`);
+  }
+  if (p.age) {
+    const ageHint = p.age === "u20" || p.age === "20-30"
+      ? "Younger shopper, performance and lighter weight are fine."
+      : p.age === "30-45"
+        ? "Mid-range. Versatile, durable picks."
+        : p.age === "45-60"
+          ? "Comfort matters alongside performance. Easy-to-use designs."
+          : "Comfort-first, easy-handling gear. Avoid the most technical items.";
+    lines.push(`- Age: ${p.age}. ${ageHint}`);
   }
   if (p.experience) {
     const hint = p.experience === "new"
@@ -126,20 +153,28 @@ async function planWithLLM(
 
   const systemPrompt = `You are a gear advisor for a Swiss outdoor retailer.
 
-Goal: pick 4-8 catalog items for the customer's trip, grounded in real weather + the catalog data.
+Goal: build a complete shopping list for the customer's trip, grouped by gear category, so they can decide what they actually want.
 
 Strict workflow:
 1. Call get_weather_forecast with the location and number of days from the trip text. If a date is given resolve it (e.g. "March 14" -> "YYYY-03-14" using the next March 14). If no location is given, pick the most plausible (default "Swiss Alps").
-2. After the tool returns, pick gear from the catalog using the forecast (cold + snow -> insulated jacket + 4-season sleeping bag; rain -> waterproof shell; short daylight -> headlamp; high wind -> windproof).
-3. Pick ONE variant per product_id. Default to size M for clothing and size 42 for footwear, but obey the customer profile below if it gives specific sizes.
-4. Respond with ONLY a JSON object (no markdown, no commentary), shape:
+2. After the tool returns, decide which gear CATEGORIES are relevant. Pick 6-12 categories covering layers, footwear, shelter, sleep, navigation, hydration, etc. Lean comprehensive — the customer will uncheck what they don't need.
+3. For EACH category, pick 2-3 specific catalog products. Pick ONE variant per product_id within a category, but include 2-3 DIFFERENT products to give the shopper choice (different brands, price tiers, or technical levels).
+4. Default to size M for clothing and 42 for footwear, but obey the customer profile if it gives specific sizes.
+5. Respond with ONLY a JSON object (no markdown, no commentary), shape:
    {
-     "picks": [
-       {"code": "<product_code>", "why": "<= 90 chars, ONE sentence about why THIS product for THIS trip, ground it in the forecast (e.g. 'For the -8°C nights, this insulated bag adds 30°C of warmth.')"}
-     ],
-     "summary": "<= 140 chars about the trip overall (one line)"
+     "summary": "<= 140 chars about the trip overall (one line, references the live forecast)",
+     "categories": [
+       {
+         "key": "<catalog category id, e.g. 'rain-jacket'>",
+         "label": "<short human label, e.g. 'Rain jacket'>",
+         "why": "<= 80 chars on why this category matters for THIS trip (e.g. 'Rain on Saturday')",
+         "products": [
+           {"code": "<product_code>", "why": "<= 70 chars on what makes THIS product right"}
+         ]
+       }
+     ]
    }
-   The "why" lines speak directly to the shopper in a warm, friendly tone, like a knowledgeable companion. Avoid jargon.${profileBlock(profile)}
+   Voice: warm, friendly, no jargon, like a knowledgeable shop companion talking to the shopper.${profileBlock(profile)}
 
 Catalog (one variant per row, ~250 rows):
 ${JSON.stringify(catalog)}`;
@@ -246,7 +281,7 @@ ${JSON.stringify(catalog)}`;
   throw new Error("Agent loop exceeded safety budget");
 }
 
-function parseFinalAnswer(text: string): { picks: PlanPick[]; reasoning?: string } {
+function parseFinalAnswer(text: string): { categories: PlanCategory[]; reasoning?: string } {
   const cleaned = text
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
@@ -255,37 +290,57 @@ function parseFinalAnswer(text: string): { picks: PlanPick[]; reasoning?: string
   if (!match) throw new Error("LLM response did not contain JSON");
 
   const parsed = JSON.parse(match[0]) as {
+    categories?: unknown;
     picks?: unknown;
-    codes?: unknown;
     summary?: unknown;
     reasoning?: unknown;
   };
 
-  let picks: PlanPick[] = [];
+  let categories: PlanCategory[] = [];
 
-  // Preferred new shape: { picks: [{code, why}], summary }
-  if (Array.isArray(parsed.picks)) {
-    picks = parsed.picks
+  if (Array.isArray(parsed.categories)) {
+    // New shape: categories with products inside
+    categories = parsed.categories
+      .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
+      .map((c): PlanCategory => {
+        const products: PlanPick[] = Array.isArray(c.products)
+          ? (c.products as unknown[])
+              .filter(
+                (p): p is { code: unknown; why: unknown } =>
+                  typeof p === "object" && p !== null && "code" in (p as object),
+              )
+              .map((p) => ({
+                code: typeof p.code === "string" ? p.code : "",
+                why: typeof p.why === "string" ? p.why : "",
+              }))
+              .filter((p) => p.code && Boolean(getProduct(p.code)))
+          : [];
+        return {
+          key: typeof c.key === "string" ? c.key : "",
+          label: typeof c.label === "string" ? c.label : "Items",
+          why: typeof c.why === "string" ? c.why : "",
+          products,
+        };
+      })
+      .filter((c) => c.products.length > 0);
+  } else if (Array.isArray(parsed.picks)) {
+    // Backwards-compat: flat picks → group by product.category locally
+    const flat = (parsed.picks as unknown[])
       .filter(
         (p): p is { code: unknown; why: unknown } =>
-          typeof p === "object" && p !== null && "code" in p,
+          typeof p === "object" && p !== null && "code" in (p as object),
       )
       .map((p) => ({
         code: typeof p.code === "string" ? p.code : "",
         why: typeof p.why === "string" ? p.why : "",
       }))
       .filter((p) => p.code && Boolean(getProduct(p.code)));
-  } else if (Array.isArray(parsed.codes)) {
-    // Backwards-compatible shape: { codes: [...] }
-    picks = parsed.codes
-      .filter((c): c is string => typeof c === "string")
-      .filter((c) => Boolean(getProduct(c)))
-      .map((code) => ({ code, why: "" }));
+    categories = groupByCategory(flat);
   } else {
-    throw new Error("LLM response is missing `picks`");
+    throw new Error("LLM response is missing `categories`");
   }
 
-  if (picks.length === 0) throw new Error("LLM returned no valid product codes");
+  if (categories.length === 0) throw new Error("LLM returned no valid categories");
 
   const summary =
     typeof parsed.summary === "string"
@@ -294,7 +349,24 @@ function parseFinalAnswer(text: string): { picks: PlanPick[]; reasoning?: string
         ? parsed.reasoning
         : undefined;
 
-  return { picks, reasoning: summary };
+  return { categories, reasoning: summary };
+}
+
+function groupByCategory(picks: PlanPick[]): PlanCategory[] {
+  const buckets = new Map<string, PlanPick[]>();
+  for (const pick of picks) {
+    const p = getProduct(pick.code);
+    if (!p) continue;
+    const arr = buckets.get(p.category) ?? [];
+    arr.push(pick);
+    buckets.set(p.category, arr);
+  }
+  return Array.from(buckets, ([key, products]) => ({
+    key,
+    label: key.replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase()),
+    why: "",
+    products,
+  }));
 }
 
 // ---------- Heuristic fallback (no API key) ----------
@@ -360,23 +432,27 @@ function planHeuristic(tripText: string): PlanResult {
   });
   scored.sort((a, b) => b.score - a.score);
 
-  const pickedCats = new Set<string>();
-  const picks: PlanPick[] = [];
+  // Group up to 3 products per category, max ~10 categories.
+  const byCat = new Map<string, PlanPick[]>();
   for (const { p, score } of scored) {
     if (score <= 0) break;
-    if (pickedCats.has(p.category)) continue;
-    picks.push({
-      code: p.product_code,
-      why: buildHeuristicReason(p, wantedTags),
-    });
-    pickedCats.add(p.category);
-    if (picks.length >= 8) break;
+    const arr = byCat.get(p.category) ?? [];
+    if (arr.length >= 3) continue;
+    arr.push({ code: p.product_code, why: buildHeuristicReason(p, wantedTags) });
+    byCat.set(p.category, arr);
+    if (byCat.size >= 10 && arr.length >= 3) break;
   }
 
+  const categories: PlanCategory[] = Array.from(byCat, ([key, products]) => ({
+    key,
+    label: key.replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase()),
+    why: "",
+    products,
+  }));
+
   return {
-    picks,
+    categories,
     source: "heuristic",
-    // No reasoning string: the per-card 'why' lines speak for themselves.
   };
 }
 

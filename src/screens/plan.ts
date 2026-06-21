@@ -1,6 +1,5 @@
-import type { Product } from "../lib/types";
 import { getProduct } from "../lib/catalog";
-import { addToList, removeFromList } from "../lib/list";
+import { addToList, removeFromList, getList } from "../lib/list";
 import { planTrip, type PlanResult } from "../integrations/ai-planner";
 import {
   searchLocations,
@@ -8,7 +7,7 @@ import {
   type ForecastSummary,
   type Geocode,
 } from "../integrations/weather";
-import { getPrefs, setPrefs, type Gender, type Experience, type Prefs } from "../lib/prefs";
+import { getPrefs, setPrefs, type Gender, type Experience, type AgeBucket, type ShoppingFor, type Prefs } from "../lib/prefs";
 import { icon } from "../lib/icons";
 import { illustrationForCategory } from "../lib/product-art";
 
@@ -29,10 +28,24 @@ const PURPOSE_OPTIONS: Array<{ key: Purpose; label: string; sub: string }> = [
   { key: "browse",  label: "Just looking around", sub: "Skip the questions" },
 ];
 
-const WHO_FOR_OPTIONS: Array<{ key: Gender; label: string; sub: string }> = [
+const SHOPPING_FOR_OPTIONS: Array<{ key: ShoppingFor; label: string; sub: string }> = [
+  { key: "self",    label: "Myself",         sub: "Just my own gear" },
+  { key: "someone", label: "Someone else",   sub: "A friend or partner" },
+  { key: "family",  label: "My family",      sub: "Two or more people" },
+];
+
+const GENDER_FOR_OPTIONS: Array<{ key: Gender; label: string; sub: string }> = [
   { key: "man",   label: "A man",   sub: "Cut for men's bodies" },
   { key: "woman", label: "A woman", sub: "Cut for women's bodies" },
-  { key: "other", label: "Unisex",  sub: "Doesn't matter to me" },
+  { key: "other", label: "Unisex",  sub: "Either way" },
+];
+
+const AGE_OPTIONS: Array<{ key: AgeBucket; label: string }> = [
+  { key: "u20",   label: "Under 20" },
+  { key: "20-30", label: "20 to 30" },
+  { key: "30-45", label: "30 to 45" },
+  { key: "45-60", label: "45 to 60" },
+  { key: "60+",   label: "60 plus" },
 ];
 
 const EXPERIENCE_OPTIONS: Array<{ key: Experience; label: string; sub: string }> = [
@@ -71,7 +84,7 @@ type Answers = {
   endDate: string | null; // null means single-day
 };
 
-type Step = "purpose" | "whoFor" | "experience" | "activity" | "location" | "when" | "sizes";
+type Step = "purpose" | "shoppingFor" | "whoFor" | "age" | "experience" | "activity" | "location" | "when" | "sizes";
 
 function todayIso(): string {
   const d = new Date();
@@ -124,16 +137,23 @@ function sizesIncomplete(prefs: Prefs): boolean {
   return !prefs.topSize || !prefs.bottomSize || !prefs.shoeSizeEU;
 }
 
-// Steps depend on the chosen purpose:
-//   trip     → who/experience (if new), activity, location, when, sizes
-//   general  → who/experience (if new), activity, sizes (no trip details)
-//   browse   → exit immediately
-//
-// Computed once per render so changing the purpose can rebuild the list.
+// Steps depend on what's missing in prefs and the chosen purpose.
+//   - shoppingFor asked if null
+//   - whoFor asked if gender is null (skipped if shopping for self/family with no
+//     dominant gender)
+//   - age, experience asked if null
+//   - trip path also asks location + when
+//   - sizes asked at the end if any size is missing
 function buildSteps(prefs: Prefs, purpose: Purpose | null): Step[] {
   if (purpose === null) return ["purpose"];
-  if (purpose === "browse") return ["purpose"]; // user exits after picking
-  const profile: Step[] = prefs.profileOffered ? [] : ["whoFor", "experience"];
+  if (purpose === "browse") return ["purpose"];
+
+  const profile: Step[] = [];
+  if (!prefs.shoppingFor) profile.push("shoppingFor");
+  if (!prefs.gender)      profile.push("whoFor");
+  if (!prefs.age)         profile.push("age");
+  if (!prefs.experience)  profile.push("experience");
+
   const tripExtras: Step[] = purpose === "trip" ? ["location", "when"] : [];
   const sizes: Step[] = sizesIncomplete(prefs) ? ["sizes"] : [];
   return ["purpose", ...profile, "activity", ...tripExtras, ...sizes];
@@ -176,8 +196,6 @@ export function renderPlan(root: HTMLElement) {
   }
 
   function advance() {
-    // Mark profile as offered once we've moved past the last profile step.
-    if (steps[i] === "experience") setPrefs({ profileOffered: true });
     i++;
     if (i >= steps.length) { runPlanner(); return; }
     render();
@@ -213,9 +231,19 @@ export function renderPlan(root: HTMLElement) {
         }
         return;
       }
+      case "shoppingFor": {
+        if (value === "skip") { advance(); return; }
+        setPrefs({ shoppingFor: value as ShoppingFor });
+        advance(); return;
+      }
       case "whoFor": {
         if (value === "skip") { advance(); return; }
         setPrefs({ gender: value as Gender });
+        advance(); return;
+      }
+      case "age": {
+        if (value === "skip") { advance(); return; }
+        setPrefs({ age: value as AgeBucket });
         advance(); return;
       }
       case "experience": {
@@ -304,19 +332,56 @@ export function renderPlan(root: HTMLElement) {
         </section>
       `;
     }
-    if (step === "whoFor") {
+    if (step === "shoppingFor") {
       return `
         <section class="wizard__step">
-          <h1 class="wizard__q">Who are we packing for?</h1>
-          <p class="wizard__hint">Helps me suggest the right cut.</p>
+          <h1 class="wizard__q">Who are we shopping for?</h1>
           <div class="wizard__list">
-            ${WHO_FOR_OPTIONS.map((o) => `
+            ${SHOPPING_FOR_OPTIONS.map((o) => `
+              <button class="wizard__opt wizard__opt--row wizard__opt--two" data-pick="${o.key}">
+                <span class="wizard__opt-title">${escapeHTML(o.label)}</span>
+                <span class="wizard__opt-sub">${escapeHTML(o.sub)}</span>
+              </button>`).join("")}
+          </div>
+          ${skipBtn()}
+        </section>
+      `;
+    }
+    if (step === "whoFor") {
+      const sf = getPrefs().shoppingFor;
+      const headline = sf === "family"
+        ? "Whose sizes should I lean on?"
+        : sf === "someone"
+          ? "Who are you shopping for?"
+          : "And who are we packing for?";
+      const hint = sf === "family"
+        ? "Pick the main wearer, or unisex if it's a mix."
+        : "Helps me suggest the right cut.";
+      return `
+        <section class="wizard__step">
+          <h1 class="wizard__q">${escapeHTML(headline)}</h1>
+          <p class="wizard__hint">${escapeHTML(hint)}</p>
+          <div class="wizard__list">
+            ${GENDER_FOR_OPTIONS.map((o) => `
               <button class="wizard__opt wizard__opt--row wizard__opt--two" data-pick="${o.key}">
                 <span class="wizard__opt-title">${escapeHTML(o.label)}</span>
                 <span class="wizard__opt-sub">${escapeHTML(o.sub)}</span>
               </button>`).join("")}
           </div>
           ${skipBtn("Prefer not to say")}
+        </section>
+      `;
+    }
+    if (step === "age") {
+      return `
+        <section class="wizard__step">
+          <h1 class="wizard__q">Age range?</h1>
+          <p class="wizard__hint">Helps me tune comfort versus performance.</p>
+          <div class="wizard__list">
+            ${AGE_OPTIONS.map((o) => `
+              <button class="wizard__opt wizard__opt--row" data-pick="${o.key}">${escapeHTML(o.label)}</button>`).join("")}
+          </div>
+          ${skipBtn()}
         </section>
       `;
     }
@@ -570,7 +635,9 @@ export function renderPlan(root: HTMLElement) {
       const cur = getPrefs();
       const result = await planTrip(buildTripText(), {
         gender: cur.gender,
+        age: cur.age,
         experience: cur.experience,
+        shoppingFor: cur.shoppingFor,
         topSize: cur.topSize,
         bottomSize: cur.bottomSize,
         shoeSizeEU: cur.shoeSizeEU,
@@ -581,14 +648,8 @@ export function renderPlan(root: HTMLElement) {
       if (result.weather && weatherEl.innerHTML === "") {
         weatherEl.innerHTML = weatherCard(result.weather);
       }
-      const deck = result.picks
-        .map(({ code, why }) => {
-          const p = getProduct(code);
-          return p ? { p, why } : null;
-        })
-        .filter((x): x is { p: Product; why: string } => Boolean(x));
       progressEl.remove();
-      renderResult(result, deck, resultEl);
+      mountCategoryFlow(resultEl, result);
     } catch (err) {
       console.warn("planTrip failed:", err);
       progressEl.textContent = "";
@@ -596,255 +657,148 @@ export function renderPlan(root: HTMLElement) {
     }
   }
 
-  function renderResult(
-    _result: PlanResult,
-    deck: Array<{ p: Product; why: string }>,
-    target: HTMLElement,
-  ) {
-    if (deck.length === 0) {
-      target.innerHTML = `<div class="status">I couldn't find a good match. Try a different place or season.</div>`;
-      return;
-    }
-    mountSwipeDeck(target, deck, { summary: _result.reasoning ?? "" });
-  }
-
   render();
 }
 
-// ─── Swipe deck (unchanged) ──────────────────────────────────────────────────
 
-type Decision = "add" | "skip";
-type DeckEntry = { p: Product; why: string };
-type DeckOptions = { summary: string };
+// ─── Result UI: category checklist → product picker ─────────────────────────
 
-const SWIPE_THRESHOLD_PX = 110;
+type FlowScreen = "categories" | "products";
 
-function mountSwipeDeck(
-  host: HTMLElement,
-  deck: DeckEntry[],
-  opts: DeckOptions,
-): void {
-  const history: Decision[] = [];
-  let cursor = 0;
-
-  host.innerHTML = `
-    <div class="deck-frame">
-      ${opts.summary
-        ? `<p class="ai-banner__reason" style="text-align:center;max-width:340px">${escapeHTML(opts.summary)}</p>`
-        : ""}
-      <div class="deck-progress" id="deck-progress"></div>
-      <div class="deck-stage" id="deck-stage"></div>
-      <button class="deck-undo-link" id="deck-undo" disabled
-              title="Undo last" aria-label="Undo last">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
-             stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 7v6h6"/>
-          <path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>
-        </svg>
-        Undo
-      </button>
-    </div>
-  `;
-
-  const stage = host.querySelector("#deck-stage") as HTMLDivElement;
-  const progress = host.querySelector("#deck-progress") as HTMLDivElement;
-  const undoBtn = host.querySelector("#deck-undo") as HTMLButtonElement;
-
-  function render(isFreshSwipe = false) {
-    if (cursor >= deck.length) { renderSummary(); return; }
-    progress.textContent = `${cursor + 1} of ${deck.length}`;
-    progress.style.visibility = "visible";
-    stage.innerHTML = renderCard(deck[cursor], 0, cursor);
-    undoBtn.disabled = history.length === 0;
-    undoBtn.style.visibility = "visible";
-    const top = stage.querySelector(`[data-card-index="${cursor}"]`) as HTMLElement | null;
-    if (top) {
-      bindCard(top);
-      if (isFreshSwipe) {
-        top.classList.add("deck-card--entering");
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => top.classList.remove("deck-card--entering"));
-        });
-      }
-    }
+function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
+  if (result.categories.length === 0) {
+    host.innerHTML = `<div class="status">I couldn't put a list together. Try a different place or season.</div>`;
+    return;
   }
 
-  function renderSummary() {
-    const added = history.filter((d) => d === "add").length;
-    progress.style.visibility = "hidden";
-    undoBtn.style.visibility = "hidden";
-    stage.style.minHeight = "auto";
-    stage.innerHTML = `
-      <div class="deck-summary">
-        <div class="deck-summary__count">${added}</div>
-        <h2 class="deck-summary__title">${added === 0 ? "No new picks this time." : added === 1 ? "One on your list." : `${added} on your list.`}</h2>
-        <p class="deck-summary__sub">${
-          added === 0
-            ? "Want to try a different trip, or build a list manually?"
-            : "Ready to find them in the store?"
-        }</p>
-        ${
-          added > 0
-            ? `<a class="primary" href="?screen=map" style="min-width:220px">Show me where they are</a>`
-            : `<a class="primary" href="?screen=list" style="min-width:220px">Build a list myself</a>`
-        }
-        <button class="link-btn" id="deck-restart">Plan a different trip</button>
+  // All categories start checked. User unchecks what they don't need.
+  const selected = new Set<string>(result.categories.map((c) => c.key));
+  let screen: FlowScreen = "categories";
+
+  function render() {
+    if (screen === "categories") host.innerHTML = renderCategories();
+    else host.innerHTML = renderProducts();
+  }
+
+  function renderCategories(): string {
+    const items = result.categories.map((c) => `
+      <li>
+        <label class="cat-row ${selected.has(c.key) ? "cat-row--on" : ""}">
+          <input type="checkbox" data-key="${escapeHTML(c.key)}" ${selected.has(c.key) ? "checked" : ""} />
+          <span class="cat-row__body">
+            <span class="cat-row__name">${escapeHTML(c.label)}</span>
+            ${c.why ? `<span class="cat-row__why">${escapeHTML(c.why)}</span>` : ""}
+          </span>
+          <span class="cat-row__tick" aria-hidden="true">✓</span>
+        </label>
+      </li>
+    `).join("");
+
+    return `
+      <div class="cat-flow">
+        ${result.reasoning ? `<p class="cat-summary">${escapeHTML(result.reasoning)}</p>` : ""}
+        <h2 class="cat-flow__title">Here's what I'd pack</h2>
+        <p class="cat-flow__hint">Uncheck anything you don't need. I'll only show options for the ones you keep.</p>
+        <ul class="cat-list">${items}</ul>
+        <button class="primary cat-flow__cta" id="cat-go">
+          Show me the gear · ${selected.size} ${selected.size === 1 ? "category" : "categories"}
+        </button>
       </div>
     `;
-    const restart = stage.querySelector("#deck-restart") as HTMLButtonElement;
-    restart.addEventListener("click", () => {
-      const url = new URL(window.location.href);
-      url.searchParams.set("screen", "plan");
-      window.location.href = url.toString();
-    });
   }
 
-  function renderCard(entry: DeckEntry, depth: number, index: number): string {
-    const { p, why } = entry;
-    const priceBlock = p.discount_pct > 0
-      ? `<span class="deck-card__price--was">CHF ${p.price_chf.toFixed(0)}</span> CHF ${(p.price_chf * (1 - p.discount_pct / 100)).toFixed(0)}`
-      : `CHF ${p.price_chf.toFixed(0)}`;
+  function renderProducts(): string {
+    const chosen = result.categories.filter((c) => selected.has(c.key));
+    const sections = chosen.map((c) => `
+      <section class="prod-section">
+        <header class="prod-section__head">
+          <h3 class="prod-section__name">${escapeHTML(c.label)}</h3>
+          ${c.why ? `<p class="prod-section__why">${escapeHTML(c.why)}</p>` : ""}
+        </header>
+        <ul class="prod-section__items">
+          ${c.products.map((pick) => renderProductCard(pick.code, pick.why, c.key)).join("")}
+        </ul>
+      </section>
+    `).join("");
+
     return `
-      <article class="deck-card" data-card-index="${index}" tabindex="${depth === 0 ? "0" : "-1"}">
-        <div class="deck-card__tint"></div>
-        <div class="deck-card__art">${illustrationForCategory(p.category)}</div>
-        <div class="deck-card__head">
-          <span class="deck-card__zone">Zone ${escapeHTML(p.zone)}</span>
-          <span class="deck-card__brand">${escapeHTML(p.brand)} · ${escapeHTML(p.color)} · size ${escapeHTML(p.size)}</span>
-        </div>
-        <h3 class="deck-card__name">${escapeHTML(p.name)}</h3>
-        <div class="deck-card__price">${priceBlock}</div>
-        ${why ? `<p class="deck-card__why">${escapeHTML(why)}</p>` : ""}
-        <div class="deck-card__meta">
-          ${p.weight_g ? `<span class="deck-card__meta-item">${p.weight_g} g</span>` : ""}
-          ${p.waterproof_rating_mm ? `<span class="deck-card__meta-item">${p.waterproof_rating_mm.toLocaleString()} mm</span>` : ""}
-          ${p.temp_rating_c != null ? `<span class="deck-card__meta-item">${p.temp_rating_c}°C</span>` : ""}
-          ${p.material ? `<span class="deck-card__meta-item">${escapeHTML(p.material)}</span>` : ""}
-        </div>
-        ${depth === 0 ? `
-        <div class="deck-card__hint">
-          <button type="button" class="deck-card__hint-chip deck-card__hint-chip--skip"
-                  data-action="skip" title="Skip" aria-label="Skip this one">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
-                 stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true">
-              <path d="M18 6L6 18M6 6l12 12"/>
-            </svg>
-          </button>
-          <button type="button" class="deck-card__hint-chip deck-card__hint-chip--add"
-                  data-action="add" title="Add to my list" aria-label="Add to list">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
-                 stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M20 6L9 17l-5-5"/>
-            </svg>
-          </button>
-        </div>
-        ` : ""}
-      </article>
+      <div class="cat-flow">
+        <button class="cat-flow__back" id="cat-back" aria-label="Back to list">‹ Back to list</button>
+        <h2 class="cat-flow__title">Pick what you want</h2>
+        <p class="cat-flow__hint">Tap Add on anything you'd like on your list.</p>
+        ${sections}
+        <a class="primary cat-flow__cta" href="?screen=map">Find them in the store ›</a>
+      </div>
     `;
   }
 
-  function commit(decision: Decision, animateDir: "right" | "left") {
-    const top = stage.querySelector(`[data-card-index="${cursor}"]`) as HTMLElement | null;
-    if (!top) return;
-    top.classList.remove("deck-card--grabbing");
-    top.style.transform = "";
-    void top.offsetWidth;
-    top.classList.add(animateDir === "right" ? "deck-card--gone-right" : "deck-card--gone-left");
-    const entry = deck[cursor];
-    if (decision === "add") addToList(entry.p.product_code);
-    if ("vibrate" in navigator) navigator.vibrate(decision === "add" ? [10, 30, 12] : 18);
-    history.push(decision);
-    cursor++;
-    window.setTimeout(() => render(true), 320);
+  function renderProductCard(code: string, why: string, catKey: string): string {
+    const p = getProduct(code);
+    if (!p) return "";
+    const onList = getList().includes(code);
+    const price = p.discount_pct > 0
+      ? `<s>CHF ${p.price_chf.toFixed(0)}</s> <strong>CHF ${(p.price_chf * (1 - p.discount_pct / 100)).toFixed(0)}</strong>`
+      : `<strong>CHF ${p.price_chf.toFixed(0)}</strong>`;
+    return `
+      <li class="prod-card ${onList ? "prod-card--on" : ""}" data-code="${escapeHTML(code)}" data-cat="${escapeHTML(catKey)}">
+        <div class="prod-card__art">${illustrationForCategory(p.category)}</div>
+        <div class="prod-card__body">
+          <div class="prod-card__name">${escapeHTML(p.name)}</div>
+          <div class="prod-card__sub">${escapeHTML(p.brand)} · ${escapeHTML(p.color)} · size ${escapeHTML(p.size)}</div>
+          <div class="prod-card__price">${price}</div>
+          ${why ? `<div class="prod-card__why">${escapeHTML(why)}</div>` : ""}
+        </div>
+        <button class="prod-card__add ${onList ? "prod-card__add--on" : ""}" data-code="${escapeHTML(code)}">
+          ${onList ? "On list ✓" : "Add"}
+        </button>
+      </li>
+    `;
   }
 
-  function undo() {
-    if (history.length === 0) return;
-    const last = history.pop()!;
-    cursor--;
-    if (last === "add") removeFromList(deck[cursor].p.product_code);
-    render();
-  }
-
-  function bindCard(card: HTMLElement) {
-    const tint = card.querySelector(".deck-card__tint") as HTMLDivElement | null;
-    let startX = 0;
-    let startY = 0;
-    let dragging = false;
-    let captured = false;
-
-    function setTransform(dx: number, dy: number) {
-      const x = Math.round(dx);
-      const y = Math.round(dy * 0.15);
-      const tiltSource = Math.abs(dx) < 8 ? 0 : (dx - Math.sign(dx) * 8);
-      const rotate = (tiltSource / 18).toFixed(2);
-      card.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${rotate}deg)`;
-      if (tint) {
-        const t = Math.min(1, Math.abs(dx) / SWIPE_THRESHOLD_PX);
-        if (dx > 0) tint.style.background = "linear-gradient(180deg, rgba(44,122,85,0), rgba(44,122,85,0.18))";
-        else tint.style.background = "linear-gradient(180deg, rgba(185,28,28,0), rgba(185,28,28,0.14))";
-        tint.style.opacity = String(t * 0.85);
-      }
+  host.addEventListener("change", (e) => {
+    const t = e.target as HTMLInputElement;
+    if (t.matches("[data-key]")) {
+      const key = t.dataset.key!;
+      if (t.checked) selected.add(key); else selected.delete(key);
+      // Update only the CTA count without a full re-render.
+      const cta = host.querySelector("#cat-go");
+      if (cta) cta.textContent = `Show me the gear · ${selected.size} ${selected.size === 1 ? "category" : "categories"}`;
+      const li = t.closest("label");
+      if (li) li.classList.toggle("cat-row--on", t.checked);
     }
-    function resetTransform() {
-      card.classList.remove("deck-card--grabbing");
-      card.style.transform = "";
-      if (tint) tint.style.opacity = "0";
-    }
-
-    card.addEventListener("pointerdown", (e) => {
-      if (Number(card.dataset.cardIndex) !== cursor) return;
-      if ((e.target as HTMLElement).closest(".deck-card__hint-chip")) return;
-      dragging = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      card.classList.add("deck-card--grabbing");
-      try { card.setPointerCapture(e.pointerId); captured = true; } catch { /* ignore */ }
-    });
-    card.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
-      setTransform(e.clientX - startX, e.clientY - startY);
-    });
-    function finish(e: PointerEvent) {
-      if (!dragging) return;
-      dragging = false;
-      const dx = e.clientX - startX;
-      if (captured) {
-        try { card.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-        captured = false;
-      }
-      if (Math.abs(dx) >= SWIPE_THRESHOLD_PX) {
-        commit(dx > 0 ? "add" : "skip", dx > 0 ? "right" : "left");
-      } else {
-        resetTransform();
-      }
-    }
-    card.addEventListener("pointerup", finish);
-    card.addEventListener("pointercancel", finish);
-  }
-
-  stage.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest("[data-action]") as HTMLButtonElement | null;
-    if (!btn) return;
-    const action = btn.dataset.action as Decision;
-    if (cursor >= deck.length) return;
-    if (action === "add") commit("add", "right");
-    else commit("skip", "left");
   });
 
-  undoBtn.addEventListener("click", undo);
-
-  function onKey(e: KeyboardEvent) {
-    if (!host.isConnected) {
-      document.removeEventListener("keydown", onKey);
+  host.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("#cat-go")) {
+      if (selected.size === 0) return;
+      screen = "products";
+      render();
       return;
     }
-    if (cursor >= deck.length) return;
-    if (e.key === "ArrowRight") { e.preventDefault(); commit("add", "right"); }
-    else if (e.key === "ArrowLeft") { e.preventDefault(); commit("skip", "left"); }
-    else if ((e.key === "Backspace" || e.key === "z") && history.length > 0) { e.preventDefault(); undo(); }
-  }
-  document.addEventListener("keydown", onKey);
+    if (target.closest("#cat-back")) {
+      screen = "categories";
+      render();
+      return;
+    }
+    const addBtn = target.closest<HTMLButtonElement>(".prod-card__add");
+    if (addBtn) {
+      const code = addBtn.dataset.code!;
+      if (getList().includes(code)) {
+        removeFromList(code);
+      } else {
+        addToList(code);
+        if ("vibrate" in navigator) navigator.vibrate([10, 30, 12]);
+      }
+      // Toggle visual state on the affected card.
+      const card = addBtn.closest<HTMLElement>(".prod-card");
+      const onList = getList().includes(code);
+      addBtn.textContent = onList ? "On list ✓" : "Add";
+      addBtn.classList.toggle("prod-card__add--on", onList);
+      if (card) card.classList.toggle("prod-card--on", onList);
+      return;
+    }
+  });
 
   render();
 }

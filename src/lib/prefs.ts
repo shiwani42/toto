@@ -5,22 +5,24 @@ const KEY = "toto.prefs";
 
 export type Gender = "man" | "woman" | "other";
 export type Experience = "new" | "comfortable" | "enthusiast" | "pro";
+export type AgeBucket = "u20" | "20-30" | "30-45" | "45-60" | "60+";
+export type ShoppingFor = "self" | "someone" | "family";
 
 export type Prefs = {
   highContrast: boolean;
   largeText: boolean;
-  reduceMotion: boolean; // forces motion reduction even if OS says otherwise
+  reduceMotion: boolean;
   ttsAnnouncements: boolean;
   topSize: "XS" | "S" | "M" | "L" | "XL" | null;
   bottomSize: "XS" | "S" | "M" | "L" | "XL" | null;
   shoeSizeEU: number | null;
   sizeSource: "manual" | "fit-check" | null;
-  // Identity bits that bias picks. Asked once via the planner wizard.
+  // Identity / context that biases picks. Asked when missing.
   gender: Gender | null;
+  age: AgeBucket | null;
   experience: Experience | null;
-  // Set to true after the first planner wizard, whether or not the user
-  // answered the profile questions. Prevents re-asking on every visit.
-  profileOffered: boolean;
+  shoppingFor: ShoppingFor | null;
+  familyCount: number | null;
 };
 
 const DEFAULTS: Prefs = {
@@ -33,8 +35,10 @@ const DEFAULTS: Prefs = {
   shoeSizeEU: null,
   sizeSource: null,
   gender: null,
+  age: null,
   experience: null,
-  profileOffered: false,
+  shoppingFor: null,
+  familyCount: null,
 };
 
 export function getPrefs(): Prefs {

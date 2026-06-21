@@ -817,6 +817,233 @@ button, .primary { font: inherit; cursor: pointer; }
   border-color: var(--bad);
 }
 
+/* ─── Result UI: category checklist + product picker ────────────────────── */
+.cat-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px 24px;
+}
+.cat-summary {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+}
+.cat-flow__title {
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.cat-flow__hint {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--muted-fg);
+  line-height: 1.45;
+}
+.cat-flow__back {
+  background: transparent;
+  border: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted-fg);
+  text-align: left;
+  padding: 4px 0;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.cat-flow__back:hover { color: var(--fg); }
+.cat-flow__cta {
+  margin-top: 6px;
+  text-align: center;
+  text-decoration: none;
+}
+
+.cat-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.cat-row input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border);
+  border-radius: 7px;
+  background: var(--card);
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  margin: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.cat-row input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.cat-row input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 6px;
+  height: 11px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.cat-row__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cat-row__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.cat-row__why {
+  font-size: 12.5px;
+  color: var(--muted-fg);
+  line-height: 1.35;
+}
+.cat-row__tick {
+  display: none;
+  font-size: 14px;
+  color: var(--accent);
+  font-weight: 700;
+}
+.cat-row--on {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.cat-row--on .cat-row__tick { display: inline; }
+
+.prod-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+.prod-section__head { padding: 0 2px; }
+.prod-section__name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.prod-section__why {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted-fg);
+}
+.prod-section__items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prod-card {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--panel-strong);
+  border-radius: 14px;
+  transition: background 0.15s ease;
+}
+.prod-card--on { background: var(--accent-bg); }
+.prod-card__art {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.prod-card__art img {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+}
+.prod-card__body { min-width: 0; }
+.prod-card__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.prod-card__sub {
+  font-size: 11.5px;
+  color: var(--muted-fg);
+  margin-top: 1px;
+}
+.prod-card__price {
+  font-size: 13px;
+  color: var(--fg);
+  margin-top: 3px;
+}
+.prod-card__why {
+  font-size: 11.5px;
+  color: var(--accent-strong);
+  margin-top: 3px;
+  line-height: 1.35;
+}
+.prod-card__add {
+  align-self: center;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.prod-card__add:hover { background: var(--accent-strong); }
+.prod-card__add:active { transform: scale(0.96); }
+.prod-card__add--on {
+  background: var(--card);
+  color: var(--accent-strong);
+  border: 1px solid var(--accent);
+}
+
 /* ─── Trip wizard ────────────────────────────────────────────────────────── */
 .wizard {
   gap: 18px;
