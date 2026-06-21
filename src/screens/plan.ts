@@ -10,6 +10,7 @@ import {
 import { getPrefs, setPrefs, type Gender, type Experience, type AgeBucket, type ShoppingFor, type Prefs } from "../lib/prefs";
 import { icon } from "../lib/icons";
 import { illustrationForCategory } from "../lib/product-art";
+import { track } from "../lib/analytics";
 
 function escapeHTML(s: string): string {
   return s
@@ -188,6 +189,8 @@ export function renderPlan(root: HTMLElement) {
   let steps: Step[] = buildSteps(getPrefs(), null);
   let i = 0;
 
+  track("wizard_start", { initial_steps: steps.length });
+
   root.addEventListener("click", onTap);
 
   function current(): Step { return steps[i]; }
@@ -196,8 +199,24 @@ export function renderPlan(root: HTMLElement) {
   }
 
   function advance() {
+    const prev = steps[i];
+    if (prev) track("wizard_step", { step: prev });
     i++;
-    if (i >= steps.length) { runPlanner(); return; }
+    if (i >= steps.length) {
+      const prefs = getPrefs();
+      track("wizard_complete", {
+        purpose: answers.purpose,
+        activity: answers.activity?.key ?? null,
+        gender: prefs.gender,
+        age: prefs.age,
+        experience: prefs.experience,
+        shopping_for: prefs.shoppingFor,
+        family_count: prefs.familyCount,
+        has_dates: Boolean(answers.startDate),
+      });
+      runPlanner();
+      return;
+    }
     render();
   }
 
@@ -649,9 +668,16 @@ export function renderPlan(root: HTMLElement) {
         weatherEl.innerHTML = weatherCard(result.weather);
       }
       progressEl.remove();
+      const empty = result.categories.filter((c) => c.products.length === 0).map((c) => c.key);
+      track("plan_returned", {
+        categories: result.categories.map((c) => c.key),
+        empty_categories: empty,
+        total_products: result.categories.reduce((n, c) => n + c.products.length, 0),
+      });
       mountCategoryFlow(resultEl, result);
     } catch (err) {
       console.warn("planTrip failed:", err);
+      track("plan_failed", { message: (err as Error)?.message?.slice(0, 60) ?? "unknown" });
       progressEl.textContent = "";
       resultEl.innerHTML = `<div class="status">Something didn't go through. Try again in a moment.</div>`;
     }
@@ -842,6 +868,8 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
     const open = target.closest<HTMLButtonElement>("[data-open]");
     if (open) {
       activeCatKey = open.dataset.open!;
+      const cat = result.categories.find((c) => c.key === activeCatKey);
+      track("category_opened", { category: activeCatKey, product_count: cat?.products.length ?? 0 });
       screen = "swipe";
       render();
       return;
@@ -936,7 +964,13 @@ function mountSwipeDeck(
     void top.offsetWidth;
     top.classList.add(animateDir === "right" ? "deck-card--gone-right" : "deck-card--gone-left");
     const entry = picks[cursor];
-    if (decision === "add") addToList(entry.code);
+    const product = getProduct(entry.code);
+    track("swipe_decision", {
+      code: entry.code,
+      category: product?.category ?? null,
+      decision: decision === "add" ? "add" : "skip",
+    });
+    if (decision === "add") addToList(entry.code, "swipe");
     if ("vibrate" in navigator) navigator.vibrate(decision === "add" ? [10, 30, 12] : 18);
     history.push(decision);
     cursor++;

@@ -16,8 +16,10 @@ import { renderRepair } from "./screens/repair";
 import { renderScan } from "./screens/scan";
 import { renderSettings } from "./screens/settings";
 import { renderSmoke } from "./screens/smoke";
+import { renderAdmin } from "./screens/admin";
 import { loadSession, initGlobalSession } from "./lib/session";
 import { initProfileSync } from "./lib/profile";
+import { initAnalytics } from "./lib/analytics";
 const VALID_SCREENS: Screen[] = [
   "home",
   "list",
@@ -33,6 +35,7 @@ const VALID_SCREENS: Screen[] = [
   "connected",
   "settings",
   "fit",
+  "admin",
 ];
 
 function currentScreen(): Screen {
@@ -168,6 +171,9 @@ function mount() {
       // dynamically import so the camera/Vision code doesn't load up front
       import("./screens/fit").then(({ renderFit }) => renderFit(root));
       break;
+    case "admin":
+      renderAdmin(root);
+      break;
   }
 
   // Mount tab bar AFTER screen render so session state is up-to-date
@@ -178,4 +184,5 @@ function mount() {
 applyPrefs();
 initGlobalSession();
 initProfileSync();
+initAnalytics();
 mount();

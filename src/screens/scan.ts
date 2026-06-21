@@ -21,6 +21,7 @@ import {
 import { getList } from "../lib/list";
 import { getProduct } from "../lib/catalog";
 import { announce } from "../lib/prefs";
+import { track } from "../lib/analytics";
 
 const LICENSE_KEY = import.meta.env.VITE_SCANDIT_LICENSE_KEY as
   | string
@@ -170,6 +171,7 @@ export function renderScan(root: HTMLElement) {
       didTapFinishButton: async (foundItems: BarcodeFindItem[]) => {
         const codes = foundItems.map((it) => it.searchOptions.barcodeData);
         sessionStorage.setItem(FOUND_KEY, JSON.stringify(codes));
+        track("scan_completed", { list_size: items.length, found_count: codes.length });
         announce(`Found ${codes.length} of ${items.length}. All done.`);
         const url = new URL(window.location.href);
         url.searchParams.set("screen", "done");
@@ -178,6 +180,7 @@ export function renderScan(root: HTMLElement) {
       },
     });
 
+    track("scan_started", { list_size: items.length });
     await view.startSearching();
     setStatus(`Looking for ${items.length} thing${items.length > 1 ? "s" : ""}.`);
 

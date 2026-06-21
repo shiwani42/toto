@@ -35,4 +35,5 @@ export type Screen =
   | "connect"
   | "connected"
   | "settings"
-  | "fit";
+  | "fit"
+  | "admin";

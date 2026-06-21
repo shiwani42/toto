@@ -1,4 +1,5 @@
 import { loadSession, Session } from "./session";
+import { track } from "./analytics";
 
 const KEY = "toto.list";
 
@@ -25,11 +26,12 @@ export function getList(): StoredList {
   return read();
 }
 
-export function addToList(code: string): StoredList {
+export function addToList(code: string, source: string = "manual"): StoredList {
   const list = read();
   if (!list.includes(code)) {
     list.push(code);
     broadcast("list:added", code);
+    track("list_added", { code, source });
   }
   write(list);
   return list;
@@ -40,6 +42,7 @@ export function removeFromList(code: string): StoredList {
   const list = before.filter((c) => c !== code);
   if (list.length !== before.length) {
     broadcast("list:removed", code);
+    track("list_removed", { code });
   }
   write(list);
   return list;
