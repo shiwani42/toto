@@ -185,6 +185,8 @@ npm run dev
 
 Open **http://localhost:5173** (or the network URL shown in the terminal, for phone testing on the same WiFi).
 
+**Note on the Scandit license.** The HerCode hackathon key only covers the origins the organizers added to it (typically `localhost`). If you deploy to a host the organizers don't know about (Render's random subdomain, Vercel, etc.) you'll see "license doesn't cover this host" in the browser. Email the organizers with the deploy hostname to have it added to the allow list, or demo from `localhost`.
+
 > If you cloned without `--recurse-submodules`: `git submodule update --init --recursive`
 
 **Test scanning without a physical store:**
