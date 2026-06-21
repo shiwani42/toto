@@ -35,6 +35,28 @@ const FORMATS: ReadInputBarcodeFormat[] = [
   "QRCode", "Code128", "Code39", "DataMatrix",
 ];
 
+// Native BarcodeDetector formats (lower-case with underscores).
+const NATIVE_FORMATS = [
+  "code_128", "ean_13", "ean_8", "upc_a", "upc_e",
+  "qr_code", "code_39", "data_matrix",
+] as const;
+
+// Minimal type surface for the native BarcodeDetector API. Not in lib.dom yet
+// for all browsers, so we declare what we need.
+type NativeCornerPoints = ReadonlyArray<{ x: number; y: number }>;
+type NativeDetectResult = {
+  rawValue: string;
+  format: string;
+  cornerPoints: NativeCornerPoints;
+};
+type NativeDetector = {
+  detect: (src: HTMLVideoElement | HTMLImageElement | ImageBitmap | ImageData | Blob) => Promise<NativeDetectResult[]>;
+};
+type NativeBarcodeDetectorCtor = {
+  new (opts?: { formats?: string[] }): NativeDetector;
+  getSupportedFormats: () => Promise<string[]>;
+};
+
 const MAX_BARCODES_PER_FRAME = 12;
 const STABILITY_FRAMES = 1;
 // Cap the decoder input. Honor whatever the camera produces up to 4K.
@@ -69,6 +91,9 @@ export type ScannerStats = {
   codesDetected: number;
   /** Wall-clock ms the most recent decode took. */
   lastDecodeMs: number;
+  /** Which detection backend is in use. "native" = OS-level ML
+   *  (Chrome Android), "zxing" = WASM fallback (iOS Safari, Firefox). */
+  backend: "native" | "zxing";
 };
 
 export type FrameInfo = {
@@ -215,6 +240,107 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
     minLineCount: 1,
   } as const;
 
+  // ─── Detection backend ─────────────────────────────────────────────────────
+  //
+  // Native BarcodeDetector (Shape Detection API) is available on Chrome
+  // Android and Chrome desktop. On Android it dispatches to Google Code
+  // Scanner — ML-based, OS-level, dramatically better at distance and
+  // partial occlusion than any algorithmic decoder. Zero bundle cost.
+  //
+  // When unavailable (iOS Safari, Firefox, etc.) we fall back to
+  // zxing-wasm. The dispatch is transparent to the rest of the scanner.
+
+  type DecodeSource = HTMLVideoElement | ImageData | Blob | ImageBitmap;
+  type Backend = {
+    name: "native" | "zxing";
+    detect: (source: DecodeSource) => Promise<DecodedBarcode[]>;
+  };
+
+  let backendName: "native" | "zxing" = "zxing";
+  let nativeDetector: NativeDetector | null = null;
+
+  async function initNativeDetector(): Promise<NativeDetector | null> {
+    const W = window as unknown as { BarcodeDetector?: NativeBarcodeDetectorCtor };
+    if (!W.BarcodeDetector) return null;
+    try {
+      const supported = await W.BarcodeDetector.getSupportedFormats();
+      const wanted = NATIVE_FORMATS.filter((f) => supported.includes(f));
+      if (wanted.length === 0) return null;
+      return new W.BarcodeDetector({ formats: wanted });
+    } catch {
+      return null;
+    }
+  }
+
+  async function detectNative(source: DecodeSource): Promise<DecodedBarcode[]> {
+    if (!nativeDetector) return [];
+    let raw: NativeDetectResult[];
+    try {
+      raw = await nativeDetector.detect(source);
+    } catch (err) {
+      console.debug("native detect failed:", err);
+      return [];
+    }
+    return raw
+      .filter((r) => r.rawValue)
+      .map((r) => {
+        const cp = r.cornerPoints;
+        // BarcodeDetector returns 4 corner points in TL/TR/BR/BL order.
+        // Defensive in case of older implementations that return fewer.
+        const tl = cp[0] ?? { x: 0, y: 0 };
+        const tr = cp[1] ?? tl;
+        const br = cp[2] ?? tr;
+        const bl = cp[3] ?? br;
+        return {
+          text: r.rawValue,
+          format: r.format,
+          position: { topLeft: tl, topRight: tr, bottomLeft: bl, bottomRight: br },
+        };
+      });
+  }
+
+  async function detectZxing(source: DecodeSource): Promise<DecodedBarcode[]> {
+    // zxing-wasm only accepts ImageData. Convert if needed.
+    let data: ImageData;
+    if (source instanceof ImageData) {
+      data = source;
+    } else if (source instanceof HTMLVideoElement) {
+      const vw = source.videoWidth, vh = source.videoHeight;
+      if (vw === 0 || vh === 0) return [];
+      const scale = Math.min(1, DECODE_TARGET_WIDTH / vw);
+      const dw = Math.round(vw * scale);
+      const dh = Math.round(vh * scale);
+      if (offscreen.width !== dw || offscreen.height !== dh) {
+        offscreen.width = dw;
+        offscreen.height = dh;
+      }
+      ctx.drawImage(source, 0, 0, dw, dh);
+      data = ctx.getImageData(0, 0, dw, dh);
+    } else {
+      // Blob or ImageBitmap — convert to ImageData via canvas.
+      const bitmap = source instanceof Blob ? await createImageBitmap(source) : source;
+      if (offscreen.width !== bitmap.width || offscreen.height !== bitmap.height) {
+        offscreen.width = bitmap.width;
+        offscreen.height = bitmap.height;
+      }
+      ctx.drawImage(bitmap, 0, 0);
+      data = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+      if (source instanceof Blob) (bitmap as ImageBitmap).close();
+    }
+    const results = await readBarcodes(data, READ_OPTIONS);
+    return results
+      .filter((r) => r.isValid && r.text)
+      .map((r) => ({ text: r.text, format: String(r.format), position: r.position }));
+  }
+
+  // Detect once at startup which backend is available, then never re-check.
+  nativeDetector = await initNativeDetector();
+  const backend: Backend = nativeDetector
+    ? { name: "native", detect: detectNative }
+    : { name: "zxing", detect: detectZxing };
+  backendName = backend.name;
+  console.info(`[scanner] backend: ${backendName}`);
+
   /** Run the dedup + stability pipeline on a fresh set of detections.
    *  `updateStabilityTracking=true` for the live video pass: a code has to
    *  persist across frames to be reported. For the ImageCapture still pass
@@ -250,38 +376,17 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
     }
   }
 
-  /** Decode the current video frame. Cheap, lower-quality (streaming),
-   *  drives the AR overlay. Throttled to VIDEO_DECODE_INTERVAL_MS. */
+  /** Decode the current video frame. The native backend accepts the
+   *  HTMLVideoElement directly (no canvas drawing); the zxing fallback
+   *  draws to canvas internally. Either way, positions come back in the
+   *  video's source coordinate space. */
   async function decodeVideoFrame(): Promise<void> {
     const vw = video.videoWidth, vh = video.videoHeight;
     if (vw === 0 || vh === 0) return;
-    const scale = Math.min(1, DECODE_TARGET_WIDTH / vw);
-    const dw = Math.round(vw * scale);
-    const dh = Math.round(vh * scale);
-    if (offscreen.width !== dw || offscreen.height !== dh) {
-      offscreen.width = dw;
-      offscreen.height = dh;
-    }
     const t0 = performance.now();
-    ctx.drawImage(video, 0, 0, dw, dh);
-    const imageData = ctx.getImageData(0, 0, dw, dh);
-    const results = await readBarcodes(imageData, READ_OPTIONS);
+    const found = await backend.detect(video);
     _framesDecoded++;
     _lastDecodeMs = Math.round(performance.now() - t0);
-
-    const invScale = scale === 0 ? 1 : 1 / scale;
-    const found: DecodedBarcode[] = results
-      .filter((r) => r.isValid && r.text)
-      .map((r) => ({
-        text: r.text,
-        format: String(r.format),
-        position: {
-          topLeft:     { x: r.position.topLeft.x     * invScale, y: r.position.topLeft.y     * invScale },
-          topRight:    { x: r.position.topRight.x    * invScale, y: r.position.topRight.y    * invScale },
-          bottomLeft:  { x: r.position.bottomLeft.x  * invScale, y: r.position.bottomLeft.y  * invScale },
-          bottomRight: { x: r.position.bottomRight.x * invScale, y: r.position.bottomRight.y * invScale },
-        },
-      }));
     processDetections(found, true);
 
     // Rolling FPS window.
@@ -297,7 +402,7 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
       barcodes: found,
       width: vw,
       height: vh,
-      stats: { fps: _fps, framesDecoded: _framesDecoded, codesDetected: _codesDetected, lastDecodeMs: _lastDecodeMs },
+      stats: { fps: _fps, framesDecoded: _framesDecoded, codesDetected: _codesDetected, lastDecodeMs: _lastDecodeMs, backend: backendName },
     });
   }
 
@@ -324,24 +429,13 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
 
     async function pulse() {
       if (!running || !stillContext) return;
-      // Drop if a decode is already in flight; takePhoto would interfere
-      // with the live stream and back things up. Next interval retries.
       if (decodeInFlight) return;
       try {
         const blob = await stillContext.ic.takePhoto();
-        const bitmap = await createImageBitmap(blob);
-        stillContext.canvas.width = bitmap.width;
-        stillContext.canvas.height = bitmap.height;
-        stillContext.sctx.drawImage(bitmap, 0, 0);
-        const data = stillContext.sctx.getImageData(0, 0, bitmap.width, bitmap.height);
-        bitmap.close();
         await tryDecode(async () => {
           const t0 = performance.now();
-          const r = await readBarcodes(data, READ_OPTIONS);
+          const found = await backend.detect(blob);
           _lastDecodeMs = Math.round(performance.now() - t0);
-          const found: DecodedBarcode[] = r
-            .filter((x) => x.isValid && x.text)
-            .map((x) => ({ text: x.text, format: String(x.format), position: x.position }));
           if (found.length > 0) processDetections(found, false);
         });
       } catch (err) {

@@ -256,7 +256,7 @@ export function renderScan(root: HTMLElement) {
               const last = barcodes.length > 0
                 ? `last: [${barcodes[0].format}] ${barcodes[0].text}`
                 : "no codes in frame";
-              dbg.textContent = `${stats.fps} fps · ${stats.lastDecodeMs}ms · seen ${stats.codesDetected} · ${last}`;
+              dbg.textContent = `${stats.backend} · ${stats.fps} fps · ${stats.lastDecodeMs}ms · seen ${stats.codesDetected} · ${last}`;
             }
           }
         },
