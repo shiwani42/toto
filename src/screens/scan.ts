@@ -128,6 +128,29 @@ export function renderScan(root: HTMLElement) {
   }
   renderCarousel();
 
+  /** Triumph animation when a list item is found for the first time.
+   *  Scrolls its card into view, plays a green-halo bounce, and triggers
+   *  a brief Toto-pop ping in the viewport's corner. */
+  function celebrateFind(code: string) {
+    const card = carouselEl.querySelector<HTMLElement>(`.find-card[data-code="${cssEscape(code)}"]`);
+    if (card) {
+      card.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      card.classList.remove("find-card--celebrate");
+      void card.offsetWidth;                     // restart the animation
+      card.classList.add("find-card--celebrate");
+      window.setTimeout(() => card.classList.remove("find-card--celebrate"), 900);
+    }
+    // Quick green flash on the whole carousel container for proprioception.
+    carouselEl.classList.remove("find-carousel--flash");
+    void carouselEl.offsetWidth;
+    carouselEl.classList.add("find-carousel--flash");
+    window.setTimeout(() => carouselEl.classList.remove("find-carousel--flash"), 500);
+  }
+
+  function cssEscape(s: string): string {
+    return s.replace(/[^a-zA-Z0-9_-]/g, (c) => "\\" + c);
+  }
+
   // ─── Audio + haptic feedback ──────────────────────────────────────────────
 
   let audioCtx: AudioContext | null = null;
@@ -325,6 +348,7 @@ export function renderScan(root: HTMLElement) {
             announce(label);
             track("scan_found", { code: code.text, in_list: true });
             renderCarousel();
+            celebrateFind(code.text);
           } else if (matched) {
             // Already-found re-detection: gentle beep, no log.
             beep(true);

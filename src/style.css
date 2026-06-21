@@ -2121,6 +2121,23 @@ button, .primary { font: inherit; cursor: pointer; }
   background: var(--accent-bg);
   border-color: var(--accent);
 }
+/* Triumph: the small "yes!" moment when an item locks for the first time. */
+.find-card--celebrate {
+  animation: find-celebrate 0.85s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes find-celebrate {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.5); }
+  35%  { transform: scale(1.06); box-shadow: 0 0 0 14px rgba(46, 204, 113, 0); }
+  60%  { transform: scale(0.99); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+}
+.find-carousel--flash {
+  animation: find-flash 0.45s ease-out;
+}
+@keyframes find-flash {
+  0%   { background: rgba(46, 204, 113, 0.18); }
+  100% { background: transparent; }
+}
 .find-card__dot {
   width: 22px;
   height: 22px;
@@ -2223,7 +2240,91 @@ button, .primary { font: inherit; cursor: pointer; }
 .back-link { align-self: flex-start; }
 
 /* ─── Done screen ────────────────────────────────────────────────────────── */
-.screen-done { gap: 12px; }
+.screen-done { gap: 14px; }
+
+/* ─── Wrap-up done screen ─────────────────────────────────────────────────── */
+.done-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 22px 22px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
+  background-image: linear-gradient(180deg, rgba(245, 241, 232, 0.6) 0%, var(--card) 100%);
+}
+.done-toto {
+  width: 120px;
+  height: 120px;
+  animation: done-toto-enter 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes done-toto-enter {
+  0%   { transform: translateY(8px) scale(0.92); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.done-headline {
+  margin: 4px 0 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.done-sub {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted-fg);
+  line-height: 1.4;
+}
+
+.done-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.done-section__title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-fg);
+}
+.done-section--missing .done-section__title { color: var(--bad); }
+
+.result__joy {
+  font-size: 12px;
+  color: var(--accent-strong);
+  font-style: italic;
+  margin-top: 2px;
+}
+
+.done-remember {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  flex-direction: row;
+  background-image: none;
+}
+.done-remember__title { font-size: 14px; font-weight: 600; color: var(--fg); }
+.done-remember__sub   { font-size: 12px; color: var(--muted-fg); margin-top: 2px; }
+.done-remember__btn   { white-space: nowrap; padding: 10px 16px; font-size: 13px; }
+
+.done-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+.done-actions .primary { min-width: 240px; }
 .screen-done .results .result {
   background: var(--panel-strong);
   border-color: var(--border);
