@@ -44,6 +44,12 @@ export function renderScan(root: HTMLElement) {
           <span id="zoom-label" class="scan-zoom__label">1×</span>
           <button id="zoom-in"  class="scan-zoom__btn" aria-label="Zoom in">+</button>
         </div>
+        <div class="scan-aim" aria-hidden="true">
+          <span class="scan-aim__corner scan-aim__corner--tl"></span>
+          <span class="scan-aim__corner scan-aim__corner--tr"></span>
+          <span class="scan-aim__corner scan-aim__corner--bl"></span>
+          <span class="scan-aim__corner scan-aim__corner--br"></span>
+        </div>
         <button id="cam-switch" class="scan-switch" title="Switch camera" aria-label="Switch camera">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -52,6 +58,13 @@ export function renderScan(root: HTMLElement) {
             <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>
           </svg>
         </button>
+        <button id="torch" class="scan-torch" hidden title="Torch" aria-label="Toggle torch">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 4H6L9 9v11l3-2 3 2V9z"/>
+          </svg>
+        </button>
+        <div id="focus-pulse" class="scan-focus-pulse" hidden></div>
         <div id="scan-start-overlay" class="scan-start-overlay">
           <div class="scan-start-ripple"></div>
           <button id="start-scan-btn" class="scan-start-btn">
@@ -80,6 +93,9 @@ export function renderScan(root: HTMLElement) {
   const zoomInBtn    = root.querySelector("#zoom-in")  as HTMLButtonElement;
   const zoomOutBtn   = root.querySelector("#zoom-out") as HTMLButtonElement;
   const zoomLabel    = root.querySelector("#zoom-label") as HTMLSpanElement;
+  const torchBtn     = root.querySelector("#torch") as HTMLButtonElement;
+  const focusPulse   = root.querySelector("#focus-pulse") as HTMLDivElement;
+  const viewport     = root.querySelector(".scan-viewport") as HTMLDivElement;
 
   // ─── List state ───────────────────────────────────────────────────────────
 
@@ -311,6 +327,40 @@ export function renderScan(root: HTMLElement) {
           updateLabel();
         });
       }
+
+      // Torch button if the camera exposes one.
+      if (handle.hasTorch()) {
+        torchBtn.hidden = false;
+        let torchOn = false;
+        torchBtn.addEventListener("click", async () => {
+          if (!handle) return;
+          torchOn = !torchOn;
+          await handle.setTorch(torchOn);
+          torchBtn.classList.toggle("scan-torch--on", torchOn);
+        });
+      }
+
+      // Tap on the viewport → focus the camera there. Skip taps that
+      // hit the existing controls (zoom buttons, torch, camera switch).
+      viewport.addEventListener("click", (e) => {
+        if (!handle) return;
+        const target = e.target as HTMLElement;
+        if (target.closest(".scan-switch, .scan-zoom, .scan-torch, .scan-start-overlay, #scan-debug")) return;
+        const rect = handle.video.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+        if (x < 0 || x > 1 || y < 0 || y > 1) return;
+        void handle.focusAt(x, y);
+        // Visual feedback: a pulse where the user tapped.
+        focusPulse.style.left = `${e.clientX - rect.left}px`;
+        focusPulse.style.top  = `${e.clientY - rect.top}px`;
+        focusPulse.hidden = false;
+        focusPulse.classList.remove("scan-focus-pulse--animate");
+        void focusPulse.offsetWidth;
+        focusPulse.classList.add("scan-focus-pulse--animate");
+        window.setTimeout(() => { focusPulse.hidden = true; }, 700);
+      });
     } catch (err) {
       console.error("Scan boot failed:", err);
       setStatus(cameraErrorMessage(err));

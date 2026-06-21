@@ -1753,6 +1753,73 @@ button, .primary { font: inherit; cursor: pointer; }
   z-index: 2;
 }
 
+/* ─── Aim guide (corner brackets, centered) ──────────────────────────────── */
+.scan-aim {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 70%;
+  max-width: 320px;
+  aspect-ratio: 3 / 1;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 2;
+}
+.scan-aim__corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: rgba(255, 255, 255, 0.85);
+  border-style: solid;
+  border-width: 0;
+}
+.scan-aim__corner--tl { top: 0;    left: 0;    border-top-width: 3px; border-left-width: 3px;  border-top-left-radius: 6px; }
+.scan-aim__corner--tr { top: 0;    right: 0;   border-top-width: 3px; border-right-width: 3px; border-top-right-radius: 6px; }
+.scan-aim__corner--bl { bottom: 0; left: 0;    border-bottom-width: 3px; border-left-width: 3px;  border-bottom-left-radius: 6px; }
+.scan-aim__corner--br { bottom: 0; right: 0;   border-bottom-width: 3px; border-right-width: 3px; border-bottom-right-radius: 6px; }
+
+/* ─── Torch button (paired with camera-switch) ───────────────────────────── */
+.scan-torch {
+  position: absolute;
+  top: 12px;
+  right: 64px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.scan-torch:hover { background: rgba(0, 0, 0, 0.75); }
+.scan-torch:active { transform: scale(0.94); }
+.scan-torch--on { background: rgba(255, 215, 0, 0.85); color: #1a1a1a; }
+
+/* ─── Tap-to-focus pulse ─────────────────────────────────────────────────── */
+.scan-focus-pulse {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0;
+}
+.scan-focus-pulse--animate {
+  animation: focus-pulse 0.6s ease-out forwards;
+}
+@keyframes focus-pulse {
+  0%   { opacity: 1; transform: translate(-50%, -50%) scale(1.4); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+}
+
 .scan-zoom {
   position: absolute;
   bottom: 14px;

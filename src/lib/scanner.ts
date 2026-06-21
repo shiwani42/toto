@@ -119,6 +119,13 @@ export type ScannerHandle = {
   setZoom: (zoom: number) => Promise<void>;
   /** Returns the supported zoom range, or null if zoom isn't available. */
   getZoomRange: () => { min: number; max: number; step: number; current: number } | null;
+  /** Toggle the camera's torch (flashlight). No-op if unsupported. */
+  setTorch: (on: boolean) => Promise<void>;
+  /** Whether the current track exposes a torch capability. */
+  hasTorch: () => boolean;
+  /** Focus on a normalized point (0..1 each axis) inside the video frame.
+   *  Triggers single-shot focus on devices that support pointsOfInterest. */
+  focusAt: (xNormalized: number, yNormalized: number) => Promise<void>;
   /** The currently-attached video element. */
   video: HTMLVideoElement;
 };
@@ -191,6 +198,7 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
         facingMode: facing,
         width:  { ideal: 3840 },
         height: { ideal: 2160 },
+        frameRate: { ideal: 30 },
       },
     });
     activeStream = stream;
@@ -202,6 +210,24 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
       video.addEventListener("error", fail, { once: true });
     });
     await video.play().catch(() => { /* iOS sometimes throws benignly */ });
+    // Push continuous focus / exposure / white balance after the stream is
+    // live. Default mode on many phones is "single-shot" — once focus
+    // locks it doesn't re-engage when the user pans. Continuous keeps it
+    // tracking which is huge for shelf sweeping. Browser ignores any
+    // unsupported keys.
+    const t = stream.getVideoTracks()[0];
+    if (t && typeof t.getCapabilities === "function") {
+      const caps = t.getCapabilities() as MediaTrackCapabilities & {
+        focusMode?: string[]; exposureMode?: string[]; whiteBalanceMode?: string[];
+      };
+      const advanced: MediaTrackConstraintSet[] = [];
+      if (caps.focusMode?.includes("continuous"))         advanced.push({ focusMode: "continuous" } as MediaTrackConstraintSet);
+      if (caps.exposureMode?.includes("continuous"))      advanced.push({ exposureMode: "continuous" } as MediaTrackConstraintSet);
+      if (caps.whiteBalanceMode?.includes("continuous"))  advanced.push({ whiteBalanceMode: "continuous" } as MediaTrackConstraintSet);
+      if (advanced.length > 0) {
+        try { await t.applyConstraints({ advanced }); } catch (err) { console.debug("camera constraints skipped:", err); }
+      }
+    }
   }
 
   await openCamera();
@@ -406,12 +432,17 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
     });
   }
 
-  /** ImageCapture-based high-resolution still pass. Sharper than the
-   *  streaming preview because takePhoto() engages autofocus, and
-   *  typically 2-3x more pixels per barcode. This is the workhorse for
-   *  shelf-distance scanning on Chrome Android. Safari/iOS no-ops. */
-  type ICCtor = new (track: MediaStreamTrack) => { takePhoto(): Promise<Blob>; };
-  let stillContext: { ic: { takePhoto(): Promise<Blob> }; canvas: HTMLCanvasElement; sctx: CanvasRenderingContext2D } | null = null;
+  /** Higher-resolution still pass via ImageCapture. We prefer grabFrame()
+   *  over takePhoto() because it doesn't trigger a shutter pause on the
+   *  live preview, returns an ImageBitmap directly, and is significantly
+   *  faster. takePhoto() stays as a fallback on devices that don't ship
+   *  grabFrame. iOS Safari ships neither; the whole loop no-ops. */
+  type IC = {
+    grabFrame?: () => Promise<ImageBitmap>;
+    takePhoto: () => Promise<Blob>;
+  };
+  type ICCtor = new (track: MediaStreamTrack) => IC;
+  let stillIc: IC | null = null;
   let stillLoopTimer: number | null = null;
 
   function startStillLoop() {
@@ -419,23 +450,25 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
     if (!W.ImageCapture) return;
     const track = activeStream?.getVideoTracks()[0];
     if (!track) return;
-    try {
-      const ic = new W.ImageCapture(track);
-      const canvas = document.createElement("canvas");
-      const sctxRaw = canvas.getContext("2d", { willReadFrequently: true });
-      if (!sctxRaw) return;
-      stillContext = { ic, canvas, sctx: sctxRaw };
-    } catch { return; }
+    try { stillIc = new W.ImageCapture(track); } catch { return; }
 
     async function pulse() {
-      if (!running || !stillContext) return;
+      if (!running || !stillIc) return;
       if (decodeInFlight) return;
       try {
-        const blob = await stillContext.ic.takePhoto();
+        // Prefer grabFrame: returns ImageBitmap at current frame size, no
+        // shutter, no preview pause. Falls back to takePhoto when absent.
+        let source: ImageBitmap | Blob;
+        if (typeof stillIc.grabFrame === "function") {
+          source = await stillIc.grabFrame();
+        } else {
+          source = await stillIc.takePhoto();
+        }
         await tryDecode(async () => {
           const t0 = performance.now();
-          const found = await backend.detect(blob);
+          const found = await backend.detect(source);
           _lastDecodeMs = Math.round(performance.now() - t0);
+          if (source instanceof ImageBitmap) source.close();
           if (found.length > 0) processDetections(found, false);
         });
       } catch (err) {
@@ -516,6 +549,52 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
         step: caps.step ?? 0.1,
         current: settings.zoom ?? caps.min,
       };
+    },
+    setTorch: async (on: boolean) => {
+      const t = track();
+      if (!t) return;
+      const caps = (t.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
+      if (!caps.torch) return;
+      try {
+        await t.applyConstraints({
+          advanced: [{ torch: on } as MediaTrackConstraintSet & { torch: boolean }],
+        });
+      } catch (err) {
+        console.warn("setTorch failed:", err);
+      }
+    },
+    hasTorch: () => {
+      const t = track();
+      if (!t || typeof t.getCapabilities !== "function") return false;
+      const caps = t.getCapabilities() as MediaTrackCapabilities & { torch?: boolean };
+      return Boolean(caps.torch);
+    },
+    focusAt: async (x, y) => {
+      const t = track();
+      if (!t || typeof t.getCapabilities !== "function") return;
+      const caps = t.getCapabilities() as MediaTrackCapabilities & {
+        focusMode?: string[];
+        pointsOfInterest?: unknown;
+      };
+      const advanced: MediaTrackConstraintSet[] = [];
+      // pointsOfInterest is in normalized (0..1) space on Chrome.
+      if (caps.pointsOfInterest != null) {
+        advanced.push({ pointsOfInterest: [{ x, y }] } as unknown as MediaTrackConstraintSet);
+      }
+      // Switch to single-shot focus to re-engage on this point. Continuous
+      // would override on its own; single locks here briefly.
+      if (caps.focusMode?.includes("single-shot")) {
+        advanced.push({ focusMode: "single-shot" } as MediaTrackConstraintSet);
+      }
+      if (advanced.length === 0) return;
+      try { await t.applyConstraints({ advanced }); } catch (err) { console.debug("focusAt skipped:", err); }
+      // After 1.5s, restore continuous focus if supported.
+      window.setTimeout(() => {
+        const caps2 = t.getCapabilities?.() as MediaTrackCapabilities & { focusMode?: string[] } | undefined;
+        if (caps2?.focusMode?.includes("continuous")) {
+          void t.applyConstraints({ advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet] }).catch(() => { /* ignore */ });
+        }
+      }, 1500);
     },
     video,
   };
