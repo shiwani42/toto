@@ -35,6 +35,58 @@ const TOTO_KEYS: Partial<Record<Screen, string>> = {
   fit:       "toto.fit",
 };
 
+// ─── Contextual suggestions ────────────────────────────────────────────────
+//
+// Screens can ask Toto to surface a feature contextually: "want to compare?",
+// "want to check fit?", etc. Each suggestion has a stable id so once the
+// user dismisses it (taps the bubble or "not now"), we don't pester them
+// again this session.
+
+type Suggestion = {
+  id: string;
+  text: string;
+  cta?: { label: string; href: string };
+};
+
+const DISMISS_KEY = "toto.dismissedSuggestions";
+
+function dismissedIds(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(DISMISS_KEY);
+    return new Set(raw ? JSON.parse(raw) as string[] : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function markDismissed(id: string) {
+  const s = dismissedIds();
+  s.add(id);
+  try { sessionStorage.setItem(DISMISS_KEY, JSON.stringify([...s])); } catch { /* ignore */ }
+}
+
+// Holds the most recent suggestion that's been pushed. The next mount
+// of the companion picks it up if it hasn't been dismissed.
+let pendingSuggestion: Suggestion | null = null;
+
+/** Push a contextual feature suggestion to Toto. Call this from any
+ *  screen when the moment is right. The companion will show it the next
+ *  time it (re-)renders, unless this suggestion id was already dismissed
+ *  in this session. */
+export function pushSuggestion(s: Suggestion) {
+  if (dismissedIds().has(s.id)) return;
+  pendingSuggestion = s;
+  // If a companion is currently mounted, re-render it to surface the suggestion.
+  refreshCompanion();
+}
+
+function refreshCompanion() {
+  const existing = document.getElementById("toto-companion");
+  if (!existing) return;
+  // Re-render by re-calling mount with last screen.
+  if (lastScreen) mountCompanion(lastScreen);
+}
+
 let lastScreen: Screen | null = null;
 let open = false;
 let collapseTimer: number | undefined;
@@ -65,15 +117,31 @@ export function mountCompanion(screen: Screen) {
   // Skip admin too — that's staff-side, no companion needed.
   if (screen === "home" || screen === "admin") return;
 
-  const key = TOTO_KEYS[screen];
-  const phrase = key ? t(key) : t("toto.fallback");
+  const screenKey = TOTO_KEYS[screen];
+  const screenPhrase = screenKey ? t(screenKey) : t("toto.fallback");
 
-  if (lastScreen !== screen) open = false;
+  // If there's a pending suggestion that hasn't been dismissed, surface it
+  // instead of the static screen line, AND auto-open the bubble with a
+  // gentle pulse to draw attention.
+  const dismissed = dismissedIds();
+  const suggestion = pendingSuggestion && !dismissed.has(pendingSuggestion.id) ? pendingSuggestion : null;
+  const phrase = suggestion ? suggestion.text : screenPhrase;
+  const isSuggestion = Boolean(suggestion);
+
+  if (lastScreen !== screen && !isSuggestion) open = false;
+  if (isSuggestion) open = true;          // proactively open for a suggestion
   lastScreen = screen;
+
+  const ctaHTML = suggestion?.cta
+    ? `<a class="toto-companion__cta" href="${escapeHTML(suggestion.cta.href)}" data-cta-id="${escapeHTML(suggestion.id)}">${escapeHTML(suggestion.cta.label)}</a>`
+    : "";
+  const dismissBtn = suggestion
+    ? `<button type="button" class="toto-companion__not-now" data-dismiss-id="${escapeHTML(suggestion.id)}">${escapeHTML(t("toto.not_now"))}</button>`
+    : "";
 
   const root = document.createElement("div");
   root.id = "toto-companion";
-  root.className = `toto-companion ${open ? "toto-companion--open" : ""}`;
+  root.className = `toto-companion ${open ? "toto-companion--open" : ""} ${isSuggestion ? "toto-companion--suggesting" : ""}`;
   root.innerHTML = `
     <button type="button" class="toto-companion__avatar" id="toto-companion-avatar"
             aria-label="${escapeHTML(t("toto.tap_hint"))}" title="${escapeHTML(t("toto.tap_hint"))}">
@@ -82,9 +150,33 @@ export function mountCompanion(screen: Screen) {
     </button>
     <div class="toto-companion__bubble" id="toto-bubble" role="status" aria-live="polite">
       <span class="toto-companion__text">${escapeHTML(phrase)}</span>
+      ${ctaHTML}
+      ${dismissBtn}
     </div>
   `;
   document.body.appendChild(root);
+
+  // Wire CTA: dismiss after tap so we don't keep prompting.
+  if (suggestion) {
+    const cta = root.querySelector("[data-cta-id]") as HTMLAnchorElement | null;
+    cta?.addEventListener("click", () => {
+      markDismissed(suggestion.id);
+      pendingSuggestion = null;
+    });
+    const not = root.querySelector("[data-dismiss-id]") as HTMLButtonElement | null;
+    not?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      markDismissed(suggestion.id);
+      pendingSuggestion = null;
+      // Restore the static screen line.
+      const txt = root.querySelector(".toto-companion__text") as HTMLSpanElement;
+      if (txt) txt.textContent = screenPhrase;
+      const ctaEl = root.querySelector(".toto-companion__cta");
+      const notEl = root.querySelector(".toto-companion__not-now");
+      ctaEl?.remove();
+      notEl?.remove();
+    });
+  }
 
   const dog = root.querySelector("#toto-companion-avatar") as HTMLButtonElement;
   const bubble = root.querySelector("#toto-bubble") as HTMLDivElement;

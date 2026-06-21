@@ -2,6 +2,8 @@ import type { Product } from "../lib/types";
 import { search, getProduct } from "../lib/catalog";
 import { getList, addToList, removeFromList } from "../lib/list";
 import { loadSession } from "../lib/session";
+import { pushSuggestion } from "../lib/companion";
+import { t } from "../lib/i18n";
 
 function escapeHTML(s: string): string {
   return s
@@ -130,6 +132,19 @@ export function renderListBuilder(root: HTMLElement) {
   const cartMount = root.querySelector("#cart-bar-mount") as HTMLDivElement;
   let cartExpanded = false;
 
+  // Once the list grows to 2+ items, offer the compare tool through Toto.
+  // pushSuggestion handles dismissal-tracking; safe to call on every list change.
+  function maybeSuggestCompare() {
+    if (getList().length >= 2) {
+      pushSuggestion({
+        id: "compare-2-items",
+        text: t("toto.suggest.compare"),
+        cta: { label: t("toto.suggest.compare.cta"), href: "?screen=compare" },
+      });
+    }
+  }
+  maybeSuggestCompare();
+
   function listProducts(): Product[] {
     return getList()
       .map((code) => getProduct(code))
@@ -193,6 +208,7 @@ export function renderListBuilder(root: HTMLElement) {
     }
     refreshCartBar();
     refreshResults();
+    maybeSuggestCompare();
   });
 
   refreshCartBar();

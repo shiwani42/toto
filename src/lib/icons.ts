@@ -16,7 +16,8 @@ export type IconName =
   | "settings"
   | "store"
   | "shield"
-  | "sparkles";
+  | "sparkles"
+  | "zap";
 
 const PATHS: Record<IconName, string> = {
   home: `<path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>`,
@@ -58,6 +59,7 @@ const PATHS: Record<IconName, string> = {
   shield: `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`,
   sparkles: `<path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/>
              <path d="M19 14l1 2.5L22 18l-2 .5L19 21l-1-2.5L16 18l2-.5z"/>`,
+  zap: `<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`,
 };
 
 export function icon(name: IconName, size = 22): string {

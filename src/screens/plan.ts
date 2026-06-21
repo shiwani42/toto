@@ -7,10 +7,11 @@ import {
   type ForecastSummary,
   type Geocode,
 } from "../integrations/weather";
-import { getPrefs, setPrefs, type Gender, type Experience, type AgeBucket, type ShoppingFor, type Prefs } from "../lib/prefs";
-import { icon } from "../lib/icons";
+import { getPrefs } from "../lib/prefs";
 import { illustrationForCategory } from "../lib/product-art";
 import { track } from "../lib/analytics";
+import { pushSuggestion } from "../lib/companion";
+import { t } from "../lib/i18n";
 
 function escapeHTML(s: string): string {
   return s
@@ -23,41 +24,6 @@ function escapeHTML(s: string): string {
 // ─── Static option lists ─────────────────────────────────────────────────────
 
 type Purpose = "trip" | "general" | "browse";
-const PURPOSE_OPTIONS: Array<{ key: Purpose; label: string; sub: string }> = [
-  { key: "trip",    label: "Planning a trip",    sub: "Specific place and dates" },
-  { key: "general", label: "Just everyday gear", sub: "No trip in particular" },
-  { key: "browse",  label: "Just looking around", sub: "Skip the questions" },
-];
-
-const SHOPPING_FOR_OPTIONS: Array<{ key: ShoppingFor; label: string; sub: string }> = [
-  { key: "self",    label: "Myself",         sub: "Just my own gear" },
-  { key: "someone", label: "Someone else",   sub: "A friend or partner" },
-  { key: "family",  label: "My family",      sub: "Two or more people" },
-];
-
-const GENDER_FOR_OPTIONS: Array<{ key: Gender; label: string; sub: string }> = [
-  { key: "man",   label: "A man",   sub: "Cut for men's bodies" },
-  { key: "woman", label: "A woman", sub: "Cut for women's bodies" },
-  { key: "other", label: "Unisex",  sub: "Either way" },
-];
-
-const AGE_OPTIONS: Array<{ key: AgeBucket; label: string }> = [
-  { key: "u20",   label: "Under 20" },
-  { key: "20-30", label: "20 to 30" },
-  { key: "30-45", label: "30 to 45" },
-  { key: "45-60", label: "45 to 60" },
-  { key: "60+",   label: "60 plus" },
-];
-
-const EXPERIENCE_OPTIONS: Array<{ key: Experience; label: string; sub: string }> = [
-  { key: "new", label: "New to this", sub: "First time out" },
-  { key: "comfortable", label: "Comfortable", sub: "I've done a few" },
-  { key: "enthusiast", label: "Enthusiast", sub: "Out most weekends" },
-  { key: "pro", label: "Pro", sub: "I do this all the time" },
-];
-
-const SIZE_CHIPS: Array<NonNullable<Prefs["topSize"]>> = ["XS", "S", "M", "L", "XL"];
-const SHOE_CHIPS = [36, 37, 38, 39, 40, 41, 42, 43, 44, 45];
 
 type Activity =
   | { key: "day-hike"; label: "Day hike" }
@@ -78,14 +44,13 @@ const ACTIVITY_OPTIONS: Activity[] = [
 ];
 
 type Answers = {
-  purpose: Purpose | null;
+  purpose: Purpose;
   activity: Activity | null;
   location: string | null;
   startDate: string | null;
-  endDate: string | null; // null means single-day
+  endDate: string | null;
+  extra: string;
 };
-
-type Step = "purpose" | "shoppingFor" | "whoFor" | "age" | "experience" | "activity" | "location" | "when" | "sizes";
 
 function todayIso(): string {
   const d = new Date();
@@ -134,32 +99,6 @@ function weatherCard(w: ForecastSummary): string {
   `;
 }
 
-function sizesIncomplete(prefs: Prefs): boolean {
-  return !prefs.topSize || !prefs.bottomSize || !prefs.shoeSizeEU;
-}
-
-// Steps depend on what's missing in prefs and the chosen purpose.
-//   - shoppingFor asked if null
-//   - whoFor asked if gender is null (skipped if shopping for self/family with no
-//     dominant gender)
-//   - age, experience asked if null
-//   - trip path also asks location + when
-//   - sizes asked at the end if any size is missing
-function buildSteps(prefs: Prefs, purpose: Purpose | null): Step[] {
-  if (purpose === null) return ["purpose"];
-  if (purpose === "browse") return ["purpose"];
-
-  const profile: Step[] = [];
-  if (!prefs.shoppingFor) profile.push("shoppingFor");
-  if (!prefs.gender)      profile.push("whoFor");
-  if (!prefs.age)         profile.push("age");
-  if (!prefs.experience)  profile.push("experience");
-
-  const tripExtras: Step[] = purpose === "trip" ? ["location", "when"] : [];
-  const sizes: Step[] = sizesIncomplete(prefs) ? ["sizes"] : [];
-  return ["purpose", ...profile, "activity", ...tripExtras, ...sizes];
-}
-
 function daysBetween(start: string, end: string): number {
   const a = new Date(start + "T12:00:00").getTime();
   const b = new Date(end + "T12:00:00").getTime();
@@ -178,31 +117,117 @@ function durationLabelFor(startDate: string | null, endDate: string | null): str
 // ─── Wizard ──────────────────────────────────────────────────────────────────
 
 export function renderPlan(root: HTMLElement) {
+  // Single-screen plan form. Everything below is optional; the user
+  // submits whatever they filled in. Personal details (gender, age,
+  // experience, sizes) live in Settings and get used by the planner
+  // when they're set. We don't gate the plan on them.
   const answers: Answers = {
-    purpose: null,
+    purpose: "trip", // arrival here implies planning a trip
     activity: null,
     location: null,
     startDate: null,
     endDate: null,
+    extra: "",
   };
 
-  let steps: Step[] = buildSteps(getPrefs(), null);
-  let i = 0;
+  track("wizard_start", { initial_steps: 1 });
 
-  track("wizard_start", { initial_steps: steps.length });
+  function render() {
+    const today = todayIso();
+    root.innerHTML = `
+      <main class="screen-plan plan-one">
+        <header class="plan-one__head">
+          <a class="wizard__back" href="?screen=home" aria-label="Home">‹</a>
+          <h1>Plan a trip</h1>
+          <p class="tag">Tell me what you can. Skip anything you don't know.</p>
+        </header>
 
-  root.addEventListener("click", onTap);
+        <section class="plan-one__field">
+          <label class="plan-one__label">What kind of trip</label>
+          <div class="plan-one__chips" id="activity-chips">
+            ${ACTIVITY_OPTIONS.map((o) => `<button class="plan-one__chip" type="button" data-activity="${o.key}">${escapeHTML(o.label)}</button>`).join("")}
+          </div>
+        </section>
 
-  function current(): Step { return steps[i]; }
-  function rebuildSteps() {
-    steps = buildSteps(getPrefs(), answers.purpose);
+        <section class="plan-one__field">
+          <label class="plan-one__label" for="loc-input">Where to</label>
+          <div class="loc-search">
+            <input id="loc-input" type="search" autocomplete="off" placeholder="Any place, anywhere…" />
+            <ul id="loc-results" class="loc-results"></ul>
+          </div>
+          <p class="plan-one__chosen" id="loc-chosen"></p>
+        </section>
+
+        <section class="plan-one__field">
+          <label class="plan-one__label">When</label>
+          <div class="wizard__date-grid">
+            <label class="wizard__date-label">
+              <span>Start</span>
+              <input id="start-date" type="date" min="${today}" />
+            </label>
+            <label class="wizard__date-label">
+              <span>End <small class="muted">(optional)</small></span>
+              <input id="end-date" type="date" min="${today}" />
+            </label>
+          </div>
+          <p class="wizard__peek" id="peek"></p>
+        </section>
+
+        <section class="plan-one__field">
+          <label class="plan-one__label" for="extra">Anything else</label>
+          <textarea id="extra" rows="2" placeholder="In your own words. E.g. 'first time skiing', 'wife and two kids', 'I run hot'…"></textarea>
+        </section>
+
+        <button class="primary plan-one__go" id="plan-go">Show me what to bring</button>
+
+        <a class="link-btn plan-one__alt" href="?screen=browse">Or just browse the store ›</a>
+      </main>
+    `;
+
+    mountLocation();
+    wireActivityChips();
+    wireDates();
+    wireExtra();
+    wireSubmit();
   }
 
-  function advance() {
-    const prev = steps[i];
-    if (prev) track("wizard_step", { step: prev });
-    i++;
-    if (i >= steps.length) {
+  function wireActivityChips() {
+    const host = root.querySelector("#activity-chips") as HTMLDivElement;
+    host.addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-activity]");
+      if (!btn) return;
+      const key = btn.dataset.activity!;
+      const found = ACTIVITY_OPTIONS.find((o) => o.key === key);
+      if (!found) return;
+      answers.activity = found;
+      host.querySelectorAll<HTMLButtonElement>("[data-activity]").forEach((b) => {
+        b.classList.toggle("plan-one__chip--on", b === btn);
+      });
+    });
+  }
+
+  function wireDates() {
+    const startEl = root.querySelector("#start-date") as HTMLInputElement;
+    const endEl = root.querySelector("#end-date") as HTMLInputElement;
+    function readDates() {
+      const s = startEl.value;
+      const e = endEl.value;
+      answers.startDate = s || null;
+      answers.endDate = e && (!s || e >= s) ? e : null;
+      if (answers.startDate) runPeek(answers.startDate);
+    }
+    startEl.addEventListener("change", readDates);
+    endEl.addEventListener("change", readDates);
+  }
+
+  function wireExtra() {
+    const el = root.querySelector("#extra") as HTMLTextAreaElement;
+    el.addEventListener("input", () => { answers.extra = el.value.trim(); });
+  }
+
+  function wireSubmit() {
+    const btn = root.querySelector("#plan-go") as HTMLButtonElement;
+    btn.addEventListener("click", () => {
       const prefs = getPrefs();
       track("wizard_complete", {
         purpose: answers.purpose,
@@ -213,295 +238,10 @@ export function renderPlan(root: HTMLElement) {
         shopping_for: prefs.shoppingFor,
         family_count: prefs.familyCount,
         has_dates: Boolean(answers.startDate),
+        has_extra: answers.extra.length > 0,
       });
       runPlanner();
-      return;
-    }
-    render();
-  }
-
-  function back() {
-    i = Math.max(0, i - 1);
-    render();
-  }
-
-  function onTap(e: Event) {
-    const t = e.target as HTMLElement;
-    if (t.closest("#back")) { back(); return; }
-    if (t.closest(".wizard__skip")) { advance(); return; }
-    const btn = t.closest<HTMLButtonElement>("[data-pick]");
-    if (!btn) return;
-    applyPick(btn.dataset.pick!);
-  }
-
-  function applyPick(value: string) {
-    const step = current();
-    switch (step) {
-      case "purpose": {
-        if (value === "trip" || value === "general" || value === "browse") {
-          answers.purpose = value;
-          rebuildSteps();
-          if (value === "browse") {
-            // Quietly head back home; the wizard isn't useful here.
-            window.location.href = "?screen=home";
-            return;
-          }
-          advance(); return;
-        }
-        return;
-      }
-      case "shoppingFor": {
-        if (value === "skip") { advance(); return; }
-        setPrefs({ shoppingFor: value as ShoppingFor });
-        advance(); return;
-      }
-      case "whoFor": {
-        if (value === "skip") { advance(); return; }
-        setPrefs({ gender: value as Gender });
-        advance(); return;
-      }
-      case "age": {
-        if (value === "skip") { advance(); return; }
-        setPrefs({ age: value as AgeBucket });
-        advance(); return;
-      }
-      case "experience": {
-        if (value === "skip") { advance(); return; }
-        setPrefs({ experience: value as Experience });
-        advance(); return;
-      }
-      case "activity": {
-        if (value === "other") {
-          const v = (root.querySelector("#activity-other") as HTMLInputElement | null)?.value.trim();
-          if (!v) return;
-          answers.activity = { key: "other", label: v };
-        } else {
-          const found = ACTIVITY_OPTIONS.find((o) => o.key === value);
-          if (!found) return;
-          answers.activity = found;
-        }
-        advance(); return;
-      }
-      case "location": {
-        // Location uses its own click handlers (see mountLocation).
-        return;
-      }
-      case "when": {
-        if (value !== "continue") return;
-        const s = (root.querySelector("#start-date") as HTMLInputElement | null)?.value || todayIso();
-        const e = (root.querySelector("#end-date") as HTMLInputElement | null)?.value;
-        answers.startDate = s;
-        answers.endDate = e && e >= s ? e : null;
-        advance(); return;
-      }
-      case "sizes": {
-        if (value === "skip") { advance(); return; }
-        if (value === "continue") { advance(); return; }
-        if (value.startsWith("top:")) {
-          setPrefs({ topSize: value.slice(4) as Prefs["topSize"], sizeSource: "manual" });
-        } else if (value.startsWith("bot:")) {
-          setPrefs({ bottomSize: value.slice(4) as Prefs["bottomSize"], sizeSource: "manual" });
-        } else if (value.startsWith("shoe:")) {
-          setPrefs({ shoeSizeEU: Number(value.slice(5)), sizeSource: "manual" });
-        }
-        // Re-render the same step to reflect the new selection state.
-        render();
-        return;
-      }
-    }
-  }
-
-  function render() {
-    root.innerHTML = `
-      <main class="screen-plan wizard">
-        <div class="wizard__top">
-          ${i > 0
-            ? `<button class="wizard__back" id="back" aria-label="Back">‹</button>`
-            : `<a class="wizard__back" href="?screen=home" aria-label="Home">‹</a>`}
-          <span class="wizard__progress">Step ${i + 1} of ${steps.length}</span>
-        </div>
-        ${renderStep()}
-      </main>
-    `;
-    if (current() === "location") mountLocation();
-    if (current() === "when") {
-      // Fire an initial peek for today's default start date.
-      const startInput = root.querySelector("#start-date") as HTMLInputElement | null;
-      if (startInput) runPeek(startInput.value);
-    }
-  }
-
-  function skipBtn(label = "I'll skip"): string {
-    return `<button class="wizard__skip" type="button">${label}</button>`;
-  }
-
-  function renderStep(): string {
-    const step = current();
-    if (step === "purpose") {
-      return `
-        <section class="wizard__step">
-          <h1 class="wizard__q">What brings you in?</h1>
-          <div class="wizard__list">
-            ${PURPOSE_OPTIONS.map((o) => `
-              <button class="wizard__opt wizard__opt--row wizard__opt--two" data-pick="${o.key}">
-                <span class="wizard__opt-title">${escapeHTML(o.label)}</span>
-                <span class="wizard__opt-sub">${escapeHTML(o.sub)}</span>
-              </button>`).join("")}
-          </div>
-        </section>
-      `;
-    }
-    if (step === "shoppingFor") {
-      return `
-        <section class="wizard__step">
-          <h1 class="wizard__q">Who are we shopping for?</h1>
-          <div class="wizard__list">
-            ${SHOPPING_FOR_OPTIONS.map((o) => `
-              <button class="wizard__opt wizard__opt--row wizard__opt--two" data-pick="${o.key}">
-                <span class="wizard__opt-title">${escapeHTML(o.label)}</span>
-                <span class="wizard__opt-sub">${escapeHTML(o.sub)}</span>
-              </button>`).join("")}
-          </div>
-          ${skipBtn()}
-        </section>
-      `;
-    }
-    if (step === "whoFor") {
-      const sf = getPrefs().shoppingFor;
-      const headline = sf === "family"
-        ? "Whose sizes should I lean on?"
-        : sf === "someone"
-          ? "Who are you shopping for?"
-          : "And who are we packing for?";
-      const hint = sf === "family"
-        ? "Pick the main wearer, or unisex if it's a mix."
-        : "Helps me suggest the right cut.";
-      return `
-        <section class="wizard__step">
-          <h1 class="wizard__q">${escapeHTML(headline)}</h1>
-          <p class="wizard__hint">${escapeHTML(hint)}</p>
-          <div class="wizard__list">
-            ${GENDER_FOR_OPTIONS.map((o) => `
-              <button class="wizard__opt wizard__opt--row wizard__opt--two" data-pick="${o.key}">
-                <span class="wizard__opt-title">${escapeHTML(o.label)}</span>
-                <span class="wizard__opt-sub">${escapeHTML(o.sub)}</span>
-              </button>`).join("")}
-          </div>
-          ${skipBtn("Prefer not to say")}
-        </section>
-      `;
-    }
-    if (step === "age") {
-      return `
-        <section class="wizard__step">
-          <h1 class="wizard__q">Age range?</h1>
-          <p class="wizard__hint">Helps me tune comfort versus performance.</p>
-          <div class="wizard__list">
-            ${AGE_OPTIONS.map((o) => `
-              <button class="wizard__opt wizard__opt--row" data-pick="${o.key}">${escapeHTML(o.label)}</button>`).join("")}
-          </div>
-          ${skipBtn()}
-        </section>
-      `;
-    }
-    if (step === "experience") {
-      return `
-        <section class="wizard__step">
-          <h1 class="wizard__q">How outdoorsy are you?</h1>
-          <div class="wizard__list">
-            ${EXPERIENCE_OPTIONS.map((o) => `
-              <button class="wizard__opt wizard__opt--row wizard__opt--two" data-pick="${o.key}">
-                <span class="wizard__opt-title">${escapeHTML(o.label)}</span>
-                <span class="wizard__opt-sub">${escapeHTML(o.sub)}</span>
-              </button>`).join("")}
-          </div>
-          ${skipBtn()}
-        </section>
-      `;
-    }
-    if (step === "activity") {
-      const lead = answers.purpose === "general" ? "Got it. What kind of gear?" : "What are you up to?";
-      return `
-        <section class="wizard__step">
-          <h1 class="wizard__q">${escapeHTML(lead)}</h1>
-          <div class="wizard__grid">
-            ${ACTIVITY_OPTIONS.map((o) => `<button class="wizard__opt" data-pick="${o.key}">${escapeHTML(o.label)}</button>`).join("")}
-          </div>
-          <div class="wizard__other">
-            <input id="activity-other" type="text" placeholder="Something else" autocomplete="off" />
-            <button class="wizard__other-btn" data-pick="other">Continue ›</button>
-          </div>
-          ${skipBtn()}
-        </section>
-      `;
-    }
-    if (step === "location") {
-      const lead = answers.activity?.label ?? "Got it";
-      return `
-        <section class="wizard__step">
-          <h1 class="wizard__q">${escapeHTML(lead)}. Where to?</h1>
-          <div class="loc-search">
-            <input id="loc-input" type="search" autocomplete="off" placeholder="Type any place, anywhere…" />
-            <ul id="loc-results" class="loc-results"></ul>
-          </div>
-          ${skipBtn()}
-        </section>
-      `;
-    }
-    if (step === "when") {
-      const today = todayIso();
-      const lead = answers.location ?? "Got it";
-      return `
-        <section class="wizard__step">
-          <h1 class="wizard__q">${escapeHTML(lead)}. When?</h1>
-          <p class="wizard__hint">Pick a start. Add an end date if you're out for more than a day.</p>
-          <div class="wizard__date-grid">
-            <label class="wizard__date-label">
-              <span>Start</span>
-              <input id="start-date" type="date" value="${today}" min="${today}" />
-            </label>
-            <label class="wizard__date-label">
-              <span>End <small class="muted">(optional)</small></span>
-              <input id="end-date" type="date" min="${today}" />
-            </label>
-          </div>
-          <p class="wizard__peek" id="peek"></p>
-          <button class="primary" data-pick="continue">Continue</button>
-          ${skipBtn()}
-        </section>
-      `;
-    }
-    if (step === "sizes") {
-      const p = getPrefs();
-      const block = (label: string, prefix: string, options: Array<string | number>, selected: string | number | null) => `
-        <div class="sizes-block">
-          <p class="sizes-block__label">${label}</p>
-          <div class="wizard__chips">
-            ${options.map((s) => `<button class="wizard__chip ${selected === s ? "wizard__chip--on" : ""}" data-pick="${prefix}:${s}">${s}</button>`).join("")}
-          </div>
-        </div>
-      `;
-      return `
-        <section class="wizard__step">
-          <h1 class="wizard__q">What size do you wear?</h1>
-          <p class="wizard__hint">Skip anything you don't know.</p>
-          ${!p.topSize    ? block("Top",   "top",  SIZE_CHIPS as Array<string|number>, p.topSize) : ""}
-          ${!p.bottomSize ? block("Bottom", "bot", SIZE_CHIPS as Array<string|number>, p.bottomSize) : ""}
-          ${!p.shoeSizeEU ? block("Shoe (EU)", "shoe", SHOE_CHIPS as Array<string|number>, p.shoeSizeEU) : ""}
-          <a class="fit-nudge fit-nudge--lite" href="?screen=fit">
-            <span class="fit-nudge__icon">${icon("ruler", 18)}</span>
-            <span class="fit-nudge__body">
-              <span class="fit-nudge__title">Or take a quick photo</span>
-              <span class="fit-nudge__sub">I'll guess your sizes from a single shot.</span>
-            </span>
-            <span class="fit-nudge__chev" aria-hidden="true">›</span>
-          </a>
-          <button class="primary" data-pick="continue">Continue</button>
-          ${skipBtn("I'll set sizes later")}
-        </section>
-      `;
-    }
-    return "";
+    });
   }
 
   // ─── Location autocomplete ─────────────────────────────────────────────────
@@ -549,13 +289,17 @@ export function renderPlan(root: HTMLElement) {
         // Store the plain name. Open-Meteo geocodes 'Chamonix' more reliably
         // than 'Chamonix, Auvergne-Rhône-Alpes'.
         answers.location = r.name;
+        // Show what was picked, hide the dropdown, also fire weather peek
+        // if a start date is set.
+        const chosen = root.querySelector("#loc-chosen") as HTMLParagraphElement | null;
+        if (chosen) chosen.textContent = `✓ ${r.name}${r.country ? `, ${r.country}` : ""}`;
+        input.value = "";
+        list.innerHTML = "";
+        if (answers.startDate) runPeek(answers.startDate);
       } catch {
         return;
       }
-      advance();
     });
-
-    input.focus();
   }
 
   // ─── Weather peek ──────────────────────────────────────────────────────────
@@ -607,18 +351,14 @@ export function renderPlan(root: HTMLElement) {
   // ─── Submit + result ───────────────────────────────────────────────────────
 
   function buildTripText(): string {
-    // The profile now goes into the system prompt directly; the trip text
-    // stays focused on the trip itself.
     const a = answers.activity?.label ?? "An outdoor trip";
-    if (answers.purpose === "general") {
-      return `Everyday outdoor gear for ${a.toLowerCase()}, no specific trip.`;
-    }
     const loc = answers.location ?? "Swiss Alps";
     const dateText = answers.startDate ? `starting ${answers.startDate}` : "soon";
     const dur = answers.endDate
       ? `for ${daysBetween(answers.startDate ?? answers.endDate, answers.endDate)} days`
-      : `for a day trip`;
-    return `${a} near ${loc} ${dateText}, ${dur}.`;
+      : answers.startDate ? `for a day trip` : "duration unspecified";
+    const base = `${a} near ${loc} ${dateText}, ${dur}.`;
+    return answers.extra ? `${base} Note from the shopper: ${answers.extra}` : base;
   }
 
   async function runPlanner() {
@@ -675,6 +415,20 @@ export function renderPlan(root: HTMLElement) {
         total_products: result.categories.reduce((n, c) => n + c.products.length, 0),
       });
       mountCategoryFlow(resultEl, result);
+      // If a clothing category was returned and sizes aren't set, gently
+      // surface the fit-check tool through Toto.
+      const cur2 = getPrefs();
+      const sizesMissing = !cur2.topSize || !cur2.bottomSize || !cur2.shoeSizeEU;
+      const hasClothing = result.categories.some((c) =>
+        /jacket|pant|shirt|sock|boot|shoe|glove|base|fleece|insulat/i.test(c.label),
+      );
+      if (sizesMissing && hasClothing) {
+        pushSuggestion({
+          id: "fit-after-plan",
+          text: t("toto.suggest.fit"),
+          cta: { label: t("toto.suggest.fit.cta"), href: "?screen=fit" },
+        });
+      }
     } catch (err) {
       console.warn("planTrip failed:", err);
       track("plan_failed", { message: (err as Error)?.message?.slice(0, 60) ?? "unknown" });

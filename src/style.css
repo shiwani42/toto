@@ -1717,6 +1717,49 @@ button, .primary { font: inherit; cursor: pointer; }
 }
 .toto-companion__text { display: block; }
 
+/* When Toto is offering a suggestion, give a soft attention ring around
+   his avatar so the user notices something new. */
+.toto-companion--suggesting .toto-companion__avatar {
+  box-shadow: 0 4px 20px rgba(45, 125, 78, 0.35),
+              0 0 0 4px rgba(45, 125, 78, 0.18);
+  animation: toto-suggest-pulse 2.2s ease-in-out infinite;
+}
+@keyframes toto-suggest-pulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(45, 125, 78, 0.35),
+                         0 0 0 4px rgba(45, 125, 78, 0.18); }
+  50%      { box-shadow: 0 4px 22px rgba(45, 125, 78, 0.45),
+                         0 0 0 8px rgba(45, 125, 78, 0.08); }
+}
+
+/* Action buttons inside a suggestion bubble. */
+.toto-companion__cta {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 8px 14px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: background 0.15s, transform 0.1s;
+}
+.toto-companion__cta:hover { background: var(--accent-strong); }
+.toto-companion__cta:active { transform: scale(0.97); }
+
+.toto-companion__not-now {
+  display: block;
+  margin: 8px 0 0 4px;
+  background: transparent;
+  border: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted-fg);
+  cursor: pointer;
+  padding: 4px 0;
+}
+.toto-companion__not-now:hover { color: var(--fg); }
+
 /* On small screens, bubble can grow up to most of the screen width. */
 @media (max-width: 419px) {
   .toto-companion__bubble {
@@ -2188,6 +2231,106 @@ button, .primary { font: inherit; cursor: pointer; }
 
 /* ─── Plan screen ────────────────────────────────────────────────────────── */
 .screen-plan { gap: 12px; }
+
+/* ─── Single-screen plan form ──────────────────────────────────────────────── */
+.plan-one {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+}
+.plan-one__head {
+  position: relative;
+  padding: 8px 0 4px;
+}
+.plan-one__head h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.plan-one__head .tag { margin-top: 4px; }
+.plan-one__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 14px 16px;
+}
+.plan-one__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-fg);
+}
+.plan-one__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.plan-one__chip {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--fg);
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.plan-one__chip:active { transform: scale(0.96); }
+.plan-one__chip--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.plan-one__chosen {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.plan-one #extra {
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  width: 100%;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.plan-one #extra:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.plan-one__go {
+  margin-top: 4px;
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 14px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.plan-one__go:hover { background: var(--accent-strong); }
+.plan-one__go:active { transform: scale(0.99); }
+.plan-one__alt {
+  text-align: center;
+  font-size: 13px;
+}
 
 #plan-input {
   width: 100%;
@@ -3665,6 +3808,35 @@ button, .primary { font: inherit; cursor: pointer; }
 .home-choice--resume .home-choice__icon {
   background: var(--accent-bg);
   color: var(--accent-strong);
+}
+
+/* "In a rush" quick lane below the three doors. Soft, unstressed,
+   but clearly tappable. */
+.home-quick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  background: var(--accent-bg);
+  border: 1px dashed var(--accent);
+  border-radius: 14px;
+  color: var(--accent-strong);
+  text-decoration: none;
+  transition: background 0.15s, transform 0.1s;
+}
+.home-quick:active { transform: scale(0.99); }
+.home-quick svg { flex-shrink: 0; color: var(--accent-strong); }
+.home-quick__main {
+  font-size: 14px;
+  font-weight: 600;
+  margin-right: 2px;
+}
+.home-quick__sub {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--muted-fg);
+  font-weight: 500;
 }
 
 .home-more {

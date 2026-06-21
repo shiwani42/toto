@@ -33,28 +33,16 @@ export function renderHome(root: HTMLElement) {
       </section>
 
       <ul class="home-choices">
-        ${hasList ? `
-          <li>
-            <a class="home-choice home-choice--resume" href="?screen=list">
-              <div class="home-choice__head">
-                <span class="home-choice__icon">${icon("list", 24)}</span>
-                <span class="home-choice__badge">${t("home.badge.in_progress")}</span>
-              </div>
-              <h2 class="home-choice__title">${t("home.choice.resume")}</h2>
-              <p class="home-choice__sub">${existingList.length} ${existingList.length === 1 ? "item" : "items"}.</p>
-            </a>
-          </li>
-        ` : `
-          <li>
-            <a class="home-choice" href="?screen=list">
-              <div class="home-choice__head">
-                <span class="home-choice__icon">${icon("list", 24)}</span>
-              </div>
-              <h2 class="home-choice__title">${t("home.choice.list")}</h2>
-              <p class="home-choice__sub">${t("home.choice.list.sub")}</p>
-            </a>
-          </li>
-        `}
+        <li>
+          <a class="home-choice" href="?screen=${hasList ? "list" : "list"}">
+            <div class="home-choice__head">
+              <span class="home-choice__icon">${icon("list", 24)}</span>
+              ${hasList ? `<span class="home-choice__badge">${t("home.badge.in_progress")}</span>` : ""}
+            </div>
+            <h2 class="home-choice__title">${hasList ? t("home.choice.resume") : t("home.choice.list")}</h2>
+            <p class="home-choice__sub">${hasList ? `${existingList.length} ${existingList.length === 1 ? "item" : "items"}.` : t("home.choice.list.sub")}</p>
+          </a>
+        </li>
 
         <li>
           <a class="home-choice" href="?screen=plan">
@@ -77,26 +65,11 @@ export function renderHome(root: HTMLElement) {
         </li>
       </ul>
 
-      <details class="home-more">
-        <summary>${t("home.more")}</summary>
-        <div class="home-more__grid">
-          <a class="home-more__chip" href="?screen=compare">
-            ${icon("scale", 16)} ${t("home.more.compare")}
-          </a>
-          <a class="home-more__chip" href="?screen=repair">
-            ${icon("wrench", 16)} ${t("home.more.repair")}
-          </a>
-          <a class="home-more__chip" href="?screen=fit">
-            ${icon("ruler", 16)} ${t("home.more.fit")}
-          </a>
-          <a class="home-more__chip" href="?screen=connect">
-            ${icon("users", 16)} ${t("home.more.connect")}
-          </a>
-          <a class="home-more__chip" href="?screen=settings">
-            ${icon("settings", 16)} ${t("home.more.settings")}
-          </a>
-        </div>
-      </details>
+      <a class="home-quick" href="?screen=browse">
+        ${icon("zap", 16)}
+        <span class="home-quick__main">${t("home.quick")}</span>
+        <span class="home-quick__sub">${t("home.quick.sub")}</span>
+      </a>
     </main>
   `;
 
