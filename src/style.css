@@ -1753,6 +1753,44 @@ button, .primary { font: inherit; cursor: pointer; }
   z-index: 2;
 }
 
+.scan-zoom {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 999px;
+  padding: 4px;
+  z-index: 3;
+}
+.scan-zoom__btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.scan-zoom__btn:hover { background: rgba(255, 255, 255, 0.28); }
+.scan-zoom__btn:active { transform: scale(0.94); }
+.scan-zoom__label {
+  min-width: 38px;
+  text-align: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-feature-settings: "tnum";
+}
+
 .scan-debug {
   position: absolute;
   top: 12px;

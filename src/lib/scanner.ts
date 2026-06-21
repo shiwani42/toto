@@ -37,14 +37,13 @@ const FORMATS: ReadInputBarcodeFormat[] = [
 ];
 
 const MAX_BARCODES_PER_FRAME = 8;
-const STABILITY_FRAMES = 1;        // report on first valid sighting; faster feedback
-// Don't downsample below 1280. Empirically (see _decode_test.mjs results),
-// zxing-wasm needs ~250+ pixels of barcode bar width to decode reliably.
-// A typical phone frame is 1280x720; if a small barcode fills 30% of the
-// frame, that's 384 pixels at full res — readable. Halving the frame turns
-// that into 192 pixels — below the threshold. 1280 wide decodes in ~20ms
-// per frame anyway, so there's nothing to gain by going lower.
-const DECODE_TARGET_WIDTH = 1280;
+const STABILITY_FRAMES = 1;
+// zxing-wasm is algorithmic (no ML). It needs ~250 pixels of bar width to
+// decode a 1D barcode reliably. We capture at 1080p and feed the decoder
+// the full frame; downsampling below this was the cause of the earlier
+// "doesn't detect anything" bug. Phones can deliver 4K but it's slow and
+// the marginal gain over 1080p is small without ML.
+const DECODE_TARGET_WIDTH = 1920;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -87,6 +86,14 @@ export type ScannerHandle = {
   stop: () => void;
   /** Flip between front and back camera (best effort). */
   switchCamera: () => Promise<void>;
+  /**
+   * Apply a zoom level. Optical zoom on phones that have a telephoto
+   * lens (e.g. iPhone Pro), digital crop everywhere else. Pass a value
+   * between getZoomRange().min and getZoomRange().max.
+   */
+  setZoom: (zoom: number) => Promise<void>;
+  /** Returns the supported zoom range, or null if zoom isn't available. */
+  getZoomRange: () => { min: number; max: number; step: number; current: number } | null;
   /** The currently-attached video element. */
   video: HTMLVideoElement;
 };
@@ -145,13 +152,17 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
       activeStream.getTracks().forEach((t) => t.stop());
       activeStream = null;
     }
+    // Ask for the highest sensible resolution. zxing-wasm is algorithmic
+    // (no ML), so it needs ~250 bar-pixels to decode a 1D barcode. The
+    // more megapixels we get from the camera, the smaller a barcode can
+    // be in the user's view and still be readable. Phones happily deliver
+    // 1080p; 4K is supported but slower and not always worth the gain.
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {
         facingMode: facing,
-        // Hint at HD; the device picks whatever it can deliver.
-        width:  { ideal: 1280 },
-        height: { ideal: 720  },
+        width:  { ideal: 1920 },
+        height: { ideal: 1080 },
       },
     });
     activeStream = stream;
@@ -209,13 +220,17 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
     try {
       ctx.drawImage(video, 0, 0, dw, dh);
       const imageData = ctx.getImageData(0, 0, dw, dh);
-      // tryHarder is for one-shot image-file scans; way too slow per-frame.
-      // tryRotate is cheap and helps when the phone is held at an angle.
+      // tryHarder is worth the cost at 1080p (~150ms per frame on mobile);
+      // it materially extends the readable distance. tryDownscale lets
+      // zxing-cpp find barcodes that aren't the dominant subject of the
+      // frame. tryInvert is dropped because we don't print inverted codes.
       const results: ReadResult[] = await readBarcodes(imageData, {
         formats: FORMATS,
         maxNumberOfSymbols: MAX_BARCODES_PER_FRAME,
+        tryHarder: true,
         tryRotate: true,
         tryInvert: false,
+        tryDownscale: true,
       });
       _framesDecoded++;
       _lastDecodeMs = Math.round(performance.now() - t0);
@@ -283,6 +298,19 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
 
   void tick();
 
+  // Some browsers (Chromium-based) expose a "zoom" capability on the
+  // video track. Standard-issue Safari doesn't. We feature-detect.
+  type ZoomCaps = { min: number; max: number; step?: number };
+  function track(): MediaStreamTrack | null {
+    return activeStream?.getVideoTracks()[0] ?? null;
+  }
+  function zoomCaps(): ZoomCaps | null {
+    const t = track();
+    if (!t || typeof t.getCapabilities !== "function") return null;
+    const caps = t.getCapabilities() as MediaTrackCapabilities & { zoom?: ZoomCaps };
+    return caps.zoom ?? null;
+  }
+
   return {
     stop: () => {
       running = false;
@@ -296,6 +324,31 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
     switchCamera: async () => {
       facing = facing === "environment" ? "user" : "environment";
       await openCamera();
+    },
+    setZoom: async (zoom: number) => {
+      const t = track();
+      const caps = zoomCaps();
+      if (!t || !caps) return;
+      const clamped = Math.max(caps.min, Math.min(caps.max, zoom));
+      try {
+        await t.applyConstraints({
+          advanced: [{ zoom: clamped } as MediaTrackConstraintSet & { zoom: number }],
+        });
+      } catch (err) {
+        console.warn("setZoom failed:", err);
+      }
+    },
+    getZoomRange: () => {
+      const caps = zoomCaps();
+      const t = track();
+      if (!caps || !t || typeof t.getSettings !== "function") return null;
+      const settings = t.getSettings() as MediaTrackSettings & { zoom?: number };
+      return {
+        min: caps.min,
+        max: caps.max,
+        step: caps.step ?? 0.1,
+        current: settings.zoom ?? caps.min,
+      };
     },
     video,
   };

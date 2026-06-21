@@ -39,6 +39,11 @@ export function renderScan(root: HTMLElement) {
         <div id="capture-view" class="scan-view"></div>
         <canvas id="overlay" class="scan-overlay"></canvas>
         ${debug ? `<div id="scan-debug" class="scan-debug"></div>` : ""}
+        <div id="zoom-control" class="scan-zoom" hidden>
+          <button id="zoom-out" class="scan-zoom__btn" aria-label="Zoom out">−</button>
+          <span id="zoom-label" class="scan-zoom__label">1×</span>
+          <button id="zoom-in"  class="scan-zoom__btn" aria-label="Zoom in">+</button>
+        </div>
         <button id="cam-switch" class="scan-switch" title="Switch camera" aria-label="Switch camera">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -71,6 +76,10 @@ export function renderScan(root: HTMLElement) {
   const camSwitchBtn = root.querySelector("#cam-switch") as HTMLButtonElement;
   const carouselEl   = root.querySelector("#carousel") as HTMLDivElement;
   const finishBtn    = root.querySelector("#finish") as HTMLButtonElement;
+  const zoomCtrl     = root.querySelector("#zoom-control") as HTMLDivElement;
+  const zoomInBtn    = root.querySelector("#zoom-in")  as HTMLButtonElement;
+  const zoomOutBtn   = root.querySelector("#zoom-out") as HTMLButtonElement;
+  const zoomLabel    = root.querySelector("#zoom-label") as HTMLSpanElement;
 
   // ─── List state ───────────────────────────────────────────────────────────
 
@@ -279,7 +288,29 @@ export function renderScan(root: HTMLElement) {
       fitOverlay();
       window.addEventListener("resize", fitOverlay);
 
-      setStatus(`Looking for ${list.length} thing${list.length > 1 ? "s" : ""}.`);
+      setStatus(`Looking for ${list.length} thing${list.length > 1 ? "s" : ""}. Sweep along the shelf.`);
+
+      // Set up zoom controls if the device supports them.
+      const range = handle.getZoomRange();
+      if (range && range.max > range.min) {
+        zoomCtrl.hidden = false;
+        let current = range.current || range.min;
+        const step = Math.max(range.step, 0.5);
+        function updateLabel() { zoomLabel.textContent = `${current.toFixed(1)}×`; }
+        updateLabel();
+        zoomInBtn.addEventListener("click", async () => {
+          if (!handle) return;
+          current = Math.min(range.max, current + step);
+          await handle.setZoom(current);
+          updateLabel();
+        });
+        zoomOutBtn.addEventListener("click", async () => {
+          if (!handle) return;
+          current = Math.max(range.min, current - step);
+          await handle.setZoom(current);
+          updateLabel();
+        });
+      }
     } catch (err) {
       console.error("Scan boot failed:", err);
       setStatus(cameraErrorMessage(err));
