@@ -1,31 +1,45 @@
-// Toto companion: a small floating Toto with a speech bubble that says
-// something contextual per screen. Tap to advance through the phrases,
-// tap × to collapse. Replaces the old "tap-to-go-home" corner avatar.
+// Ambient Toto: a small persistent companion in the top-left of every
+// screen (except home, where he's the big mascot). The design principle
+// is "iPad-intuitive": he's impossible to miss, subtle but alive,
+// rewards tapping with a brief warm note in the user's language, and
+// gets out of the way otherwise.
+//
+// What's alive about him:
+//   * Gentle breathing scale (always on, slow, ~3 s cycle)
+//   * Random blinks every 4-7 s
+//   * Occasional ear twitches every 12-20 s
+//   * On tap: bouncy scale-up, his line drops in a soft spring, haptic ping
+//   * After 8 s of bubble inactivity, he settles back into idle
+//
+// He is not chatty. One short line per screen. No notifications, no
+// nudges he wasn't asked to give. Restraint is the whole design.
 
 import { totoAvatar } from "./toto";
 import type { Screen } from "./types";
+import { t } from "./i18n";
 
-// One contextual line per screen. No cycling — what you see is what you get.
-const PHRASE: Partial<Record<Screen, string>> = {
-  list:      "Search anything and I'll keep it on the list.",
-  map:       "Tap a zone to start scanning there.",
-  scan:      "Anything on your list lights up green.",
-  done:      "Nicely done.",
-  plan:      "Just answer what you know. Skip the rest.",
-  browse:    "Point at any barcode and I'll explain it.",
-  compare:   "Scan slot A, then slot B.",
-  repair:    "Scan something you've had a while.",
-  connect:   "Start a session or join one.",
-  connected: "You're in. Share the code.",
-  settings:  "Tweak whatever you like.",
-  fit:       "One quick photo. Nothing stored.",
+// Map screens to their i18n key. Single source of truth. Add a screen
+// here when you want Toto present on it; omit to hide him.
+const TOTO_KEYS: Partial<Record<Screen, string>> = {
+  list:      "toto.list",
+  map:       "toto.map",
+  scan:      "toto.scan",
+  done:      "toto.done",
+  plan:      "toto.plan",
+  browse:    "toto.browse",
+  compare:   "toto.compare",
+  repair:    "toto.repair",
+  connect:   "toto.connect",
+  connected: "toto.connected",
+  settings:  "toto.settings",
+  fit:       "toto.fit",
 };
 
 let lastScreen: Screen | null = null;
-// Bubble stays collapsed by default. User taps the avatar to read.
-// Prevents bubble text from overlapping screen headlines on mount.
 let open = false;
 let collapseTimer: number | undefined;
+let blinkTimer: number | undefined;
+let twitchTimer: number | undefined;
 
 function escapeHTML(s: string): string {
   return s
@@ -35,14 +49,25 @@ function escapeHTML(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
+function clearTimers() {
+  if (collapseTimer)  window.clearTimeout(collapseTimer);
+  if (blinkTimer)     window.clearTimeout(blinkTimer);
+  if (twitchTimer)    window.clearTimeout(twitchTimer);
+  collapseTimer = blinkTimer = twitchTimer = undefined;
+}
+
 export function mountCompanion(screen: Screen) {
-  // Home has the big mascot. No companion bubble there.
   const existing = document.getElementById("toto-companion");
   if (existing) existing.remove();
-  if (screen === "home") return;
+  clearTimers();
 
-  const phrase = PHRASE[screen] ?? "I'm here if you need me.";
-  // Reset to collapsed whenever the screen changes; user opens on demand.
+  // Home has its own giant Toto. The floating one would feel redundant.
+  // Skip admin too — that's staff-side, no companion needed.
+  if (screen === "home" || screen === "admin") return;
+
+  const key = TOTO_KEYS[screen];
+  const phrase = key ? t(key) : t("toto.fallback");
+
   if (lastScreen !== screen) open = false;
   lastScreen = screen;
 
@@ -50,39 +75,65 @@ export function mountCompanion(screen: Screen) {
   root.id = "toto-companion";
   root.className = `toto-companion ${open ? "toto-companion--open" : ""}`;
   root.innerHTML = `
-    <div class="toto-companion__bubble" id="toto-bubble" aria-live="polite">
-      <span class="toto-companion__text">${escapeHTML(phrase)}</span>
-      <button type="button" class="toto-companion__close" id="toto-close" aria-label="Hide" title="Hide">×</button>
-    </div>
-    <button type="button" class="toto-companion__avatar" id="toto-companion-avatar" aria-label="Show or hide Toto">
-      ${totoAvatar(40)}
+    <button type="button" class="toto-companion__avatar" id="toto-companion-avatar"
+            aria-label="${escapeHTML(t("toto.tap_hint"))}" title="${escapeHTML(t("toto.tap_hint"))}">
+      <span class="toto-companion__breath">${totoAvatar(56)}</span>
+      <span class="toto-companion__dot" aria-hidden="true"></span>
     </button>
+    <div class="toto-companion__bubble" id="toto-bubble" role="status" aria-live="polite">
+      <span class="toto-companion__text">${escapeHTML(phrase)}</span>
+    </div>
   `;
   document.body.appendChild(root);
 
-  const closeX = root.querySelector("#toto-close") as HTMLButtonElement;
   const dog = root.querySelector("#toto-companion-avatar") as HTMLButtonElement;
+  const bubble = root.querySelector("#toto-bubble") as HTMLDivElement;
+  const breath = root.querySelector(".toto-companion__breath") as HTMLSpanElement;
 
   function setOpen(state: boolean) {
     open = state;
     root.classList.toggle("toto-companion--open", state);
     if (state) scheduleCollapse();
-    else window.clearTimeout(collapseTimer);
+    else if (collapseTimer) window.clearTimeout(collapseTimer);
   }
 
   function scheduleCollapse() {
-    window.clearTimeout(collapseTimer);
-    collapseTimer = window.setTimeout(() => setOpen(false), 7000);
+    if (collapseTimer) window.clearTimeout(collapseTimer);
+    collapseTimer = window.setTimeout(() => setOpen(false), 8000);
   }
 
-  closeX.addEventListener("click", (e) => {
-    e.stopPropagation();
-    setOpen(false);
-  });
-  // Tap on Toto just toggles the bubble. No random phrase cycling.
+  // Random blinks every 4-7s. Adds the smallest amount of life without
+  // ever being distracting. A blink is a 120ms eye-close via CSS class.
+  function scheduleBlink() {
+    const delay = 4000 + Math.random() * 3000;
+    blinkTimer = window.setTimeout(() => {
+      breath.classList.add("toto-companion__breath--blink");
+      window.setTimeout(() => breath.classList.remove("toto-companion__breath--blink"), 140);
+      scheduleBlink();
+    }, delay);
+  }
+
+  // Rare ear twitch / head tilt every 12-20s. Lower frequency than blinks
+  // so it feels intentional, not nervous.
+  function scheduleTwitch() {
+    const delay = 12000 + Math.random() * 8000;
+    twitchTimer = window.setTimeout(() => {
+      breath.classList.add("toto-companion__breath--twitch");
+      window.setTimeout(() => breath.classList.remove("toto-companion__breath--twitch"), 700);
+      scheduleTwitch();
+    }, delay);
+  }
+
+  scheduleBlink();
+  scheduleTwitch();
+
   dog.addEventListener("click", () => {
     setOpen(!open);
     if ("vibrate" in navigator) navigator.vibrate(8);
+    // A small "noticed" reaction on tap, regardless of open/close.
+    breath.classList.add("toto-companion__breath--noticed");
+    window.setTimeout(() => breath.classList.remove("toto-companion__breath--noticed"), 350);
   });
-  // Don't auto-show on mount. User taps to reveal.
+  // Allow tapping the bubble to dismiss as well.
+  bubble.addEventListener("click", () => { setOpen(false); });
 }

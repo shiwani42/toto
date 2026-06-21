@@ -96,6 +96,14 @@ a { color: inherit; }
 
 /* ─── Header ─────────────────────────────────────────────────────────────── */
 header {
+  /* Right padding leaves room for the language pill (top-right);
+     left padding clears the floating Toto avatar (top-left, 60px + 12px).
+     The home screen's own header has different padding overrides this. */
+  padding: 24px 56px 14px 84px;
+}
+/* Home screen has its own centered greeting; no need for the side padding. */
+.screen-home header,
+body:not(.no-tab-bar) .screen-home header {
   padding: 24px 20px 14px;
 }
 
@@ -1561,14 +1569,14 @@ button, .primary { font: inherit; cursor: pointer; }
 /* ─── Toto companion (top-right on non-home screens) ─────────────────────
    Avatar sits at top-right corner. Bubble drops DOWN below the avatar
    so it never spans horizontally over the screen headlines. */
+/* Ambient Toto companion — fixed top-left, persistent across screens. */
 .toto-companion {
   position: fixed;
-  top: calc(env(safe-area-inset-top) + 12px);
-  right: 14px;
+  top: calc(env(safe-area-inset-top) + 10px);
+  left: 12px;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
   z-index: 50;
   pointer-events: none;
 }
@@ -1577,66 +1585,144 @@ button, .primary { font: inherit; cursor: pointer; }
   pointer-events: auto;
 }
 
+/* The avatar button is the visible body of Toto. */
+.toto-companion__avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: linear-gradient(180deg, #fff 0%, #f5f1e8 100%);
+  box-shadow: 0 4px 16px rgba(45, 125, 78, 0.18),
+              0 1px 3px rgba(0, 0, 0, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  overflow: visible;
+  position: relative;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  flex-shrink: 0;
+}
+.toto-companion__avatar:hover { transform: scale(1.06); }
+.toto-companion__avatar:active { transform: scale(0.94); }
+
+/* The breath wrapper gets the always-on idle animations. */
+.toto-companion__breath {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  animation: toto-breath 3.6s ease-in-out infinite;
+  transform-origin: 50% 65%;
+  transition: transform 0.25s ease;
+}
+@keyframes toto-breath {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.035); }
+}
+
+/* Quick blink: scaleY squashes the avatar momentarily so the eyes wink.
+   Combined with breath it reads as a tiny eye blink, not a body squish. */
+.toto-companion__breath--blink {
+  animation: toto-blink 0.14s ease-in-out;
+}
+@keyframes toto-blink {
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(0.86); }
+}
+
+/* Head tilt twitch — small rotation, returns. */
+.toto-companion__breath--twitch {
+  animation: toto-twitch 0.65s ease-out;
+}
+@keyframes toto-twitch {
+  0%   { transform: rotate(0deg); }
+  25%  { transform: rotate(-8deg); }
+  60%  { transform: rotate(4deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* "I see you" reaction on tap — a quick bounce. */
+.toto-companion__breath--noticed {
+  animation: toto-noticed 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes toto-noticed {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* Tiny green dot bottom-right of the avatar to telegraph "alive".
+   It also serves as an unread-style affordance on first mount. */
+.toto-companion__dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  bottom: 2px;
+  right: 2px;
+  border-radius: 50%;
+  background: #2ecc71;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  animation: toto-pulse 2.6s ease-in-out infinite;
+}
+@keyframes toto-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 0 0 0 rgba(46, 204, 113, 0.35); }
+  50%      { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 0 0 6px rgba(46, 204, 113, 0.0); }
+}
+
+/* Speech bubble. Hidden by default, spring-in on open. */
 .toto-companion__bubble {
   position: relative;
-  max-width: 220px;
-  padding: 9px 30px 9px 14px;
+  max-width: 240px;
+  padding: 12px 16px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 18px;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.35;
   color: var(--fg);
   text-align: left;
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
   opacity: 0;
-  transform: translateY(-6px) scale(0.94);
-  transform-origin: 100% 0%;
-  transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transform: translateX(-8px) scale(0.92);
+  transform-origin: 0% 50%;
+  transition: opacity 0.18s ease, transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
   pointer-events: none;
-  order: 2;
+  margin-top: 8px;
+  cursor: pointer;
 }
-.toto-companion__avatar { order: 1; }
 .toto-companion--open .toto-companion__bubble {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: translateX(0) scale(1);
   pointer-events: auto;
 }
-.toto-companion__bubble::after {
-  /* Pointer triangle at the top-right pointing UP at the avatar. */
+/* Pointer triangle on the LEFT side of the bubble, pointing at the avatar. */
+.toto-companion__bubble::before {
   content: "";
   position: absolute;
-  top: -6px;
-  right: 16px;
+  top: 18px;
+  left: -7px;
   width: 12px;
   height: 12px;
   background: var(--card);
-  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   border-left: 1px solid var(--border);
   transform: rotate(45deg);
 }
-.toto-companion__text {
-  display: block;
+.toto-companion__text { display: block; }
+
+/* On small screens, bubble can grow up to most of the screen width. */
+@media (max-width: 419px) {
+  .toto-companion__bubble {
+    max-width: calc(100vw - 100px);
+  }
 }
-.toto-companion__close {
-  position: absolute;
-  top: 4px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  color: var(--muted-fg);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  user-select: none;
-}
-.toto-companion__close:hover { color: var(--fg); }
 
 .toto-companion__avatar {
   width: 48px;
