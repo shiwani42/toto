@@ -38,11 +38,17 @@ const FORMATS: ReadInputBarcodeFormat[] = [
 
 const MAX_BARCODES_PER_FRAME = 12;
 const STABILITY_FRAMES = 1;
-// At 4K we feed the decoder ~33 MB per frame. zxing-wasm with
-// minLineCount: 1 still gets ~3 fps on a modern phone -- usable for
-// "sweep the shelf" because each barcode passes through the frame
-// for several seconds. Going above 4K isn't worth the perf cost.
+// Cap the decoder input width. We give it the full video frame as long
+// as the device produces something at or below 4K; above that we'd be
+// wasting cycles.
 const DECODE_TARGET_WIDTH = 3840;
+// How often to also decode 4 tile crops in addition to the full frame.
+// At 4K, tiling adds ~25ms/tile so 1-in-3 tiled frames keeps fps usable.
+const TILED_EVERY = 3;
+// How often to grab a full-sensor still via ImageCapture (much higher
+// res than the streaming preview on phones that support it). This is the
+// shelf-scan trump card on Chrome Android; iOS Safari ignores it.
+const STILL_EVERY_MS = 900;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -190,6 +196,7 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
   const reported = new Set<string>();             // values already fired via onScan
   let running = true;
   let inFlight = false;                            // gate concurrent decode calls
+  let tickCount = 0;
 
   // Stats for the optional debug overlay. Caller can read these.
   let _framesDecoded = 0;
@@ -199,6 +206,126 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
   let _statsWindowFrames = 0;
   let _fps = 0;
 
+  const READ_OPTIONS = {
+    formats: FORMATS,
+    maxNumberOfSymbols: MAX_BARCODES_PER_FRAME,
+    tryHarder: true,
+    tryRotate: true,
+    tryInvert: false,
+    tryDownscale: true,
+    minLineCount: 1,
+  } as const;
+
+  /** Run the dedup + stability pipeline on a fresh set of detections.
+   *  Used by the video-frame pass, the tile pass, and the ImageCapture pass. */
+  function processDetections(found: DecodedBarcode[], updateStabilityTracking: boolean) {
+    _codesDetected += found.length;
+    if (updateStabilityTracking) {
+      const codesThisFrame = new Set(found.map((b) => b.text));
+      for (const [k] of seen) {
+        if (!codesThisFrame.has(k)) seen.delete(k);
+      }
+    }
+    for (const b of found) {
+      const n = (updateStabilityTracking ? (seen.get(b.text) ?? 0) + 1 : STABILITY_FRAMES);
+      if (updateStabilityTracking) seen.set(b.text, n);
+      if (n >= STABILITY_FRAMES) {
+        if (opts.dedupe === false || !reported.has(b.text)) {
+          reported.add(b.text);
+          opts.onScan?.(b);
+        }
+      }
+    }
+  }
+
+  /** Decode 5 overlapping crops (4 corners + center) at native resolution.
+   *  Catches barcodes too small to survive the decoder's internal downscale
+   *  on the full frame. Runs in the background; results only fire onScan. */
+  async function decodeTiles(srcW: number, srcH: number) {
+    const tw = Math.round(srcW * 0.6);
+    const th = Math.round(srcH * 0.6);
+    const tiles = [
+      [0, 0],
+      [srcW - tw, 0],
+      [0, srcH - th],
+      [srcW - tw, srcH - th],
+      [Math.round((srcW - tw) / 2), Math.round((srcH - th) / 2)],
+    ];
+    const tileCanvas = document.createElement("canvas");
+    const tctx = tileCanvas.getContext("2d", { willReadFrequently: true });
+    if (!tctx) return;
+    tileCanvas.width = tw; tileCanvas.height = th;
+    for (const [tx, ty] of tiles) {
+      if (!running) return;
+      tctx.drawImage(video, tx, ty, tw, th, 0, 0, tw, th);
+      const data = tctx.getImageData(0, 0, tw, th);
+      try {
+        const r = await readBarcodes(data, READ_OPTIONS);
+        const found: DecodedBarcode[] = r
+          .filter((x) => x.isValid && x.text)
+          .map((x) => ({
+            text: x.text,
+            format: String(x.format),
+            position: {
+              topLeft:     { x: x.position.topLeft.x     + tx, y: x.position.topLeft.y     + ty },
+              topRight:    { x: x.position.topRight.x    + tx, y: x.position.topRight.y    + ty },
+              bottomLeft:  { x: x.position.bottomLeft.x  + tx, y: x.position.bottomLeft.y  + ty },
+              bottomRight: { x: x.position.bottomRight.x + tx, y: x.position.bottomRight.y + ty },
+            },
+          }));
+        if (found.length > 0) processDetections(found, false);
+      } catch { /* keep going */ }
+    }
+  }
+
+  /** ImageCapture-based high-resolution still pass. On Chrome Android,
+   *  takePhoto() returns a Blob at the camera's full sensor resolution
+   *  (often 12 MP, much higher than the 4K streaming preview). Hugely
+   *  improves shelf-scan range. Unsupported on Safari/iOS — we no-op. */
+  let stillLoopTimer: number | null = null;
+  function startStillLoop() {
+    type ICCtor = new (track: MediaStreamTrack) => { takePhoto(): Promise<Blob>; };
+    const W = window as unknown as { ImageCapture?: ICCtor };
+    if (!W.ImageCapture) return;
+    const track = activeStream?.getVideoTracks()[0];
+    if (!track) return;
+    let ic: { takePhoto(): Promise<Blob> };
+    try { ic = new W.ImageCapture(track); } catch { return; }
+
+    const stillCanvas = document.createElement("canvas");
+    const sctxRaw = stillCanvas.getContext("2d", { willReadFrequently: true });
+    if (!sctxRaw) return;
+    const sctx: CanvasRenderingContext2D = sctxRaw;
+
+    async function pulse() {
+      if (!running) return;
+      try {
+        const blob = await ic.takePhoto();
+        const bitmap = await createImageBitmap(blob);
+        stillCanvas.width = bitmap.width;
+        stillCanvas.height = bitmap.height;
+        sctx.drawImage(bitmap, 0, 0);
+        const data = sctx.getImageData(0, 0, bitmap.width, bitmap.height);
+        bitmap.close();
+        const t0 = performance.now();
+        const r = await readBarcodes(data, READ_OPTIONS);
+        const found: DecodedBarcode[] = r
+          .filter((x) => x.isValid && x.text)
+          .map((x) => ({ text: x.text, format: String(x.format), position: x.position }));
+        if (found.length > 0) processDetections(found, false);
+        // Track this pass in stats too so the debug overlay shows it.
+        _lastDecodeMs = Math.round(performance.now() - t0);
+      } catch (err) {
+        // Common on iOS: NotSupportedError. Stop trying.
+        console.debug("ImageCapture pulse skipped:", err);
+        if (stillLoopTimer !== null) window.clearInterval(stillLoopTimer);
+        stillLoopTimer = null;
+      }
+    }
+    stillLoopTimer = window.setInterval(() => { void pulse(); }, STILL_EVERY_MS);
+  }
+  startStillLoop();
+
   async function tick(): Promise<void> {
     if (!running) return;
     requestAnimationFrame(() => { void tick(); });
@@ -207,9 +334,8 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
     const vw = video.videoWidth, vh = video.videoHeight;
     if (vw === 0 || vh === 0) return;
 
-    // Downsample to DECODE_TARGET_WIDTH for the decoder. Most barcode formats
-    // need ~80 pixels of bar width to read reliably; 720px-wide source covers
-    // that with room to spare and is 3-4x faster than 1280p on mobile WASM.
+    // Scale to DECODE_TARGET_WIDTH only if the source is larger. For 1080p
+    // and below we hand the decoder the native frame.
     const scale = Math.min(1, DECODE_TARGET_WIDTH / vw);
     const dw = Math.round(vw * scale);
     const dh = Math.round(vh * scale);
@@ -218,24 +344,12 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
       offscreen.height = dh;
     }
     inFlight = true;
+    tickCount++;
     const t0 = performance.now();
     try {
       ctx.drawImage(video, 0, 0, dw, dh);
       const imageData = ctx.getImageData(0, 0, dw, dh);
-      // minLineCount: 1 is the big win at 4K. The default (2) makes the
-      // decoder confirm a 1D barcode with two parallel scan lines before
-      // returning it; for shelf scanning under any motion blur, that
-      // second confirmation often doesn't survive. Lowering it cuts 4K
-      // decode time ~3x with no measurable detection loss in local tests.
-      const results: ReadResult[] = await readBarcodes(imageData, {
-        formats: FORMATS,
-        maxNumberOfSymbols: MAX_BARCODES_PER_FRAME,
-        tryHarder: true,
-        tryRotate: true,
-        tryInvert: false,
-        tryDownscale: true,
-        minLineCount: 1,
-      });
+      const results: ReadResult[] = await readBarcodes(imageData, READ_OPTIONS);
       _framesDecoded++;
       _lastDecodeMs = Math.round(performance.now() - t0);
 
@@ -254,22 +368,12 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
             bottomRight: { x: r.position.bottomRight.x * invScale, y: r.position.bottomRight.y * invScale },
           },
         }));
-      _codesDetected += found.length;
+      processDetections(found, true);
 
-      // Track stability — same code seen N frames in a row gets reported.
-      const codesThisFrame = new Set(found.map((b) => b.text));
-      for (const [k] of seen) {
-        if (!codesThisFrame.has(k)) seen.delete(k);
-      }
-      for (const b of found) {
-        const n = (seen.get(b.text) ?? 0) + 1;
-        seen.set(b.text, n);
-        if (n === STABILITY_FRAMES) {
-          if (opts.dedupe === false || !reported.has(b.text)) {
-            reported.add(b.text);
-            opts.onScan?.(b);
-          }
-        }
+      // Every Nth frame, also run the tile decoder in the background.
+      // Don't await -- the next animation frame should fire on time.
+      if (tickCount % TILED_EVERY === 0 && vw > 0 && vh > 0) {
+        void decodeTiles(vw, vh);
       }
 
       // Rolling FPS over the last 1s window.
@@ -318,6 +422,10 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
   return {
     stop: () => {
       running = false;
+      if (stillLoopTimer !== null) {
+        window.clearInterval(stillLoopTimer);
+        stillLoopTimer = null;
+      }
       if (activeStream) {
         activeStream.getTracks().forEach((t) => t.stop());
         activeStream = null;
