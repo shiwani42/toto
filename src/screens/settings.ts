@@ -1,4 +1,6 @@
 import { applyPrefs, getPrefs, setPrefs, type Prefs, type Gender, type Experience } from "../lib/prefs";
+import { authConfigured, getCurrentUser, signInWithEmail, signOut, onAuthChange } from "../lib/auth";
+import type { User } from "@supabase/supabase-js";
 
 function escapeHTML(s: string): string {
   return s
@@ -22,14 +24,49 @@ const EXPERIENCE_LABELS: Record<Experience, string> = {
   pro: "Pro",
 };
 
+function accountSectionHTML(user: User | null, status: string): string {
+  if (!authConfigured) return "";
+  if (user) {
+    return `
+      <section class="card-section" aria-labelledby="acct-h">
+        <h2 id="acct-h">Account</h2>
+        <p class="tag">Signed in. Your sizes and preferences follow you across devices.</p>
+        <div class="account-row">
+          <span class="account-row__email">${escapeHTML(user.email ?? "Signed in")}</span>
+          <button id="sign-out" class="link-btn">Sign out</button>
+        </div>
+      </section>
+    `;
+  }
+  return `
+    <section class="card-section" aria-labelledby="acct-h">
+      <h2 id="acct-h">Account</h2>
+      <p class="tag">Optional. Sign in to keep your sizes and preferences when you switch phones.</p>
+      <form id="sign-in-form" class="account-form" novalidate>
+        <label class="account-form__label">
+          Email
+          <input id="sign-in-email" type="email" autocomplete="email"
+                 inputmode="email" required placeholder="you@example.com" />
+        </label>
+        <button type="submit" class="btn-primary account-form__submit">Send sign-in link</button>
+        <p class="account-form__status" role="status" aria-live="polite">${escapeHTML(status)}</p>
+      </form>
+    </section>
+  `;
+}
+
 export function renderSettings(root: HTMLElement) {
   const p = getPrefs();
+  let currentUser: User | null = null;
+  let statusMsg = "";
 
   root.innerHTML = `
     <header>
       <h1>Your preferences</h1>
     </header>
     <main class="screen-settings">
+      <div id="account-slot"></div>
+
       <section class="card-section" aria-labelledby="you-h">
         <h2 id="you-h">You</h2>
         <p class="tag">Helps me pick the right cut and difficulty.</p>
@@ -196,4 +233,69 @@ export function renderSettings(root: HTMLElement) {
       setPrefs({ experience: (val || null) as Experience | null });
     },
   );
+
+  // ─── Account section ───────────────────────────────────────────────────────
+
+  const accountSlot = root.querySelector("#account-slot") as HTMLDivElement;
+
+  function paintAccount() {
+    accountSlot.innerHTML = accountSectionHTML(currentUser, statusMsg);
+    if (!authConfigured) return;
+
+    if (currentUser) {
+      const out = accountSlot.querySelector("#sign-out") as HTMLButtonElement | null;
+      out?.addEventListener("click", async () => {
+        await signOut();
+        currentUser = null;
+        statusMsg = "Signed out.";
+        paintAccount();
+      });
+      return;
+    }
+
+    const form = accountSlot.querySelector("#sign-in-form") as HTMLFormElement | null;
+    form?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = accountSlot.querySelector("#sign-in-email") as HTMLInputElement;
+      const email = input.value.trim();
+      if (!email) {
+        statusMsg = "Type your email first.";
+        paintAccount();
+        return;
+      }
+      statusMsg = "Sending…";
+      paintAccount();
+      try {
+        await signInWithEmail(email);
+        statusMsg = "Check your email for the sign-in link.";
+      } catch (err) {
+        statusMsg = err instanceof Error ? err.message : "Couldn't send the link. Try again.";
+      }
+      paintAccount();
+    });
+  }
+
+  paintAccount();
+
+  if (authConfigured) {
+    void getCurrentUser().then((user) => {
+      currentUser = user;
+      paintAccount();
+    });
+
+    const unsub = onAuthChange((user) => {
+      currentUser = user;
+      statusMsg = user ? "" : statusMsg;
+      paintAccount();
+    });
+
+    // Unsubscribe when this screen unmounts (next route swap clears #app).
+    const observer = new MutationObserver(() => {
+      if (!document.contains(accountSlot)) {
+        unsub();
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
 }

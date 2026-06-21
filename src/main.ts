@@ -17,6 +17,7 @@ import { renderScan } from "./screens/scan";
 import { renderSettings } from "./screens/settings";
 import { renderSmoke } from "./screens/smoke";
 import { loadSession, initGlobalSession } from "./lib/session";
+import { initProfileSync } from "./lib/profile";
 const VALID_SCREENS: Screen[] = [
   "home",
   "list",
@@ -176,4 +177,5 @@ function mount() {
 
 applyPrefs();
 initGlobalSession();
+initProfileSync();
 mount();

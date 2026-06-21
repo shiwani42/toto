@@ -52,10 +52,27 @@ export function getPrefs(): Prefs {
   }
 }
 
+// Listeners that want to react to local pref changes. The profile sync
+// layer registers here without prefs.ts having to import it (would create
+// a cycle: prefs ← profile ← auth ← supabase).
+type PrefsListener = (prefs: Prefs) => void;
+const listeners: PrefsListener[] = [];
+
+export function subscribePrefs(fn: PrefsListener): () => void {
+  listeners.push(fn);
+  return () => {
+    const i = listeners.indexOf(fn);
+    if (i >= 0) listeners.splice(i, 1);
+  };
+}
+
 export function setPrefs(patch: Partial<Prefs>): Prefs {
   const next = { ...getPrefs(), ...patch };
   localStorage.setItem(KEY, JSON.stringify(next));
   applyPrefs(next);
+  for (const fn of listeners) {
+    try { fn(next); } catch (err) { console.warn("prefs listener failed:", err); }
+  }
   return next;
 }
 

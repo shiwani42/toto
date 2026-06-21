@@ -2083,6 +2083,61 @@ scandit-data-capture-view {
   box-shadow: var(--shadow-sm);
 }
 
+/* ─── Account section (sign-in / signed-in) ───────────────────────────────── */
+.account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+.account-row__email {
+  font-size: 14px;
+  color: var(--fg);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.account-form__label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted-fg);
+}
+.account-form__label input {
+  padding: 10px 12px;
+  font-size: 15px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  width: 100%;
+  box-sizing: border-box;
+}
+.account-form__label input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.account-form__submit {
+  align-self: flex-start;
+}
+.account-form__status {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted-fg);
+  min-height: 1.2em;
+}
+
 /* ─── Member rows ─────────────────────────────────────────────────────────── */
 .member-row {
   display: flex;
