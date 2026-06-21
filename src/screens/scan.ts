@@ -177,8 +177,8 @@ export function renderScan(root: HTMLElement) {
     lastSeen: number;
     inserted: number;
   };
-  const PIN_TTL_MS = 600;
-  const PIN_FADE_AFTER_MS = 350;
+  const PIN_TTL_MS = 1500;
+  const PIN_FADE_AFTER_MS = 1000;
   const pinBuffer = new Map<string, PinEntry>();
 
   function drawOverlay(handle: ScannerHandle, barcodes: DecodedBarcode[], srcW: number, srcH: number) {
@@ -308,10 +308,8 @@ export function renderScan(root: HTMLElement) {
           if (debug) {
             const dbg = root.querySelector("#scan-debug") as HTMLDivElement | null;
             if (dbg) {
-              const last = barcodes.length > 0
-                ? `last: [${barcodes[0].format}] ${barcodes[0].text}`
-                : "no codes in frame";
-              dbg.textContent = `${stats.backend} · ${stats.fps} fps · ${stats.lastDecodeMs}ms · seen ${stats.codesDetected} · ${last}`;
+              const last = barcodes.length > 0 ? `[${barcodes[0].format}] ${barcodes[0].text}` : "—";
+              dbg.textContent = `${stats.backend} · ${stats.fps}fps · ${stats.lastDecodeMs}ms · frame:${barcodes.length} buf:${pinBuffer.size} · ${last}`;
             }
           }
         },
