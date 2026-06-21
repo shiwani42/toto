@@ -23,6 +23,7 @@ export type Prefs = {
   experience: Experience | null;
   shoppingFor: ShoppingFor | null;
   familyCount: number | null;
+  language: "en" | "de" | "fr" | "it" | null;
 };
 
 const DEFAULTS: Prefs = {
@@ -39,6 +40,7 @@ const DEFAULTS: Prefs = {
   experience: null,
   shoppingFor: null,
   familyCount: null,
+  language: null,
 };
 
 export function getPrefs(): Prefs {

@@ -1,6 +1,7 @@
 import { applyPrefs, getPrefs, setPrefs, type Prefs, type Gender, type Experience, type AgeBucket, type ShoppingFor } from "../lib/prefs";
 import { authConfigured, getCurrentUser, signInWithEmail, signOut, onAuthChange } from "../lib/auth";
 import type { User } from "@supabase/supabase-js";
+import { LANGUAGES, getLang, setLang, type Language, t } from "../lib/i18n";
 
 function escapeHTML(s: string): string {
   return s
@@ -186,7 +187,21 @@ export function renderSettings(root: HTMLElement) {
         ${p.sizeSource ? `<p class="tag">From: ${escapeHTML(p.sizeSource === "fit-check" ? "a fit photo" : "what you typed in")}</p>` : ""}
       </section>
 
-      <a class="link-btn" href="?screen=list">‹ Back</a>
+      <section class="card-section" aria-labelledby="lang-h">
+        <h2 id="lang-h">${t("settings.lang")}</h2>
+        <p class="tag">${t("settings.lang.help")}</p>
+        <div class="lang-picker" role="radiogroup" aria-labelledby="lang-h">
+          ${LANGUAGES.map((l) => `
+            <label class="lang-picker__option">
+              <input type="radio" name="lang" value="${l.code}" ${getLang() === l.code ? "checked" : ""} />
+              <span class="lang-picker__native">${escapeHTML(l.native)}</span>
+              <span class="lang-picker__english">${escapeHTML(l.label)}</span>
+            </label>
+          `).join("")}
+        </div>
+      </section>
+
+      <a class="link-btn" href="?screen=list">${t("settings.back")}</a>
     </main>
   `;
 
@@ -296,6 +311,18 @@ export function renderSettings(root: HTMLElement) {
   familyInput.addEventListener("change", () => {
     const n = Number(familyInput.value);
     setPrefs({ familyCount: Number.isFinite(n) && n >= 2 ? Math.min(12, Math.round(n)) : null });
+  });
+
+  // Language picker. Save to prefs, update the cached language, and
+  // reload the page so every screen re-renders in the new language.
+  root.querySelectorAll<HTMLInputElement>('input[name="lang"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (!radio.checked) return;
+      const lang = radio.value as Language;
+      setLang(lang);
+      setPrefs({ language: lang });
+      window.location.reload();
+    });
   });
 
   // ─── Account section ───────────────────────────────────────────────────────
