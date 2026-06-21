@@ -22,8 +22,9 @@
   background: #f5f7f2;
 
   --bg:           #f5f7f2;
+  --bg-warm:      #f7f2e8;   /* parchment tone for greeting / wrap-up cards */
   --fg:           #1a1a1a;
-  --muted-fg:     #6b7280;
+  --muted-fg:     #5a6470;   /* darker than before, less bureaucratic */
   --card:         #ffffff;
   --accent:       #2c7a55;
   --accent-strong:#226040;
@@ -3652,8 +3653,11 @@ button, .primary { font: inherit; cursor: pointer; }
 }
 
 .home-greeting {
-  padding: 12px 4px 8px;
+  padding: 24px 16px 18px;
   text-align: center;
+  background: linear-gradient(180deg, var(--bg-warm) 0%, transparent 100%);
+  border-radius: 22px;
+  margin-bottom: 4px;
 }
 .toto-hero {
   display: flex;

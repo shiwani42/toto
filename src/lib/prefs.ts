@@ -24,6 +24,11 @@ export type Prefs = {
   shoppingFor: ShoppingFor | null;
   familyCount: number | null;
   language: "en" | "de" | "fr" | "it" | null;
+  /** Compact trip history — most recent first. See lib/history.ts. */
+  history: Array<{
+    at: number;
+    items: Array<{ code: string; category: string; brand: string; color: string; size: string; }>;
+  }>;
 };
 
 const DEFAULTS: Prefs = {
@@ -41,6 +46,7 @@ const DEFAULTS: Prefs = {
   shoppingFor: null,
   familyCount: null,
   language: null,
+  history: [],
 };
 
 export function getPrefs(): Prefs {

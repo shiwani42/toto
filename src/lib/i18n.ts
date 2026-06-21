@@ -32,6 +32,8 @@ const TRANSLATIONS: Catalog = {
     // home
     "home.hi":                 "Hi, I'm Toto",
     "home.sub":                "What brings you in today?",
+    "home.back":               "Welcome back.",
+    "home.back.last":          "Last time it was {category}. What this time?",
     "home.choice.list":        "I have a list",
     "home.choice.list.sub":    "Search by name, size, or brand.",
     "home.choice.resume":      "Pick up where you left off",
@@ -185,6 +187,8 @@ const TRANSLATIONS: Catalog = {
   de: {
     "home.hi":                 "Hallo, ich bin Toto",
     "home.sub":                "Was führt dich heute hierher?",
+    "home.back":               "Willkommen zurück.",
+    "home.back.last":          "Letztes Mal war's {category}. Diesmal?",
     "home.choice.list":        "Ich habe eine Liste",
     "home.choice.list.sub":    "Suche nach Name, Grösse oder Marke.",
     "home.choice.resume":      "Mache da weiter, wo du warst",
@@ -329,6 +333,8 @@ const TRANSLATIONS: Catalog = {
   fr: {
     "home.hi":                 "Salut, je suis Toto",
     "home.sub":                "Qu'est-ce qui t'amène aujourd'hui ?",
+    "home.back":               "Re-bonjour.",
+    "home.back.last":          "La dernière fois c'était {category}. Cette fois ?",
     "home.choice.list":        "J'ai une liste",
     "home.choice.list.sub":    "Cherche par nom, taille ou marque.",
     "home.choice.resume":      "Reprends où tu en étais",
@@ -473,6 +479,8 @@ const TRANSLATIONS: Catalog = {
   it: {
     "home.hi":                 "Ciao, sono Toto",
     "home.sub":                "Cosa ti porta qui oggi?",
+    "home.back":               "Bentornato.",
+    "home.back.last":          "L'ultima volta era {category}. Stavolta?",
     "home.choice.list":        "Ho una lista",
     "home.choice.list.sub":    "Cerca per nome, taglia o marca.",
     "home.choice.resume":      "Riprendi da dove eri rimasto",

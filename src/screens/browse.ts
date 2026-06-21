@@ -5,6 +5,7 @@ import { cameraErrorMessage } from "../lib/camera-errors";
 import type { Product } from "../lib/types";
 import { t } from "../lib/i18n";
 import { pushSuggestion } from "../lib/companion";
+import { remarkFor } from "../lib/history";
 
 function escapeHTML(s: string): string {
   return s
@@ -111,13 +112,21 @@ export function renderBrowse(root: HTMLElement) {
           const onList = getList().includes(product.product_code);
           showResult(productCard(product, onList));
           setStatus("");
-          // After a real product is shown, Toto offers the repair-check
-          // tool. Dismissal is sticky, so this only nudges once.
-          pushSuggestion({
-            id: "repair-after-browse",
-            text: t("toto.suggest.repair"),
-            cta: { label: t("toto.suggest.repair.cta"), href: `?screen=repair&code=${product.product_code}` },
-          });
+          // Personalized remark (only fires if there's actual history).
+          // Otherwise fall back to the repair suggestion below.
+          const remark = remarkFor(product.product_code);
+          if (remark) {
+            pushSuggestion({
+              id: `remark-${product.product_code}`,
+              text: remark,
+            });
+          } else {
+            pushSuggestion({
+              id: "repair-after-browse",
+              text: t("toto.suggest.repair"),
+              cta: { label: t("toto.suggest.repair.cta"), href: `?screen=repair&code=${product.product_code}` },
+            });
+          }
         },
       });
       captureViewEl.classList.add("browse-cam--active");

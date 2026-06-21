@@ -3,6 +3,7 @@ import { getList } from "../lib/list";
 import { icon } from "../lib/icons";
 import { totoMascot } from "../lib/toto";
 import { t } from "../lib/i18n";
+import { getInsights } from "../lib/history";
 
 function escapeHTML(s: string): string {
   return s
@@ -16,6 +17,9 @@ export function renderHome(root: HTMLElement) {
   const activeSession = loadSession();
   const existingList = getList();
   const hasList = existingList.length > 0;
+  const insights = getInsights();
+  const isReturning = insights.tripCount > 0;
+  const lastCategory = insights.topCategories[0]?.category;
 
   root.innerHTML = `
     <main class="screen-home">
@@ -28,8 +32,12 @@ export function renderHome(root: HTMLElement) {
 
       <section class="home-greeting">
         <button type="button" class="toto-hero" id="toto-hero" aria-label="Hi from Toto">${totoMascot(180)}</button>
-        <h1 class="home-greeting__hi">${t("home.hi")}</h1>
-        <p class="home-greeting__sub">${t("home.sub")}</p>
+        <h1 class="home-greeting__hi">${isReturning ? t("home.back") : t("home.hi")}</h1>
+        <p class="home-greeting__sub">${
+          isReturning && lastCategory
+            ? t("home.back.last").replace("{category}", escapeHTML(lastCategory))
+            : t("home.sub")
+        }</p>
       </section>
 
       <ul class="home-choices">

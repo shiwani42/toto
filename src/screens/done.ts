@@ -4,6 +4,7 @@ import { clearList, getList } from "../lib/list";
 import { totoMascot } from "../lib/toto";
 import { getPrefs, setPrefs } from "../lib/prefs";
 import { t } from "../lib/i18n";
+import { recordTrip } from "../lib/history";
 
 const FOUND_KEY = "toto.found";
 
@@ -73,6 +74,13 @@ export function renderDone(root: HTMLElement) {
   const foundProducts = products.filter((p) => found.has(p.product_code));
   const missingProducts = products.filter((p) => !found.has(p.product_code));
   const allFound = missingProducts.length === 0;
+
+  // Record the trip on the way out. Only the things they actually took
+  // (found in store) get remembered. This is what powers "you went for
+  // navy last time" on future visits.
+  if (foundProducts.length > 0) {
+    recordTrip(foundProducts.map((p) => p.product_code));
+  }
 
   // Pull together what sizes the user has tried inside this list, so the
   // "remember my sizes" CTA only appears when there's actually a size to
