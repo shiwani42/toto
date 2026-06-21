@@ -39,9 +39,6 @@ const MAX_BARCODES_PER_FRAME = 12;
 const STABILITY_FRAMES = 1;
 // Cap the decoder input. Honor whatever the camera produces up to 4K.
 const DECODE_TARGET_WIDTH = 3840;
-// Throttle the live video decode. Anything faster than ~4 fps just piles
-// work on the single WASM instance and turns the AR overlay laggy.
-const VIDEO_DECODE_INTERVAL_MS = 250;
 // ImageCapture stills are the high-quality recognition pass. takePhoto()
 // engages autofocus and gives the decoder a sharp full-sensor image — way
 // better than the live preview for shelf-distance reads. We fire it as
@@ -194,10 +191,11 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
   const reported = new Set<string>();             // values already fired via onScan
   let running = true;
 
-  // One decode at a time. Any callsite that wants to decode awaits this
-  // promise first, then sets it to its own work. Keeps the WASM single-
-  // threaded reader from getting flooded — which was the source of lag.
-  let decodeLock: Promise<void> = Promise.resolve();
+  // Drop-if-busy. zxing-wasm is single-threaded; if a decode is running,
+  // new calls are simply skipped rather than queued. Queueing turned out
+  // to be the source of "everything stops working" -- decode of stale
+  // frames piled up forever and the scanner never caught up.
+  let decodeInFlight = false;
 
   // Stats for the optional debug overlay.
   let _framesDecoded = 0;
@@ -241,21 +239,15 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
     }
   }
 
-  /** Serialize a decode call. Anyone wanting to decode awaits the lock,
-   *  runs their work, then releases. */
-  function decodeUnderLock<T>(fn: () => Promise<T>): Promise<T> {
-    let resolveLock: () => void = () => {};
-    const next = new Promise<void>((res) => { resolveLock = res; });
-    const prior = decodeLock;
-    decodeLock = next;
-    return (async () => {
-      try {
-        await prior;
-        return await fn();
-      } finally {
-        resolveLock();
-      }
-    })();
+  /** Try to run a decode. If one's already in flight, skip and return null. */
+  async function tryDecode<T>(fn: () => Promise<T>): Promise<T | null> {
+    if (decodeInFlight) return null;
+    decodeInFlight = true;
+    try {
+      return await fn();
+    } finally {
+      decodeInFlight = false;
+    }
   }
 
   /** Decode the current video frame. Cheap, lower-quality (streaming),
@@ -332,10 +324,9 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
 
     async function pulse() {
       if (!running || !stillContext) return;
-      // Skip if a decode is already running. The next interval will retry.
-      // (Doing decodeUnderLock here would queue and starve video frames.)
-      // The lock state isn't introspectable but we approximate: only start
-      // a still if we're not currently inside a video decode.
+      // Drop if a decode is already in flight; takePhoto would interfere
+      // with the live stream and back things up. Next interval retries.
+      if (decodeInFlight) return;
       try {
         const blob = await stillContext.ic.takePhoto();
         const bitmap = await createImageBitmap(blob);
@@ -344,8 +335,7 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
         stillContext.sctx.drawImage(bitmap, 0, 0);
         const data = stillContext.sctx.getImageData(0, 0, bitmap.width, bitmap.height);
         bitmap.close();
-        await decodeUnderLock(async () => {
-          if (!stillContext) return;
+        await tryDecode(async () => {
           const t0 = performance.now();
           const r = await readBarcodes(data, READ_OPTIONS);
           _lastDecodeMs = Math.round(performance.now() - t0);
@@ -364,14 +354,15 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
   }
   startStillLoop();
 
-  // Video decode loop: fixed interval, gated through the same lock as
-  // stills. Anything faster than ~4 fps on a 4K stream just piles work.
+  // Video decode loop. Runs every 100ms but drops when a decode is in
+  // flight, so the effective rate matches whatever the device can do
+  // -- around 3-6 fps on Chrome Android at 4K. No queue, no backlog.
   const videoLoopTimer = window.setInterval(() => {
     if (!running) return;
-    void decodeUnderLock(decodeVideoFrame).catch((err) => {
+    void tryDecode(decodeVideoFrame).catch((err) => {
       console.debug("video decode skipped:", err);
     });
-  }, VIDEO_DECODE_INTERVAL_MS);
+  }, 100);
 
   // Stash so `stop()` can clear it.
   function clearLoops() {
