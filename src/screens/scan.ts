@@ -27,6 +27,8 @@ export function renderScan(root: HTMLElement) {
   const zoneParam =
     new URLSearchParams(window.location.search).get("zone") ?? "";
 
+  const debug = new URLSearchParams(window.location.search).get("debug") === "1";
+
   root.innerHTML = `
     <header>
       <h1>${zoneParam ? `You're at Zone ${escapeHTML(zoneParam)}.` : "Ready to scan."}</h1>
@@ -36,6 +38,7 @@ export function renderScan(root: HTMLElement) {
       <div class="scan-viewport">
         <div id="capture-view" class="scan-view"></div>
         <canvas id="overlay" class="scan-overlay"></canvas>
+        ${debug ? `<div id="scan-debug" class="scan-debug"></div>` : ""}
         <button id="cam-switch" class="scan-switch" title="Switch camera" aria-label="Switch camera">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -215,10 +218,19 @@ export function renderScan(root: HTMLElement) {
     try {
       handle = await startScanner({
         host: captureView,
-        onFrame: ({ barcodes, width, height }) => {
+        onFrame: ({ barcodes, width, height, stats }) => {
           if (!handle) return;
           if (overlay.width === 0) sizeOverlayTo(handle.video);
           drawOverlay(handle, barcodes, width, height);
+          if (debug) {
+            const dbg = root.querySelector("#scan-debug") as HTMLDivElement | null;
+            if (dbg) {
+              const last = barcodes.length > 0
+                ? `last: [${barcodes[0].format}] ${barcodes[0].text}`
+                : "no codes in frame";
+              dbg.textContent = `${stats.fps} fps · ${stats.lastDecodeMs}ms · seen ${stats.codesDetected} · ${last}`;
+            }
+          }
         },
         onScan: (code) => {
           const matched = wantedSet.has(code.text);

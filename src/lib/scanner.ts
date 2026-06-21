@@ -36,8 +36,9 @@ const FORMATS: ReadInputBarcodeFormat[] = [
   "QRCode", "Code128", "Code39", "DataMatrix",
 ];
 
-const MAX_BARCODES_PER_FRAME = 12;
-const STABILITY_FRAMES = 2;       // barcode must persist this many frames before reporting
+const MAX_BARCODES_PER_FRAME = 8;
+const STABILITY_FRAMES = 1;       // report on first valid sighting; faster feedback
+const DECODE_TARGET_WIDTH = 720;  // downsample to this width before decoding
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -54,12 +55,25 @@ export type DecodedBarcode = {
   };
 };
 
+export type ScannerStats = {
+  /** Frames decoded per second over the last 1s window. */
+  fps: number;
+  /** Cumulative frames decoded since the scanner started. */
+  framesDecoded: number;
+  /** Cumulative valid barcode detections since the scanner started. */
+  codesDetected: number;
+  /** Wall-clock ms the most recent decode took. */
+  lastDecodeMs: number;
+};
+
 export type FrameInfo = {
   barcodes: DecodedBarcode[];
   /** Width of the source video frame, in pixels. */
   width: number;
   /** Height of the source video frame, in pixels. */
   height: number;
+  /** Decode performance stats. */
+  stats: ScannerStats;
 };
 
 export type ScannerHandle = {
@@ -158,6 +172,14 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
   let running = true;
   let inFlight = false;                            // gate concurrent decode calls
 
+  // Stats for the optional debug overlay. Caller can read these.
+  let _framesDecoded = 0;
+  let _codesDetected = 0;
+  let _lastDecodeMs = 0;
+  let _statsWindowStart = performance.now();
+  let _statsWindowFrames = 0;
+  let _fps = 0;
+
   async function tick(): Promise<void> {
     if (!running) return;
     requestAnimationFrame(() => { void tick(); });
@@ -165,29 +187,49 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
     if (inFlight) return;
     const vw = video.videoWidth, vh = video.videoHeight;
     if (vw === 0 || vh === 0) return;
-    if (offscreen.width !== vw || offscreen.height !== vh) {
-      offscreen.width = vw;
-      offscreen.height = vh;
+
+    // Downsample to DECODE_TARGET_WIDTH for the decoder. Most barcode formats
+    // need ~80 pixels of bar width to read reliably; 720px-wide source covers
+    // that with room to spare and is 3-4x faster than 1280p on mobile WASM.
+    const scale = Math.min(1, DECODE_TARGET_WIDTH / vw);
+    const dw = Math.round(vw * scale);
+    const dh = Math.round(vh * scale);
+    if (offscreen.width !== dw || offscreen.height !== dh) {
+      offscreen.width = dw;
+      offscreen.height = dh;
     }
     inFlight = true;
+    const t0 = performance.now();
     try {
-      ctx.drawImage(video, 0, 0, vw, vh);
-      const imageData = ctx.getImageData(0, 0, vw, vh);
+      ctx.drawImage(video, 0, 0, dw, dh);
+      const imageData = ctx.getImageData(0, 0, dw, dh);
+      // tryHarder is for one-shot image-file scans; way too slow per-frame.
+      // tryRotate is cheap and helps when the phone is held at an angle.
       const results: ReadResult[] = await readBarcodes(imageData, {
         formats: FORMATS,
         maxNumberOfSymbols: MAX_BARCODES_PER_FRAME,
-        tryHarder: true,
         tryRotate: true,
-        tryInvert: true,
+        tryInvert: false,
       });
+      _framesDecoded++;
+      _lastDecodeMs = Math.round(performance.now() - t0);
 
+      // Re-scale positions back to source-video coordinates so the overlay
+      // math in the caller (which works in video-px space) stays correct.
+      const invScale = scale === 0 ? 1 : 1 / scale;
       const found: DecodedBarcode[] = results
         .filter((r) => r.isValid && r.text)
         .map((r) => ({
           text: r.text,
           format: String(r.format),
-          position: r.position,
+          position: {
+            topLeft:     { x: r.position.topLeft.x     * invScale, y: r.position.topLeft.y     * invScale },
+            topRight:    { x: r.position.topRight.x    * invScale, y: r.position.topRight.y    * invScale },
+            bottomLeft:  { x: r.position.bottomLeft.x  * invScale, y: r.position.bottomLeft.y  * invScale },
+            bottomRight: { x: r.position.bottomRight.x * invScale, y: r.position.bottomRight.y * invScale },
+          },
         }));
+      _codesDetected += found.length;
 
       // Track stability — same code seen N frames in a row gets reported.
       const codesThisFrame = new Set(found.map((b) => b.text));
@@ -205,10 +247,28 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
         }
       }
 
-      opts.onFrame({ barcodes: found, width: vw, height: vh });
+      // Rolling FPS over the last 1s window.
+      _statsWindowFrames++;
+      const now = performance.now();
+      if (now - _statsWindowStart >= 1000) {
+        _fps = Math.round((_statsWindowFrames * 1000) / (now - _statsWindowStart));
+        _statsWindowFrames = 0;
+        _statsWindowStart = now;
+      }
+
+      opts.onFrame({
+        barcodes: found,
+        width: vw,
+        height: vh,
+        stats: {
+          fps: _fps,
+          framesDecoded: _framesDecoded,
+          codesDetected: _codesDetected,
+          lastDecodeMs: _lastDecodeMs,
+        },
+      });
     } catch (err) {
       // Don't crash the loop on decoder errors; just keep going.
-      // (zxing-wasm rarely throws once initialized.)
       console.debug("decode error:", err);
     } finally {
       inFlight = false;
