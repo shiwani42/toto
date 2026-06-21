@@ -1,4 +1,4 @@
-import { applyPrefs, getPrefs, setPrefs, type Prefs, type Gender, type Experience } from "../lib/prefs";
+import { applyPrefs, getPrefs, setPrefs, type Prefs, type Gender, type Experience, type AgeBucket, type ShoppingFor } from "../lib/prefs";
 import { authConfigured, getCurrentUser, signInWithEmail, signOut, onAuthChange } from "../lib/auth";
 import type { User } from "@supabase/supabase-js";
 
@@ -22,6 +22,18 @@ const EXPERIENCE_LABELS: Record<Experience, string> = {
   comfortable: "Comfortable",
   enthusiast: "Enthusiast",
   pro: "Pro",
+};
+const AGE_LABELS: Record<AgeBucket, string> = {
+  u20: "Under 20",
+  "20-30": "20 to 30",
+  "30-45": "30 to 45",
+  "45-60": "45 to 60",
+  "60+": "60 plus",
+};
+const SHOPPING_FOR_LABELS: Record<ShoppingFor, string> = {
+  self: "Myself",
+  someone: "Someone else",
+  family: "My family",
 };
 
 function accountSectionHTML(user: User | null, status: string): string {
@@ -69,14 +81,23 @@ export function renderSettings(root: HTMLElement) {
 
       <section class="card-section" aria-labelledby="you-h">
         <h2 id="you-h">You</h2>
-        <p class="tag">Helps me pick the right cut and difficulty.</p>
+        <p class="tag">Helps me pick the right cut, size, and difficulty.</p>
 
         <div class="row-group">
-          <label>I'm shopping for
+          <label>I am
             <select id="gender">
               <option value="">Prefer not to say</option>
               ${(Object.keys(GENDER_LABELS) as Gender[]).map((g) =>
                 `<option value="${g}" ${p.gender === g ? "selected" : ""}>${GENDER_LABELS[g]}</option>`,
+              ).join("")}
+            </select>
+          </label>
+
+          <label>Age
+            <select id="age">
+              <option value="">Not set</option>
+              ${(Object.keys(AGE_LABELS) as AgeBucket[]).map((a) =>
+                `<option value="${a}" ${p.age === a ? "selected" : ""}>${AGE_LABELS[a]}</option>`,
               ).join("")}
             </select>
           </label>
@@ -88,6 +109,21 @@ export function renderSettings(root: HTMLElement) {
                 `<option value="${e}" ${p.experience === e ? "selected" : ""}>${EXPERIENCE_LABELS[e]}</option>`,
               ).join("")}
             </select>
+          </label>
+
+          <label>Shopping for
+            <select id="shopping-for">
+              <option value="">Not set</option>
+              ${(Object.keys(SHOPPING_FOR_LABELS) as ShoppingFor[]).map((s) =>
+                `<option value="${s}" ${p.shoppingFor === s ? "selected" : ""}>${SHOPPING_FOR_LABELS[s]}</option>`,
+              ).join("")}
+            </select>
+          </label>
+
+          <label id="family-count-wrap" style="${p.shoppingFor === "family" ? "" : "display:none;"}">
+            How many people
+            <input id="family-count" type="number" min="2" max="12" inputmode="numeric"
+                   value="${p.familyCount ?? ""}" placeholder="2" />
           </label>
         </div>
       </section>
@@ -233,6 +269,34 @@ export function renderSettings(root: HTMLElement) {
       setPrefs({ experience: (val || null) as Experience | null });
     },
   );
+
+  (root.querySelector("#age") as HTMLSelectElement).addEventListener(
+    "change",
+    (e) => {
+      const val = (e.target as HTMLSelectElement).value;
+      setPrefs({ age: (val || null) as AgeBucket | null });
+    },
+  );
+
+  const familyWrap = root.querySelector("#family-count-wrap") as HTMLLabelElement;
+  const familyInput = root.querySelector("#family-count") as HTMLInputElement;
+
+  (root.querySelector("#shopping-for") as HTMLSelectElement).addEventListener(
+    "change",
+    (e) => {
+      const val = (e.target as HTMLSelectElement).value as ShoppingFor | "";
+      const next: Partial<Prefs> = { shoppingFor: (val || null) as ShoppingFor | null };
+      if (val !== "family") next.familyCount = null;
+      setPrefs(next);
+      familyWrap.style.display = val === "family" ? "" : "none";
+      if (val !== "family") familyInput.value = "";
+    },
+  );
+
+  familyInput.addEventListener("change", () => {
+    const n = Number(familyInput.value);
+    setPrefs({ familyCount: Number.isFinite(n) && n >= 2 ? Math.min(12, Math.round(n)) : null });
+  });
 
   // ─── Account section ───────────────────────────────────────────────────────
 

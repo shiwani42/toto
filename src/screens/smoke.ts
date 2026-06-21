@@ -25,10 +25,13 @@ export function renderSmoke(root: HTMLElement) {
       <h1>Camera diagnostics</h1>
       <p class="tag">Walks through the camera setup so we can see exactly where it breaks.</p>
     </header>
-    <main>
-      <button id="start" class="primary">Run the test</button>
-      <div id="status" class="status">Tap the button when you're ready.</div>
-      <ol id="steps" class="steps"></ol>
+    <main style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+      <div style="padding:10px 12px;background:#e6f4ea;border:1px solid #a8d5b5;border-radius:10px;font-size:13px;">
+        ✅ Diagnostic page loaded at <code>${location.host}${location.pathname}${location.search}</code>
+      </div>
+      <div id="status" class="status">starting…</div>
+      <ol id="steps" class="steps" style="list-style:none;padding:0;margin:0;"></ol>
+      <button id="start" class="primary" style="display:none;">Re-run the test</button>
       <div id="capture-view" style="min-height:60vh;background:#000;border-radius:12px;"></div>
       <div id="last-scan" class="last-scan"></div>
     </main>
@@ -216,12 +219,19 @@ export function renderSmoke(root: HTMLElement) {
     }
   }
 
-  startBtn.addEventListener("click", () => {
+  function run() {
     startBtn.disabled = true;
+    startBtn.style.display = "none";
     setStatus("starting…");
     boot().catch((err: unknown) => {
       console.error(err);
       setStatus(`UNCAUGHT: ${(err as Error).message ?? String(err)}`);
+    }).finally(() => {
+      // Show the rerun button after the run completes so the user can re-test.
+      startBtn.disabled = false;
+      startBtn.style.display = "";
     });
-  });
+  }
+  startBtn.addEventListener("click", run);
+  run();
 }
