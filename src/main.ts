@@ -53,12 +53,6 @@ function mountTabBar() {
   if (document.getElementById("tab-bar")) return;
 
   const screen = currentScreen();
-
-  // The home screen is its own thing. No tab bar.
-  if (screen === "home") {
-    document.body.classList.add("no-tab-bar");
-    return;
-  }
   document.body.classList.remove("no-tab-bar");
 
   const session = loadSession();
@@ -81,7 +75,7 @@ function mountTabBar() {
   bar.innerHTML = `
     <div class="tab-bar__inner">
       <a id="tab-home" href="?screen=home"
-         class="${tabClass([])}"
+         class="${tabClass(["home"])}"
          aria-label="Home">
         <span class="tab-btn__icon">${icon("home", 22)}</span>
         <span class="tab-btn__label">Home</span>
