@@ -79,7 +79,7 @@ export function renderDone(root: HTMLElement) {
   } else {
     root.innerHTML = `
       <header>
-        <h1>Almost there.</h1>
+        <h1>Almost there</h1>
         <p class="tag">${foundProducts.length} of ${products.length} in the basket. ${missingProducts.length} to go.</p>
       </header>
       <main class="screen-done">

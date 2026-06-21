@@ -27,7 +27,7 @@ export function renderSettings(root: HTMLElement) {
 
   root.innerHTML = `
     <header>
-      <h1>Your preferences.</h1>
+      <h1>Your preferences</h1>
     </header>
     <main class="screen-settings">
       <section class="card-section" aria-labelledby="you-h">

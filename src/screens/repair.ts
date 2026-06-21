@@ -223,8 +223,10 @@ export function renderRepair(root: HTMLElement) {
       await barcodeCapture.setEnabled(true);
       setStatus("Point the camera at the barcode.");
     } catch (err) {
-      console.error("Repair scanner failed:", err);
-      setStatus("The camera ran into a problem. Try again.");
+      console.error("Repair scanner failed:", err, "hostname:", location.hostname);
+      void import("../lib/camera-errors").then(({ cameraErrorMessage }) => {
+        setStatus(cameraErrorMessage(err));
+      });
     }
   });
 

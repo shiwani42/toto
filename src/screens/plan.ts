@@ -423,16 +423,15 @@ export function renderPlan(root: HTMLElement) {
     }
   }
 
-  // Re-fire the peek every time the date input value changes.
-  root.addEventListener("input", (e) => {
-    const t = e.target as HTMLElement;
-    if (t.id !== "when-date") return;
-    runPeek((t as HTMLInputElement).value);
-  });
+  // Re-fire the peek on commit (change), debounced. Listening to both 'input'
+  // and 'change' raced and clobbered each other; date pickers only need change.
+  let peekDebounce: number | undefined;
   root.addEventListener("change", (e) => {
     const t = e.target as HTMLElement;
     if (t.id !== "when-date") return;
-    runPeek((t as HTMLInputElement).value);
+    const v = (t as HTMLInputElement).value;
+    window.clearTimeout(peekDebounce);
+    peekDebounce = window.setTimeout(() => runPeek(v), 200);
   });
 
   // ─── Submit + result ───────────────────────────────────────────────────────

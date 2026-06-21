@@ -324,8 +324,10 @@ export function renderCompare(root: HTMLElement) {
     const slot = btn.dataset.target as Slot | undefined;
     if (slot === "A" || slot === "B") {
       startScanning(slot).catch((err: unknown) => {
-        console.error("Compare scanner failed:", err);
-        setStatus("The camera ran into a problem. Try again.");
+        console.error("Compare scanner failed:", err, "hostname:", location.hostname);
+        void import("../lib/camera-errors").then(({ cameraErrorMessage }) => {
+          setStatus(cameraErrorMessage(err));
+        });
       });
     }
   });

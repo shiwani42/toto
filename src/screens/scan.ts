@@ -187,8 +187,12 @@ export function renderScan(root: HTMLElement) {
   startBtn.addEventListener("click", () => {
     overlay.style.display = "none";
     boot().catch((err: unknown) => {
-      console.error("Scan boot failed:", err);
-      setStatus("The camera ran into a problem. Try again.");
+      console.error("Scan boot failed:", err, "hostname:", location.hostname);
+      // Show the actual reason so deployment / license issues are visible.
+      // Imported lazily to keep the existing import block tight.
+      void import("../lib/camera-errors").then(({ cameraErrorMessage }) => {
+        setStatus(cameraErrorMessage(err));
+      });
       overlay.style.display = "";
       startBtn.disabled = false;
     });

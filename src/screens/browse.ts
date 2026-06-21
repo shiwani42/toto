@@ -80,7 +80,7 @@ function productCard(p: Product, alreadyOnList: boolean): string {
 export function renderBrowse(root: HTMLElement) {
   root.innerHTML = `
     <header>
-      <h1>Just look around.</h1>
+      <h1>Just look around</h1>
     </header>
     <main class="screen-browse">
       <div id="status" class="status" hidden></div>
@@ -191,7 +191,9 @@ export function renderBrowse(root: HTMLElement) {
   });
 
   boot().catch((err: unknown) => {
-    console.error("Browse boot failed:", err);
-    setStatus("The camera ran into a problem. Try again.");
+    console.error("Browse boot failed:", err, "hostname:", location.hostname);
+    void import("../lib/camera-errors").then(({ cameraErrorMessage }) => {
+      setStatus(cameraErrorMessage(err));
+    });
   });
 }

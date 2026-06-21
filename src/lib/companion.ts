@@ -22,7 +22,9 @@ const PHRASE: Partial<Record<Screen, string>> = {
 };
 
 let lastScreen: Screen | null = null;
-let open = true;
+// Bubble stays collapsed by default. User taps the avatar to read.
+// Prevents bubble text from overlapping screen headlines on mount.
+let open = false;
 let collapseTimer: number | undefined;
 
 function escapeHTML(s: string): string {
@@ -40,8 +42,8 @@ export function mountCompanion(screen: Screen) {
   if (screen === "home") return;
 
   const phrase = PHRASE[screen] ?? "I'm here if you need me.";
-  // Reset open state whenever the screen changes.
-  if (lastScreen !== screen) open = true;
+  // Reset to collapsed whenever the screen changes; user opens on demand.
+  if (lastScreen !== screen) open = false;
   lastScreen = screen;
 
   const root = document.createElement("div");
@@ -82,6 +84,5 @@ export function mountCompanion(screen: Screen) {
     setOpen(!open);
     if ("vibrate" in navigator) navigator.vibrate(8);
   });
-
-  scheduleCollapse();
+  // Don't auto-show on mount. User taps to reveal.
 }

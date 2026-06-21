@@ -1,4 +1,5 @@
 import { setPrefs, getPrefs } from "../lib/prefs";
+import { icon } from "../lib/icons";
 
 const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY as
   | string
@@ -135,14 +136,18 @@ export function renderFit(root: HTMLElement) {
 
   root.innerHTML = `
     <header>
-      <h1>Quick fit check.</h1>
+      <h1>Say cheese</h1>
     </header>
     <main class="screen-fit">
       <label class="capture-btn">
         <input id="file" type="file" accept="image/*" capture="environment" hidden />
-        <span>📸 Take a photo</span>
+        <span class="capture-btn__icon">${icon("camera", 22)}</span>
+        <span class="capture-btn__label">Take a photo</span>
       </label>
-      <p class="fit-privacy">🔒 One look, then it's gone. Nothing stored.</p>
+      <p class="fit-privacy">
+        <span class="fit-privacy__icon">${icon("shield", 14)}</span>
+        One look, then it's gone
+      </p>
 
       <div id="preview"></div>
       <div id="result"></div>

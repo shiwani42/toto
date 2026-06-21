@@ -27,7 +27,7 @@ export function renderHome(root: HTMLElement) {
 
       <section class="home-greeting">
         <button type="button" class="toto-hero" id="toto-hero" aria-label="Hi from Toto">${totoMascot(180)}</button>
-        <h1 class="home-greeting__hi">Hi, I'm Toto.</h1>
+        <h1 class="home-greeting__hi">Hi, I'm Toto</h1>
         <p class="home-greeting__sub">What brings you in today?</p>
       </section>
 

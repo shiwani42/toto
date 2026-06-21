@@ -24,7 +24,7 @@ export function renderConnect(root: HTMLElement) {
 
   root.innerHTML = `
     <header>
-      <h1>Shop with someone.</h1>
+      <h1>Shop with someone</h1>
     </header>
     <main class="screen-connect">
       ${!supabaseConfigured ? `

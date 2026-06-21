@@ -101,7 +101,7 @@ export function renderMap(root: HTMLElement) {
 
   root.innerHTML = `
     <header>
-      <h1>Here's the plan.</h1>
+      <h1>Here's the plan</h1>
       <p class="tag">${list.length} thing${list.length > 1 ? "s" : ""} across ${zones.length} zone${zones.length > 1 ? "s" : ""}. Tap the zone you're at to start.</p>
     </header>
     <main class="screen-map">

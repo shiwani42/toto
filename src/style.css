@@ -1067,13 +1067,16 @@ button, .primary { font: inherit; cursor: pointer; }
 
 .fit-nudge--lite { margin-top: 4px; }
 
-/* ─── Toto companion (top-right on non-home screens) ────────────────────── */
+/* ─── Toto companion (top-right on non-home screens) ─────────────────────
+   Avatar sits at top-right corner. Bubble drops DOWN below the avatar
+   so it never spans horizontally over the screen headlines. */
 .toto-companion {
   position: fixed;
   top: calc(env(safe-area-inset-top) + 12px);
   right: 14px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
   z-index: 50;
   pointer-events: none;
@@ -1098,29 +1101,30 @@ button, .primary { font: inherit; cursor: pointer; }
   cursor: pointer;
   box-shadow: 0 2px 10px rgba(0,0,0,0.06);
   opacity: 0;
-  transform: translateX(8px) scale(0.94);
-  transform-origin: 100% 50%;
+  transform: translateY(-6px) scale(0.94);
+  transform-origin: 100% 0%;
   transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
   pointer-events: none;
+  order: 2;
 }
+.toto-companion__avatar { order: 1; }
 .toto-companion--open .toto-companion__bubble {
   opacity: 1;
-  transform: translateX(0) scale(1);
+  transform: translateY(0) scale(1);
   pointer-events: auto;
 }
 .toto-companion__bubble::after {
-  /* Pointer triangle on the right side of the bubble */
+  /* Pointer triangle at the top-right pointing UP at the avatar. */
   content: "";
   position: absolute;
-  right: -6px;
-  top: 50%;
-  margin-top: -6px;
+  top: -6px;
+  right: 16px;
   width: 12px;
   height: 12px;
   background: var(--card);
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  transform: rotate(-45deg);
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  transform: rotate(45deg);
 }
 .toto-companion__text {
   display: block;
@@ -2037,7 +2041,8 @@ scandit-data-capture-view {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px 16px;
+  gap: 10px;
+  padding: 18px 20px;
   font-size: 16px;
   font-weight: 600;
   background: var(--accent);
@@ -2045,18 +2050,35 @@ scandit-data-capture-view {
   border-radius: var(--radius);
   cursor: pointer;
   min-height: 64px;
-  text-align: center;
-  transition: background 0.15s;
+  transition: background 0.15s ease, transform 0.1s ease;
   border: none;
 }
 .capture-btn:hover { background: var(--accent-strong); }
+.capture-btn:active { transform: scale(0.985); }
+.capture-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  color: white;
+}
+.capture-btn__icon svg { display: block; }
+.capture-btn__label { letter-spacing: -0.01em; }
 
 .fit-privacy {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   font-size: 12px;
   color: var(--muted-fg);
   text-align: center;
 }
+.fit-privacy__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted-fg);
+}
+.fit-privacy__icon svg { display: block; }
 .fit-preview {
   position: relative;
   background: #000;
