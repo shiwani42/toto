@@ -6,6 +6,7 @@ import {
   randomEmoji,
   randomId,
 } from "../lib/session";
+import { icon } from "../lib/icons";
 import { t } from "../lib/i18n";
 
 function escapeHTML(s: string): string {
@@ -16,8 +17,7 @@ function escapeHTML(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
-// A small list of friendly host names. If the user doesn't type one, we
-// pick from these so the session immediately has personality.
+// Friendly host names used when the user doesn't type one.
 const FRIENDLY_NAMES = ["Alpine", "Trail", "Summit", "River", "Pine", "Fox", "Wren", "Wolf", "Cedar", "Stone"];
 function defaultName(): string {
   const a = FRIENDLY_NAMES[Math.floor(Math.random() * FRIENDLY_NAMES.length)];
@@ -25,69 +25,98 @@ function defaultName(): string {
   return `${a} ${b}`;
 }
 
-type Mode = "create" | "join";
+type Mode = "create" | "join" | null;
 
 export function renderConnect(root: HTMLElement) {
   const existing = loadSession();
   const initialCode = new URLSearchParams(location.search).get("code")?.toUpperCase() ?? "";
 
-  // Minimalist single-form approach. No choice tiles, no mode toggle,
-  // no second-tier copy. The user lands on one input. If they have a
-  // code, the toggle link below swaps the form into join mode. The
-  // family/partner distinction was a power-user setting that confused
-  // first-timers; we default to "family" for in-store shopping.
-  let mode: Mode = initialCode ? "join" : "create";
+  // The two tiles stay as the discovery layer. Tapping one reveals a
+  // single-input form below — no mode toggle, no duplicate labels, no
+  // second-tier copy. Default mode for "create" is "family"; partner
+  // sessions are reachable by joining a partner code.
+  let mode: Mode = initialCode ? "join" : null;
 
   function render() {
     root.innerHTML = `
       <header>
         <h1>${t("connect.title")}</h1>
       </header>
-      <main class="screen-connect connect-min">
+      <main class="screen-connect connect-v2">
         ${!supabaseConfigured ? `
-          <div class="connect-min__notice">${escapeHTML(t("connect.unavailable"))}</div>
+          <div class="connect-v2__notice">${escapeHTML(t("connect.unavailable"))}</div>
         ` : ""}
 
         ${existing ? `
-          <a class="connect-min__resume" href="?screen=connected">
-            <span class="connect-min__resume-icon">${escapeHTML(existing.me.emoji)}</span>
-            <span class="connect-min__resume-body">
-              <span class="connect-min__resume-title">${escapeHTML(existing.me.name)}</span>
-              <span class="connect-min__resume-sub">${escapeHTML(existing.code)}</span>
+          <a class="connect-v2__resume" href="?screen=connected">
+            <span class="connect-v2__resume-icon">${escapeHTML(existing.me.emoji)}</span>
+            <span class="connect-v2__resume-body">
+              <span class="connect-v2__resume-title">${escapeHTML(existing.me.name)}</span>
+              <span class="connect-v2__resume-sub">${escapeHTML(existing.code)}</span>
             </span>
-            <span class="connect-min__resume-cta">${t("home.banner.open")} ›</span>
+            <span class="connect-v2__resume-cta">${t("home.banner.open")} ›</span>
           </a>
         ` : ""}
 
-        <form class="connect-min__form" id="connect-form" novalidate>
-          ${mode === "create" ? `
-            <input id="create-name" class="connect-min__input" type="text"
-                   placeholder="${escapeHTML(t("connect.your_name"))}" autocomplete="off" />
-            <button type="submit" id="create-btn" class="primary connect-min__go">${t("connect.start.go")}</button>
-          ` : `
-            <input id="join-code" class="connect-min__input connect-min__input--code" type="text"
-                   placeholder="FAM-A4T7" autocapitalize="characters" maxlength="8"
-                   value="${escapeHTML(initialCode)}" autocomplete="off" />
-            <button type="submit" id="join-btn" class="primary connect-min__go">${t("connect.join.btn")}</button>
-          `}
-        </form>
+        <div class="connect-v2__choices">
+          <button type="button" class="connect-v2__choice ${mode === "create" ? "connect-v2__choice--on" : ""}" id="choice-start">
+            <span class="connect-v2__choice-icon">${icon("users", 28)}</span>
+            <span class="connect-v2__choice-title">${t("connect.start")}</span>
+          </button>
+          <button type="button" class="connect-v2__choice ${mode === "join" ? "connect-v2__choice--on" : ""}" id="choice-join">
+            <span class="connect-v2__choice-icon">${icon("compass", 28)}</span>
+            <span class="connect-v2__choice-title">${t("connect.join")}</span>
+          </button>
+        </div>
 
-        <button type="button" id="mode-swap" class="connect-min__swap">
-          ${mode === "create" ? t("connect.have_code") : t("connect.no_code")}
-        </button>
+        ${mode ? `
+          <form class="connect-v2__panel" id="connect-form" novalidate>
+            ${mode === "create" ? `
+              <input id="create-name" class="connect-v2__input" type="text"
+                     placeholder="${escapeHTML(t("connect.your_name"))}" autocomplete="off" />
+              <button type="submit" id="create-btn" class="primary connect-v2__go">${t("connect.start.go")}</button>
+            ` : `
+              <input id="join-code" class="connect-v2__input connect-v2__input--code" type="text"
+                     placeholder="FAM-A4T7" autocapitalize="characters" maxlength="8"
+                     value="${escapeHTML(initialCode)}" autocomplete="off" />
+              <button type="submit" id="join-btn" class="primary connect-v2__go">${t("connect.join.btn")}</button>
+            `}
+          </form>
+        ` : `
+          <div id="empty-preview" class="empty-preview" aria-hidden="true">
+            <div class="empty-preview__label">${escapeHTML(t("preview.label"))}</div>
+            <div class="empty-preview__chat">
+              <div class="empty-preview__chat-head">
+                <span class="empty-preview__chat-code">FAM-A4T7</span>
+                <span class="empty-preview__chat-people">
+                  <span class="empty-preview__avatar empty-preview__avatar--a">🐻</span>
+                  <span class="empty-preview__avatar empty-preview__avatar--b">🦊</span>
+                </span>
+              </div>
+              <div class="empty-preview__chat-row">
+                <span class="empty-preview__chat-name">Alpine 14</span>
+                <span class="empty-preview__chat-msg">${escapeHTML(t("connect.preview_msg1"))}</span>
+              </div>
+              <div class="empty-preview__chat-row empty-preview__chat-row--right">
+                <span class="empty-preview__chat-msg">${escapeHTML(t("connect.preview_msg2"))}</span>
+                <span class="empty-preview__chat-name">Trail 28</span>
+              </div>
+            </div>
+            <div class="empty-preview__hint">${escapeHTML(t("connect.preview_hint"))}</div>
+          </div>
+        `}
 
-        <a class="link-btn connect-min__back" href="?screen=home">${t("connect.back")}</a>
+        <a class="link-btn connect-v2__back" href="?screen=home">${t("connect.back")}</a>
       </main>
     `;
 
-    const swap = root.querySelector("#mode-swap") as HTMLButtonElement;
-    swap.addEventListener("click", () => {
-      mode = mode === "create" ? "join" : "create";
-      render();
-    });
+    const choiceStart = root.querySelector("#choice-start") as HTMLButtonElement;
+    const choiceJoin = root.querySelector("#choice-join") as HTMLButtonElement;
+    choiceStart.addEventListener("click", () => { mode = "create"; render(); });
+    choiceJoin.addEventListener("click", () => { mode = "join"; render(); });
 
-    const form = root.querySelector("#connect-form") as HTMLFormElement;
-    form.addEventListener("submit", (e) => {
+    const form = root.querySelector("#connect-form") as HTMLFormElement | null;
+    form?.addEventListener("submit", (e) => {
       e.preventDefault();
       if (!supabaseConfigured) {
         alert(t("connect.unavailable"));
@@ -99,7 +128,7 @@ export function renderConnect(root: HTMLElement) {
         const code = newCode("FAM");
         saveSession({ code, mode: "family", me: { id: randomId(), name, emoji: randomEmoji() } });
         location.href = "?screen=connected";
-      } else {
+      } else if (mode === "join") {
         const code = (root.querySelector("#join-code") as HTMLInputElement).value.trim().toUpperCase();
         if (!/^(FAM|PAR)-[A-Z0-9]{4}$/.test(code)) {
           alert(t("connected.invalid_code"));
@@ -111,7 +140,7 @@ export function renderConnect(root: HTMLElement) {
       }
     });
 
-    // Autofocus the live input.
+    // Autofocus the live input when a panel is open.
     const input = root.querySelector("#create-name, #join-code") as HTMLInputElement | null;
     input?.focus();
   }
