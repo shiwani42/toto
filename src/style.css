@@ -3131,7 +3131,9 @@ body.has-cart .toto-companion {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 6px 0 0;
+  /* Horizontal padding kept so the choice tiles don't run off the
+     screen edges on narrower phones. */
+  padding: 6px 18px 0;
 }
 .connect-v2__notice {
   padding: 10px 14px;
