@@ -1551,6 +1551,190 @@ button, .primary { font: inherit; cursor: pointer; }
   opacity: 0.85;
 }
 
+/* ─── Wizard Where + When (visual polish) ────────────────────────────────── */
+
+/* Lead block: a big emoji + the question, used by Where and When to
+   bring those steps in line with the visually-rich activity step. */
+.wizard-lead {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.wizard-lead__emoji {
+  font-size: 40px;
+  line-height: 1;
+}
+.wizard-lead .wizard__q {
+  margin: 0;
+}
+
+/* Where */
+.wizard-loc {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wizard-loc__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.wizard-loc__icon {
+  position: absolute;
+  left: 14px;
+  color: var(--muted-fg);
+  pointer-events: none;
+}
+.wizard-loc__search input {
+  width: 100%;
+  padding: 14px 16px 14px 44px;
+  font: inherit;
+  font-size: 15px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  color: var(--fg);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.wizard-loc__search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.wizard-loc__search input::placeholder { color: var(--muted-fg); }
+
+.wizard-loc__quicks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.wizard-loc__quick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.wizard-loc__quick:active { transform: scale(0.97); }
+.wizard-loc__quick:hover { border-color: var(--accent); }
+.wizard-loc__quick-emoji { font-size: 20px; flex-shrink: 0; }
+.wizard-loc__quick-name { line-height: 1; }
+
+.wizard-loc__chosen {
+  margin: 0;
+  font-size: 13px;
+  color: var(--accent-strong);
+  font-weight: 500;
+}
+.wizard-loc__chosen[hidden] { display: none; }
+
+/* When */
+.wizard-when {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wizard-when__presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.wizard-when__preset {
+  padding: 12px 8px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.wizard-when__preset:active { transform: scale(0.97); }
+.wizard-when__preset:hover { border-color: var(--accent); }
+.wizard-when__preset--on {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.wizard-when__cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.wizard-when__card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+}
+.wizard-when__card:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.wizard-when__card-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-fg);
+}
+.wizard-when__card-label small {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  font-size: 11px;
+  margin-left: 4px;
+}
+.wizard-when__card input[type="date"] {
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14.5px;
+  color: var(--fg);
+  padding: 0;
+  outline: none;
+  width: 100%;
+}
+
+.wizard-when__peek {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--muted-fg);
+  font-size: 13px;
+  line-height: 1.4;
+  min-height: 38px;
+  transition: background 0.2s, color 0.2s;
+}
+.wizard-when__peek:empty { display: none; }
+.wizard-when__peek--ready {
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+.wizard-when__peek--ready strong {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
 .wizard__loading {
   text-align: center;
   padding: 32px 12px 16px;
@@ -5108,12 +5292,41 @@ body.has-cart .toto-companion {
 
 .deck-stage {
   width: 100%;
-  /* Size to viewport so the card fits without scroll. Subtract chrome:
-     ~80px header, ~80px tab bar, ~90px deck-progress + undo bar above. */
-  height: calc(100svh - 250px);
-  min-height: 420px;
-  max-height: 640px;
+  /* Size to viewport. The swipe view no longer has a heading above the
+     cards, so we can claim more vertical space. Subtract: tab bar
+     (~72), safe area, progress chip (~28), undo strip (~36), main
+     padding (~36). */
+  height: calc(100svh - 200px);
+  min-height: 440px;
+  max-height: 680px;
   position: relative;
+}
+
+/* Swipe screen: drop the wizard's normal vertical padding so the
+   deck claims the whole viewport. The deck card is the content. */
+.cat-flow--swipe {
+  padding: 0;
+  gap: 8px;
+  position: relative;
+}
+.cat-flow__back--float {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  z-index: 5;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--fg);
+  padding: 0;
 }
 
 .deck-card {

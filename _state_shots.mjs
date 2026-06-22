@@ -22,40 +22,55 @@ await ctx.addInitScript(() => {
   } catch {}
 });
 
-// Connect — default mode (create) lands directly on the form
+// Connect — after tapping Start tile
 {
   const page = await ctx.newPage();
   await page.goto(BASE + "/?screen=connect", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(800);
+  await page.click("#choice-start");
+  await page.waitForTimeout(400);
   await page.screenshot({ path: join(OUT, "10b-connect-start.png"), fullPage: true });
   console.log("✓ connect-start");
   await page.close();
 }
 
-// Connect — join mode (after tapping the swap link)
+// Connect — after tapping Join tile
 {
   const page = await ctx.newPage();
   await page.goto(BASE + "/?screen=connect", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(800);
-  await page.click("#mode-swap");
+  await page.click("#choice-join");
   await page.waitForTimeout(400);
   await page.screenshot({ path: join(OUT, "10c-connect-join.png"), fullPage: true });
   console.log("✓ connect-join");
   await page.close();
 }
 
-// Plan wizard, step several steps in to hit non-activity steps
+// Plan wizard — walk to specific steps and capture each
 {
   const page = await ctx.newPage();
   await page.goto(BASE + "/?screen=plan", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(800);
-  // Tap "Day hike" — first card
   await page.click('[data-activity="day-hike"]');
   await page.waitForTimeout(400);
   await page.screenshot({ path: join(OUT, "03b-plan-step2.png"), fullPage: true });
   console.log("✓ plan-step2");
-  // Try to walk to specifics by tapping Skip until we land there
+  // Walk Skip until we hit the location step
   for (let i = 0; i < 8; i++) {
+    const here = await page.$('h1:has-text("Where")');
+    if (here) break;
+    await page.click("#skip");
+    await page.waitForTimeout(300);
+  }
+  await page.screenshot({ path: join(OUT, "03d-plan-where.png"), fullPage: true });
+  console.log("✓ plan-where");
+  // Walk to When
+  await page.click("#skip");
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: join(OUT, "03e-plan-when.png"), fullPage: true });
+  console.log("✓ plan-when");
+  // Walk to specifics
+  for (let i = 0; i < 6; i++) {
     const last = await page.$('h1:has-text("Anything special")');
     if (last) break;
     await page.click("#skip");

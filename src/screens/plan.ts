@@ -284,13 +284,38 @@ export function renderPlan(root: HTMLElement) {
       `;
     }
     if (step === "location") {
+      // Quick-pick chips for popular Swiss destinations. Tapping one
+      // sets the answer and advances. The free-text search stays
+      // available for anywhere else.
+      const quicks: { emoji: string; name: string }[] = [
+        { emoji: "⛰️", name: "Zermatt" },
+        { emoji: "⛷️", name: "Verbier" },
+        { emoji: "🏞️", name: "Interlaken" },
+        { emoji: "🥾", name: "Lavaux" },
+      ];
       stepBody = `
-        <h1 class="wizard__q">${t("plan.q.location")}</h1>
-        <div class="loc-search">
-          <input id="loc-input" type="search" autocomplete="off" placeholder="Any place, anywhere…" />
-          <ul id="loc-results" class="loc-results"></ul>
+        <div class="wizard-lead">
+          <span class="wizard-lead__emoji" aria-hidden="true">🗺️</span>
+          <h1 class="wizard__q">${t("plan.q.location")}</h1>
         </div>
-        <p class="plan-one__chosen" id="loc-chosen">${answers.location ? `✓ ${escapeHTML(answers.location)}` : ""}</p>
+        <div class="wizard-loc">
+          <div class="wizard-loc__search">
+            <svg class="wizard-loc__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+            </svg>
+            <input id="loc-input" type="search" autocomplete="off" placeholder="Type a place..." />
+          </div>
+          <ul id="loc-results" class="loc-results"></ul>
+          <div class="wizard-loc__quicks">
+            ${quicks.map((q) => `
+              <button type="button" class="wizard-loc__quick" data-quick="${escapeHTML(q.name)}">
+                <span class="wizard-loc__quick-emoji">${q.emoji}</span>
+                <span class="wizard-loc__quick-name">${escapeHTML(q.name)}</span>
+              </button>
+            `).join("")}
+          </div>
+          ${answers.location ? `<p class="wizard-loc__chosen" id="loc-chosen">✓ ${escapeHTML(answers.location)}</p>` : `<p class="wizard-loc__chosen" id="loc-chosen" hidden></p>`}
+        </div>
       `;
     }
     if (step === "when") {
@@ -299,18 +324,28 @@ export function renderPlan(root: HTMLElement) {
       const startValue = answers.startDate ?? today;
       if (!answers.startDate) answers.startDate = today;
       stepBody = `
-        <h1 class="wizard__q">${t("plan.q.when")}</h1>
-        <div class="wizard__date-grid">
-          <label class="wizard__date-label">
-            <span>Start</span>
-            <input id="start-date" type="date" min="${today}" value="${startValue}" />
-          </label>
-          <label class="wizard__date-label">
-            <span>End <small class="muted">(optional)</small></span>
-            <input id="end-date" type="date" min="${today}" value="${answers.endDate ?? ""}" />
-          </label>
+        <div class="wizard-lead">
+          <span class="wizard-lead__emoji" aria-hidden="true">📅</span>
+          <h1 class="wizard__q">${t("plan.q.when")}</h1>
         </div>
-        <p class="wizard__peek" id="peek"></p>
+        <div class="wizard-when">
+          <div class="wizard-when__presets" id="when-presets">
+            <button type="button" class="wizard-when__preset" data-preset="today">${escapeHTML(t("plan.when.today"))}</button>
+            <button type="button" class="wizard-when__preset" data-preset="weekend">${escapeHTML(t("plan.when.weekend"))}</button>
+            <button type="button" class="wizard-when__preset" data-preset="nextweek">${escapeHTML(t("plan.when.nextweek"))}</button>
+          </div>
+          <div class="wizard-when__cards">
+            <label class="wizard-when__card">
+              <span class="wizard-when__card-label">${escapeHTML(t("plan.when.start"))}</span>
+              <input id="start-date" type="date" min="${today}" value="${startValue}" />
+            </label>
+            <label class="wizard-when__card wizard-when__card--end">
+              <span class="wizard-when__card-label">${escapeHTML(t("plan.when.end"))} <small>${escapeHTML(t("plan.when.optional"))}</small></span>
+              <input id="end-date" type="date" min="${today}" value="${answers.endDate ?? ""}" />
+            </label>
+          </div>
+          <p class="wizard-when__peek" id="peek"></p>
+        </div>
       `;
     }
     if (step === "sizes") {
@@ -452,6 +487,8 @@ export function renderPlan(root: HTMLElement) {
   function wireDates() {
     const startEl = root.querySelector("#start-date") as HTMLInputElement;
     const endEl = root.querySelector("#end-date") as HTMLInputElement;
+    const presets = root.querySelector("#when-presets") as HTMLDivElement;
+
     function readDates() {
       const s = startEl.value;
       const e = endEl.value;
@@ -461,8 +498,58 @@ export function renderPlan(root: HTMLElement) {
     }
     startEl.addEventListener("change", readDates);
     endEl.addEventListener("change", readDates);
-    // Immediate peek using whatever's in the field on mount.
     if (startEl.value) runPeek(startEl.value);
+
+    // Preset chips: shift the date fields to match common requests so
+    // the user can skip the calendar entirely on the easy cases.
+    presets.addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-preset]");
+      if (!btn) return;
+      const preset = btn.dataset.preset!;
+      const now = new Date();
+      now.setHours(12, 0, 0, 0);
+      function isoDate(d: Date): string {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
+      }
+      // Sat = next 6 - dayOfWeek; Sun = next 7 - dayOfWeek; use the
+      // first Sat-Sun pair that's at or after today.
+      function nextWeekendRange(base: Date): { start: string; end: string } {
+        const dow = base.getDay(); // 0..6 with Sun = 0
+        const daysToSat = ((6 - dow) + 7) % 7; // 0 if Sat
+        const sat = new Date(base);
+        sat.setDate(base.getDate() + daysToSat);
+        const sun = new Date(sat);
+        sun.setDate(sat.getDate() + 1);
+        return { start: isoDate(sat), end: isoDate(sun) };
+      }
+
+      let start = "";
+      let end = "";
+      if (preset === "today") {
+        start = isoDate(now); end = "";
+      } else if (preset === "weekend") {
+        const r = nextWeekendRange(now);
+        start = r.start; end = r.end;
+      } else if (preset === "nextweek") {
+        const monday = new Date(now);
+        const dow = now.getDay();
+        const daysToMon = ((1 - dow) + 7) % 7 || 7;
+        monday.setDate(now.getDate() + daysToMon);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        start = isoDate(monday); end = isoDate(sunday);
+      }
+      startEl.value = start;
+      endEl.value = end;
+      // Highlight the active preset chip.
+      presets.querySelectorAll<HTMLButtonElement>("[data-preset]").forEach((b) => {
+        b.classList.toggle("wizard-when__preset--on", b === btn);
+      });
+      readDates();
+    });
   }
 
   // ─── Location autocomplete ─────────────────────────────────────────────────
@@ -513,6 +600,15 @@ export function renderPlan(root: HTMLElement) {
         return;
       }
     });
+
+    // Quick-pick chips for popular spots: tap to set + advance.
+    const quicks = root.querySelector(".wizard-loc__quicks") as HTMLDivElement | null;
+    quicks?.addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-quick]");
+      if (!btn) return;
+      answers.location = btn.dataset.quick!;
+      advance();
+    });
   }
 
   // ─── Weather peek ──────────────────────────────────────────────────────────
@@ -522,31 +618,31 @@ export function renderPlan(root: HTMLElement) {
     const peekEl = root.querySelector("#peek") as HTMLParagraphElement | null;
     if (!peekEl) return;
     if (!answers.location) {
-      peekEl.classList.remove("wizard__peek--ready");
+      peekEl.classList.remove("wizard-when__peek--ready");
       peekEl.textContent = "Tip: set a location in the previous step and I'll pull the forecast.";
       return;
     }
     if (!date) return;
     const localToken = ++peekToken;
-    peekEl.classList.remove("wizard__peek--ready");
+    peekEl.classList.remove("wizard-when__peek--ready");
     peekEl.textContent = "Sniffing out the forecast…";
     try {
       const w = await forecast(answers.location, date, 1);
       if (localToken !== peekToken) return;
       if (!w) {
-        peekEl.classList.remove("wizard__peek--ready");
+        peekEl.classList.remove("wizard-when__peek--ready");
         peekEl.textContent = "I couldn't grab a forecast for that spot. Continuing anyway.";
         return;
       }
       const s = w.summary;
-      peekEl.classList.add("wizard__peek--ready");
+      peekEl.classList.add("wizard-when__peek--ready");
       peekEl.innerHTML = `
         <strong>${escapeHTML(weatherComment(s))}</strong>
         <span class="wizard__peek-detail">${s.min_c}°/${s.max_c}°C${s.has_rain ? ", " + s.total_precip_mm + " mm rain" : ""}${s.has_snow ? ", " + s.total_snow_cm + " cm snow" : ""}</span>
       `;
     } catch (err) {
       console.warn("weather peek failed:", err);
-      peekEl.classList.remove("wizard__peek--ready");
+      peekEl.classList.remove("wizard-when__peek--ready");
       peekEl.textContent = "";
     }
   }
@@ -705,12 +801,10 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
 
     return `
       <div class="cat-flow">
-        ${result.reasoning ? `<p class="cat-summary">${escapeHTML(result.reasoning)}</p>` : ""}
         <h2 class="cat-flow__title">Here's what I'd pack</h2>
-        <p class="cat-flow__hint">Uncheck anything you don't need. I'll only show options for the ones you keep.</p>
         <ul class="cat-list">${items}</ul>
         <button class="primary cat-flow__cta" id="cat-go">
-          Show me the gear · ${selected.size} ${selected.size === 1 ? "category" : "categories"}
+          Next · ${selected.size} ${selected.size === 1 ? "category" : "categories"}
         </button>
       </div>
     `;
@@ -744,24 +838,22 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
 
     return `
       <div class="cat-flow">
-        <button class="cat-flow__back" id="cat-back">‹ Back to the list</button>
-        <h2 class="cat-flow__title">Pick what you want</h2>
-        <p class="cat-flow__hint">Tap a category to see options. Swipe right to add, left to skip.</p>
+        <button class="cat-flow__back" id="cat-back">‹ Back</button>
         <div class="cat-picks">${rows}</div>
         <a class="primary cat-flow__cta" href="?screen=map">${totalAdded > 0 ? `Find ${totalAdded} in the store ›` : "Find them in the store ›"}</a>
       </div>
     `;
   }
 
-  // Screen 3: the swipe deck for one category
+  // Swipe deck: stripped of top text so the cards fill the screen and
+  // there's nothing to scroll past. A small floating back button and
+  // the undo control are the only chrome.
   function renderSwipe(): string {
     const cat = activeCategory();
     if (!cat) return "";
     return `
-      <div class="cat-flow">
-        <button class="cat-flow__back" id="swipe-back">‹ Back to categories</button>
-        <h2 class="cat-flow__title">${escapeHTML(cat.label)}</h2>
-        ${cat.why ? `<p class="cat-flow__hint">${escapeHTML(cat.why)}</p>` : ""}
+      <div class="cat-flow cat-flow--swipe">
+        <button class="cat-flow__back cat-flow__back--float" id="swipe-back" aria-label="Back to categories">‹</button>
         <div class="deck-frame">
           <div class="deck-progress" id="deck-progress"></div>
           <div class="deck-stage" id="deck-stage"></div>
