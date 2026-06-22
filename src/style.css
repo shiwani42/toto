@@ -1361,42 +1361,53 @@ button, .primary { font: inherit; cursor: pointer; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 4px;
 }
+/* Date fields styled the way Apple's calendar fields read: small
+   uppercase label sitting on top of a soft tinted card. The native
+   date input gets a soft fill, generous padding, big tabular date
+   text. The whole label is a tappable surface. */
 .wizard__date-label {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  font-size: 11px;
+  gap: 6px;
+  font-size: 10.5px;
   font-weight: 700;
   color: var(--muted-fg);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
+  cursor: pointer;
 }
 .wizard__date-label small.muted {
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
-  opacity: 0.7;
-  font-size: 11px;
+  opacity: 0.65;
+  font-size: 10.5px;
   margin-left: 4px;
 }
 .wizard__date-label input[type="date"] {
   padding: 16px 16px;
   font: inherit;
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   color: var(--fg);
-  background: var(--card);
-  border: 1.5px solid var(--border);
-  border-radius: 16px;
+  background: var(--panel);
+  border: 1px solid transparent;
+  border-radius: 14px;
   outline: none;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   text-transform: none;
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
   font-feature-settings: "tnum";
+  width: 100%;
+  box-sizing: border-box;
+}
+.wizard__date-label input[type="date"]:hover {
+  background: var(--panel-strong);
 }
 .wizard__date-label input[type="date"]:focus {
+  background: var(--card);
   border-color: var(--accent);
   box-shadow: 0 0 0 4px var(--accent-bg);
 }
@@ -1475,29 +1486,38 @@ button, .primary { font: inherit; cursor: pointer; }
   margin: 4px 0 0;
 }
 
-/* Location search */
+/* Location search.
+   Lives on white inside the wizard card, so the input itself gets a
+   soft tinted fill instead of a stark border. Reads as "type here"
+   without shouting. Generous height + tracking like Airbnb's place
+   field. */
 .loc-search {
   position: relative;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 .loc-search input {
   width: 100%;
   font: inherit;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 500;
-  padding: 16px 18px;
-  background: var(--card);
-  border: 1.5px solid var(--border);
+  padding: 20px 20px;
+  background: var(--panel);
+  border: 1px solid transparent;
   border-radius: 16px;
   outline: none;
   color: var(--fg);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  letter-spacing: -0.01em;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 .loc-search input::placeholder {
   color: var(--muted-fg);
   font-weight: 400;
 }
+.loc-search input:hover {
+  background: var(--panel-strong);
+}
 .loc-search input:focus {
+  background: var(--card);
   border-color: var(--accent);
   box-shadow: 0 0 0 4px var(--accent-bg);
 }
@@ -1546,22 +1566,25 @@ button, .primary { font: inherit; cursor: pointer; }
   color: var(--muted-fg);
 }
 
-/* Weather peek line on the date step */
+/* Weather peek line on the date step. Quiet by default (just muted
+   text on flat background), elevated to a tinted ready state when
+   a forecast lands. */
 .wizard__peek {
-  margin: 0;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: var(--panel-strong);
+  margin: 14px 0 0;
+  padding: 0;
+  background: transparent;
   color: var(--muted-fg);
-  font-size: 13.5px;
-  line-height: 1.4;
-  min-height: 38px;
-  transition: background 0.2s ease, color 0.2s ease;
+  font-size: 13px;
+  line-height: 1.45;
+  transition: color 0.2s ease;
 }
 .wizard__peek:empty { display: none; }
 .wizard__peek--ready {
+  padding: 14px 16px;
+  border-radius: 14px;
   background: var(--accent-bg);
   color: var(--accent-strong);
+  margin-top: 12px;
 }
 .wizard__peek--ready strong {
   display: block;
@@ -2849,6 +2872,16 @@ body.has-cart .toto-companion {
   font-weight: 700;
   letter-spacing: -0.02em;
 }
+/* Where + When share a quieter visual treatment: the input(s) carry the
+   weight, so the question itself can sit large with extra breathing room
+   underneath, the way Apple Calendar and Airbnb's date pickers do. */
+.plan-one__step:has(.loc-search) .wizard__q,
+.plan-one__step:has(.wizard__date-grid) .wizard__q {
+  font-size: 28px;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin: 4px 0 22px;
+}
 .plan-one__actions {
   display: flex;
   align-items: stretch;
@@ -3389,6 +3422,182 @@ body.has-cart .toto-companion {
 
 /* ─── Connect / Connected ────────────────────────────────────────────────── */
 .screen-connect, .screen-connected { gap: 14px; }
+
+/* ─── Connected (minimal) ────────────────────────────────────────────────── */
+.screen-connected--min {
+  gap: 18px;
+  padding-top: 32px;
+}
+
+/* Tappable code. The code IS the button — tap to copy. A small
+   clipboard glyph nests on the right so it reads as interactive. */
+.conn-code {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 22px 24px;
+  background: var(--panel);
+  border: 1px solid transparent;
+  border-radius: 18px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.1s;
+}
+.conn-code:hover { background: var(--panel-strong); }
+.conn-code:active { transform: scale(0.99); }
+.conn-code--copied {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+}
+.conn-code__value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--fg);
+}
+.conn-code--copied .conn-code__value { color: var(--accent-strong); }
+.conn-code__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--muted-fg);
+}
+.conn-code--copied .conn-code__action {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Quiet roster row: avatar pill chips. */
+.conn-roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.conn-roster__empty {
+  font-size: 13px;
+  color: var(--muted-fg);
+}
+.conn-roster__person {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--fg);
+}
+.conn-roster__person--me {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent-strong);
+}
+.conn-roster__avatar {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  border-radius: 50%;
+  font-size: 14px;
+}
+.conn-roster__name { font-weight: 500; }
+
+/* Unified activity + chat stream. */
+.conn-stream {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 120px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.conn-stream__row {
+  font-size: 13.5px;
+  color: var(--fg);
+  line-height: 1.45;
+}
+.conn-stream__time {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted-fg);
+  margin-right: 6px;
+}
+
+/* Chat input — a single rounded composer. */
+.conn-chat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 16px;
+  background: var(--panel);
+  border-radius: 999px;
+}
+.conn-chat input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--fg);
+  padding: 8px 0;
+}
+.conn-chat input::placeholder { color: var(--muted-fg); }
+.conn-chat__send {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s;
+}
+.conn-chat__send:hover { background: var(--accent-strong); }
+.conn-chat__send:active { transform: scale(0.95); }
+
+/* Foot: Share + Leave as quiet text links, balanced on a row. */
+.conn-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+.conn-foot__btn {
+  background: transparent;
+  border: none;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 6px 4px;
+}
+.conn-foot__btn:hover { color: var(--accent-strong); }
+.conn-foot__btn--leave {
+  color: var(--muted-fg);
+}
+.conn-foot__btn--leave:hover { color: var(--bad, #c0392b); }
 
 /* ─── Connect screen v2 (visual, low-text) ────────────────────────────────── */
 .connect-v2 {
@@ -4156,7 +4365,10 @@ body.has-cart .toto-companion {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 16px;
+  /* Right padding clears the floating language FAB (~60px wide + 12px
+     edge gap), so the Open button stays tappable. Without this the
+     FAB sat over the Open pill and blocked the tap target. */
+  padding: 10px 88px 10px 16px;
   background: rgba(232, 245, 238, 0.92);
   border-bottom: 1px solid var(--accent-border);
   font-size: 13px;

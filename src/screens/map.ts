@@ -175,7 +175,6 @@ export function renderMap(root: HTMLElement) {
                 <div class="zone-row__name">Zone ${zone} · ${escapeHTML(zone_name)}</div>
                 <div class="zone-row__sub">${count} item${count > 1 ? "s" : ""}</div>
               </div>
-              ${i === 0 ? `<span class="zone-row__step">${t("map.suggested")}</span>` : ""}
               <span class="zone-row__chev" aria-hidden="true">›</span>
             </div>
             <ul class="zone-items">

@@ -103,20 +103,6 @@ export function renderRepair(root: HTMLElement) {
       <button class="primary" id="scan-btn">${t("repair.scan")}</button>
       <div id="result"></div>
 
-      <div id="empty-preview" class="empty-preview" aria-hidden="true">
-        <div class="empty-preview__label">${escapeHTML(t("preview.label"))}</div>
-        <div class="empty-preview__verdict empty-preview__verdict--ok">
-          <span class="empty-preview__verdict-tag">${escapeHTML(t("repair.recommend"))}</span>
-          <span class="empty-preview__verdict-line">${escapeHTML(t("repair.preview_line"))}</span>
-        </div>
-        <ul class="empty-preview__list">
-          <li><span>${escapeHTML(t("repair.minor"))}</span><span class="empty-preview__delta">~CHF 25</span></li>
-          <li><span>${escapeHTML(t("repair.medium"))}</span><span class="empty-preview__delta">~CHF 55</span></li>
-          <li><span>${escapeHTML(t("repair.new_cost"))}</span><span class="empty-preview__delta">CHF 280</span></li>
-        </ul>
-        <div class="empty-preview__hint">${escapeHTML(t("repair.preview_hint"))}</div>
-      </div>
-
       <a class="link-btn" href="?screen=list">${t("compare.back")}</a>
     </main>
   `;
@@ -152,8 +138,6 @@ export function renderRepair(root: HTMLElement) {
         scanBtn.textContent = t("repair.scan_another");
         setStatus(`${t("repair.got_it")} ${product.name}, ${product.brand}, ${product.size}`);
         resultEl.innerHTML = buildResultHTML(product);
-        const previewEl = root.querySelector("#empty-preview") as HTMLDivElement | null;
-        if (previewEl) previewEl.hidden = true;
       },
     });
   }
@@ -178,8 +162,6 @@ export function renderRepair(root: HTMLElement) {
       scanBtn.textContent = t("repair.scan_different");
       setStatus(`Looking at: ${product.name}, ${product.brand}.`);
       resultEl.innerHTML = buildResultHTML(product);
-      const previewEl = root.querySelector("#empty-preview") as HTMLDivElement | null;
-      if (previewEl) previewEl.hidden = true;
     }
   }
 

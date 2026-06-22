@@ -168,9 +168,20 @@ export function mountCompanion(screen: Screen) {
   if (existing) existing.remove();
   clearTimers();
 
-  // Home has its own giant Toto. The floating one would feel redundant.
-  // Skip admin too — that's staff-side, no companion needed.
-  if (screen === "home" || screen === "admin") return;
+  // Skip the companion on screens where it adds noise instead of value:
+  // - Home already has the giant Toto mascot.
+  // - Admin is staff-only.
+  // - Scan / browse / compare / repair / fit are camera or photo flows
+  //   where the user's attention is on the lens or the result. A
+  //   floating bubble in the corner just crowds the viewfinder.
+  // - Connect and connected are session-management screens, not places
+  //   for a contextual nudge.
+  const noCompanion = new Set<Screen>([
+    "home", "admin",
+    "scan", "browse", "compare", "repair", "fit",
+    "connect", "connected",
+  ]);
+  if (noCompanion.has(screen)) return;
 
   const screenPhrase = pickLine(screen);
 

@@ -84,7 +84,6 @@ export function renderBrowse(root: HTMLElement) {
         </div>
       </div>
       <div id="result"></div>
-      <a class="link-btn" href="?screen=home">${t("browse.back")}</a>
     </main>
   `;
 

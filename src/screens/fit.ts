@@ -156,16 +156,6 @@ export function renderFit(root: HTMLElement) {
 
       ${existing.sizeSource ? `<p class="tag">Last saved: ${escapeHTML(`top ${existing.topSize ?? "?"}, bottom ${existing.bottomSize ?? "?"}, shoe EU ${existing.shoeSizeEU ?? "?"}`)} <a class="inline-link" href="?screen=settings">edit</a></p>` : ""}
 
-      <div id="empty-preview" class="empty-preview" aria-hidden="true">
-        <div class="empty-preview__label">${escapeHTML(t("preview.label"))}</div>
-        <ul class="empty-preview__sizes">
-          <li><span class="empty-preview__sizes-label">${escapeHTML(t("fit.top"))}</span><span class="empty-preview__sizes-val">M</span></li>
-          <li><span class="empty-preview__sizes-label">${escapeHTML(t("fit.bottom"))}</span><span class="empty-preview__sizes-val">L</span></li>
-          <li><span class="empty-preview__sizes-label">${escapeHTML(t("fit.shoe"))}</span><span class="empty-preview__sizes-val">EU 41</span></li>
-        </ul>
-        <div class="empty-preview__hint">${escapeHTML(t("fit.preview_hint"))}</div>
-      </div>
-
       <a class="link-btn" href="?screen=settings">‹ Back to settings</a>
     </main>
   `;
@@ -179,8 +169,6 @@ export function renderFit(root: HTMLElement) {
     if (!file) return;
     previewEl.innerHTML = `<div class="status">Tidying up the photo…</div>`;
     resultEl.innerHTML = "";
-    const emptyPreview = root.querySelector("#empty-preview") as HTMLDivElement | null;
-    if (emptyPreview) emptyPreview.hidden = true;
     let imgData: { base64: string; dataUrl: string };
     try {
       imgData = await fileToBase64Jpeg(file);

@@ -1,5 +1,5 @@
 import { getProduct } from "../lib/catalog";
-import { getList, addToList } from "../lib/list";
+import { getList } from "../lib/list";
 import {
   clearSession,
   loadSession,
@@ -25,32 +25,6 @@ function timeStr(): string {
 
 type FeedEntry = { time: string; html: string };
 
-// Render a mini cart card for a set of product codes
-function renderCartHTML(
-  codes: string[],
-  who: string,
-  emptyMsg: string,
-): string {
-  if (codes.length === 0) {
-    return `<p class="hint">${escapeHTML(emptyMsg)}</p>`;
-  }
-  return `
-    <p class="tag">${escapeHTML(who)}'s list, ${codes.length} item${codes.length > 1 ? "s" : ""}</p>
-    <ul class="cart-list">
-      ${codes
-        .map((code) => {
-          const p = getProduct(code);
-          if (!p) return `<li class="cart-item"><span class="cart-item__name">${escapeHTML(code)}</span></li>`;
-          return `
-            <li class="cart-item">
-              <span class="cart-item__name">${escapeHTML(p.name)}</span>
-              <span class="cart-item__sub">${escapeHTML(p.brand)} · ${escapeHTML(p.size)} · ${escapeHTML(p.color)}</span>
-            </li>`;
-        })
-        .join("")}
-    </ul>`;
-}
-
 export function renderConnected(root: HTMLElement) {
   const state = loadSession();
   if (!state) {
@@ -58,79 +32,60 @@ export function renderConnected(root: HTMLElement) {
     return;
   }
 
+  // Minimal layout: a tappable code as the only hero (tap to copy), a
+  // quiet roster row, and a single combined stream for activity + chat.
+  // Dropped the Your cart / Their cart duplicate sections (already in
+  // the List tab), the standalone Copy / Open buttons, the verbose
+  // "Connecting…" / "You're in. Share the code..." status banners.
   root.innerHTML = `
-    <header>
-      <h1>${t("connected.title")}</h1>
-    </header>
-    <main class="screen-connected">
-      <div class="session-code-hero">
-        <p class="session-code-hero__label">Session code</p>
-        <div class="session-code-hero__code" id="code">${escapeHTML(state.code)}</div>
-      </div>
+    <main class="screen-connected screen-connected--min">
+      <button type="button" class="conn-code" id="code" aria-label="Tap to copy code">
+        <span class="conn-code__value" id="code-val">${escapeHTML(state.code)}</span>
+        <span class="conn-code__action" id="code-action" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        </span>
+      </button>
 
-      <div class="status" id="status">Connecting…</div>
+      <ul class="conn-roster" id="roster"></ul>
 
-      <section class="card-section">
-        <h2>Who's here</h2>
-        <ul class="roster" id="roster"></ul>
-      </section>
+      <ul class="conn-stream" id="stream"></ul>
 
-      <section class="card-section" id="their-cart-section" style="display:none">
-        <h2>Their cart</h2>
-        <div id="their-cart"><p class="hint">Waiting for their cart to sync…</p></div>
-        <button class="link-btn" id="merge-btn" style="display:none;margin-top:8px">
-          Add their picks to my list
+      <form class="conn-chat" id="chat-form">
+        <input id="chat-input" type="text" placeholder="${escapeHTML(t("connected.say"))}" autocomplete="off" />
+        <button class="conn-chat__send" type="submit" aria-label="Send">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m22 2-7 20-4-9-9-4z"/>
+            <path d="M22 2 11 13"/>
+          </svg>
         </button>
-      </section>
+      </form>
 
-      <section class="card-section">
-        <h2>Your cart</h2>
-        <div id="my-cart"></div>
-      </section>
-
-      <section class="card-section">
-        <h2>What's happening</h2>
-        <ul class="feed" id="feed"><li class="hint">Quiet so far.</li></ul>
-      </section>
-
-      <section class="card-section">
-        <h2>Chat</h2>
-        <ul class="chat" id="chat"></ul>
-        <form class="chat-form" id="chat-form">
-          <input id="chat-input" type="text" placeholder="Say something…" />
-          <button class="primary" type="submit">Send</button>
-        </form>
-      </section>
-
-      <div class="row-buttons">
-        <a class="primary" href="?screen=list">Open my list</a>
-        <button class="link-btn" id="copy">Copy code</button>
-        <button class="link-btn" id="share">Share invite</button>
-        <button class="link-btn" id="leave">Leave</button>
+      <div class="conn-foot">
+        <button class="conn-foot__btn" id="share" type="button">${t("connected.share")}</button>
+        <button class="conn-foot__btn conn-foot__btn--leave" id="leave" type="button">${t("connected.leave")}</button>
       </div>
     </main>
   `;
 
-  const statusEl = root.querySelector("#status") as HTMLDivElement;
   const rosterEl = root.querySelector("#roster") as HTMLUListElement;
-  const feedEl = root.querySelector("#feed") as HTMLUListElement;
-  const chatEl = root.querySelector("#chat") as HTMLUListElement;
+  const streamEl = root.querySelector("#stream") as HTMLUListElement;
   const chatForm = root.querySelector("#chat-form") as HTMLFormElement;
   const chatInput = root.querySelector("#chat-input") as HTMLInputElement;
-  const copyBtn = root.querySelector("#copy") as HTMLButtonElement;
+  const copyBtn = root.querySelector("#code") as HTMLButtonElement;
+  const codeAction = root.querySelector("#code-action") as HTMLSpanElement;
   const shareBtn = root.querySelector("#share") as HTMLButtonElement;
   const leaveBtn = root.querySelector("#leave") as HTMLButtonElement;
-  const theirCartSection = root.querySelector("#their-cart-section") as HTMLElement;
-  const theirCartEl = root.querySelector("#their-cart") as HTMLDivElement;
-  const myCartEl = root.querySelector("#my-cart") as HTMLDivElement;
-  const mergeBtn = root.querySelector("#merge-btn") as HTMLButtonElement;
 
   let members: Member[] = [];
-  const feed: FeedEntry[] = [];
-  const chat: FeedEntry[] = [];
-
-  // Track other members' carts: memberId → product codes[]
-  const otherCarts = new Map<string, string[]>();
+  // Single combined stream for activity and chat. Newest at the
+  // bottom so the chat feel reads naturally and you can scroll back
+  // through what people did/said.
+  const stream: FeedEntry[] = [];
 
   function memberById(id: string): Member | undefined {
     return members.find((m) => m.id === id);
@@ -143,73 +98,41 @@ export function renderConnected(root: HTMLElement) {
     return "Someone";
   }
 
-  function renderMyCart() {
-    const list = getList();
-    myCartEl.innerHTML = renderCartHTML(
-      list,
-      `${state!.me.emoji} ${state!.me.name}`,
-      "Nothing in your cart yet.",
-    );
-  }
-
-  function renderTheirCart() {
-    if (otherCarts.size === 0) return;
-    theirCartSection.style.display = "";
-    // Merge all other members' carts into one view
-    const allCodes = Array.from(otherCarts.entries()).flatMap(([id, codes]) => {
-      const who = nameFor(id);
-      return codes.map((c) => ({ who, code: c }));
-    });
-    const uniqueCodes = [...new Set(allCodes.map((x) => x.code))];
-    // Show by first contributor's name
-    const firstEntry = Array.from(otherCarts.entries())[0];
-    const firstWho = firstEntry ? nameFor(firstEntry[0]) : "Partner";
-    theirCartEl.innerHTML = renderCartHTML(uniqueCodes, firstWho, "");
-    mergeBtn.style.display = uniqueCodes.length > 0 ? "" : "none";
-  }
-
   function renderRoster() {
     if (members.length === 0) {
-      rosterEl.innerHTML = `<li class="hint">Just you so far.</li>`;
+      rosterEl.innerHTML = `<li class="conn-roster__empty">${escapeHTML(t("connected.alone"))}</li>`;
       return;
     }
     rosterEl.innerHTML = members
       .map(
         (m) => `
-          <li class="member-row ${m.id === state!.me.id ? "member-row--me" : ""}">
-            <span class="member-row__dot member-row__dot--green" title="Online"></span>
-            <span class="member-row__emoji">${escapeHTML(m.emoji)}</span>
-            <div class="member-row__body">
-              <div class="member-row__name">${escapeHTML(m.name)}${m.id === state!.me.id ? " <span style=\"font-size:11px;color:var(--muted-fg);font-weight:400\">(you)</span>" : ""}</div>
-              <div class="member-row__detail">📍 ${escapeHTML(m.zone ?? "entry")}</div>
-            </div>
+          <li class="conn-roster__person ${m.id === state!.me.id ? "conn-roster__person--me" : ""}" title="${escapeHTML(m.name)}">
+            <span class="conn-roster__avatar">${escapeHTML(m.emoji)}</span>
+            <span class="conn-roster__name">${escapeHTML(m.name)}${m.id === state!.me.id ? " · you" : ""}</span>
           </li>
         `,
       )
       .join("");
   }
 
-  function pushFeed(html: string) {
-    feed.unshift({ time: timeStr(), html });
-    if (feed.length > 30) feed.pop();
-    feedEl.innerHTML = feed
-      .map(
-        (f) => `<li><span class="feed__time">${f.time}</span> ${f.html}</li>`,
-      )
+  function pushStream(html: string, kind: "event" | "chat" = "event") {
+    stream.push({ time: timeStr(), html: `<span class="conn-stream__time">${timeStr()}</span> ${html}` });
+    if (stream.length > 80) stream.shift();
+    streamEl.innerHTML = stream
+      .map((s) => `<li class="conn-stream__row conn-stream__row--${kind}">${s.html}</li>`)
       .join("");
+    streamEl.scrollTop = streamEl.scrollHeight;
   }
-
-  function pushChat(html: string) {
-    chat.push({ time: timeStr(), html });
-    if (chat.length > 60) chat.shift();
-    chatEl.innerHTML = chat
-      .map(
-        (c) =>
-          `<li><span class="chat__time">${c.time}</span> ${c.html}</li>`,
-      )
+  void pushStream; // suppress unused warning; used via two thin wrappers below
+  function pushEvent(html: string) {
+    stream.push({ time: timeStr(), html });
+    if (stream.length > 80) stream.shift();
+    streamEl.innerHTML = stream
+      .map((s) => `<li class="conn-stream__row"><span class="conn-stream__time">${s.time}</span> ${s.html}</li>`)
       .join("");
-    chatEl.scrollTop = chatEl.scrollHeight;
+    streamEl.scrollTop = streamEl.scrollHeight;
   }
+  function pushChat(html: string) { pushEvent(html); }
 
   function describeEvent(e: SessionEvent): string {
     const who = nameFor(e.from);
@@ -268,46 +191,19 @@ export function renderConnected(root: HTMLElement) {
         return; // no feed noise
       }
 
-      // Keep other members' carts up to date
-      if (e.kind === "list:snapshot") {
-        otherCarts.set(e.from, e.codes);
-        renderTheirCart();
-      } else if (e.kind === "list:added") {
-        const existing = otherCarts.get(e.from) ?? [];
-        if (!existing.includes(e.code)) existing.push(e.code);
-        otherCarts.set(e.from, existing);
-        renderTheirCart();
-      } else if (e.kind === "list:removed") {
-        const existing = otherCarts.get(e.from) ?? [];
-        otherCarts.set(
-          e.from,
-          existing.filter((c) => c !== e.code),
-        );
-        renderTheirCart();
-      }
-
       const desc = describeEvent(e);
-      if (desc) pushFeed(desc);
+      if (desc) pushEvent(desc);
     },
   };
 
-  // Wait a small amount of time for the global session to connect if it was just initialized
+  // Quietly broadcast our presence + cart snapshot when the page mounts.
   setTimeout(async () => {
-    statusEl.textContent = "You're in. Share the code to bring others.";
-    renderMyCart();
-
     const list = getList();
-
-    // Push our own cart to the feed entry so we remember we joined.
     if (list.length > 0) {
-      pushFeed(
+      pushEvent(
         `<strong>${escapeHTML(`${state.me.emoji} ${state.me.name}`)}</strong> joined with ${list.length} item${list.length > 1 ? "s" : ""}`,
       );
     }
-
-    // Tell everyone in the room "I just joined, please send me your cart".
-    // Existing members will hear this and respond with list:snapshot.
-    // We also broadcast our own snapshot at the same time so they see ours.
     await Promise.all([
       session.send({ kind: "list:request-snapshot", from: state.me.id }),
       list.length > 0
@@ -316,22 +212,39 @@ export function renderConnected(root: HTMLElement) {
     ]);
   }, 100);
 
-  // Merge their cart into mine
-  mergeBtn.addEventListener("click", () => {
-    const allCodes = Array.from(otherCarts.values()).flat();
-    let added = 0;
-    for (const code of allCodes) {
-      const before = getList();
-      if (!before.includes(code)) {
-        addToList(code);
-        added++;
+  // Tappable code: copy to clipboard on click and morph the icon into a
+  // check briefly so the user sees the action was acknowledged.
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(state.code);
+    } catch {
+      // Clipboard might be blocked in some contexts. Selecting the
+      // text is a graceful fallback.
+      const range = document.createRange();
+      const valEl = root.querySelector("#code-val");
+      if (valEl) {
+        range.selectNodeContents(valEl);
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(range);
       }
     }
-    mergeBtn.textContent = added === 0 ? "Already had them" : `Added ${added}`;
-    renderMyCart();
-    setTimeout(() => {
-      mergeBtn.textContent = "Add their picks to my list";
-    }, 2000);
+    copyBtn.classList.add("conn-code--copied");
+    codeAction.innerHTML = `
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+           stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 6L9 17l-5-5"/>
+      </svg>
+    `;
+    window.setTimeout(() => {
+      copyBtn.classList.remove("conn-code--copied");
+      codeAction.innerHTML = `
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+      `;
+    }, 1400);
   });
 
   chatForm.addEventListener("submit", async (e) => {
@@ -345,18 +258,9 @@ export function renderConnected(root: HTMLElement) {
     await session.send({ kind: "chat", from: state.me.id, text });
   });
 
-  copyBtn.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(state.code);
-      copyBtn.textContent = "Copied";
-      setTimeout(() => (copyBtn.textContent = "Copy code"), 1500);
-    } catch {
-      copyBtn.textContent = "Code: " + state.code;
-    }
-  });
-
   shareBtn.addEventListener("click", async () => {
     const url = `${location.origin}/?screen=connect&code=${state.code}`;
+    const original = shareBtn.textContent ?? "";
     try {
       if (navigator.share) {
         await navigator.share({
@@ -367,7 +271,7 @@ export function renderConnected(root: HTMLElement) {
       } else {
         await navigator.clipboard.writeText(url);
         shareBtn.textContent = "Link copied";
-        setTimeout(() => (shareBtn.textContent = "Share invite"), 1500);
+        setTimeout(() => (shareBtn.textContent = original), 1500);
       }
     } catch (err) {
       console.warn(err);

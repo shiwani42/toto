@@ -82,31 +82,7 @@ export function renderConnect(root: HTMLElement) {
               <button type="submit" id="join-btn" class="primary connect-v2__go">${t("connect.join.btn")}</button>
             `}
           </form>
-        ` : `
-          <div id="empty-preview" class="empty-preview" aria-hidden="true">
-            <div class="empty-preview__label">${escapeHTML(t("preview.label"))}</div>
-            <div class="empty-preview__chat">
-              <div class="empty-preview__chat-head">
-                <span class="empty-preview__chat-code">FAM-A4T7</span>
-                <span class="empty-preview__chat-people">
-                  <span class="empty-preview__avatar empty-preview__avatar--a">🐻</span>
-                  <span class="empty-preview__avatar empty-preview__avatar--b">🦊</span>
-                </span>
-              </div>
-              <div class="empty-preview__chat-row">
-                <span class="empty-preview__chat-name">Alpine 14</span>
-                <span class="empty-preview__chat-msg">${escapeHTML(t("connect.preview_msg1"))}</span>
-              </div>
-              <div class="empty-preview__chat-row empty-preview__chat-row--right">
-                <span class="empty-preview__chat-msg">${escapeHTML(t("connect.preview_msg2"))}</span>
-                <span class="empty-preview__chat-name">Trail 28</span>
-              </div>
-            </div>
-            <div class="empty-preview__hint">${escapeHTML(t("connect.preview_hint"))}</div>
-          </div>
-        `}
-
-        <a class="link-btn connect-v2__back" href="?screen=home">${t("connect.back")}</a>
+        ` : ""}
       </main>
     `;
 
