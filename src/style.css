@@ -197,15 +197,10 @@ button, .primary { font: inherit; cursor: pointer; }
   margin: 0 0 8px;
 }
 
-/* ─── Smoke screen ───────────────────────────────────────────────────────── */
-#capture-view {
-  flex: 1;
-  min-height: 50vh;
-  background: #000;
-  border-radius: var(--radius);
-  overflow: hidden;
-  position: relative;
-}
+/* Each scanning screen now sizes its own #capture-view via its class
+   (.scan-view / .browse-cam / .compare-cam). A global rule used to set
+   flex:1 + min-height:50vh, which stretched the compare and repair
+   placeholders into giant black blocks even when the camera was off. */
 
 .last-scan {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
