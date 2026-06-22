@@ -22,24 +22,22 @@ await ctx.addInitScript(() => {
   } catch {}
 });
 
-// Connect after tap on Start
+// Connect — default mode (create) lands directly on the form
 {
   const page = await ctx.newPage();
   await page.goto(BASE + "/?screen=connect", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(800);
-  await page.click("#choice-start");
-  await page.waitForTimeout(400);
   await page.screenshot({ path: join(OUT, "10b-connect-start.png"), fullPage: true });
   console.log("✓ connect-start");
   await page.close();
 }
 
-// Connect after tap on Join
+// Connect — join mode (after tapping the swap link)
 {
   const page = await ctx.newPage();
   await page.goto(BASE + "/?screen=connect", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(800);
-  await page.click("#choice-join");
+  await page.click("#mode-swap");
   await page.waitForTimeout(400);
   await page.screenshot({ path: join(OUT, "10c-connect-join.png"), fullPage: true });
   console.log("✓ connect-join");
