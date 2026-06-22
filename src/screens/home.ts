@@ -13,28 +13,6 @@ function escapeHTML(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
-/** First-run intro. Toto greets, briefly says what he can do, gives a
- *  single "let's go" button. Skippable at any moment. */
-function renderFirstRunIntro(root: HTMLElement, done: () => void): void {
-  root.innerHTML = `
-    <main class="screen-intro">
-      <button type="button" class="intro-skip" id="intro-skip">${escapeHTML("Skip")}</button>
-      <section class="intro-card">
-        <div class="intro-mascot">${totoMascot(180)}</div>
-        <h1 class="intro-title">Hi, I'm Toto.</h1>
-        <p class="intro-line">I'll help you find gear in the store.</p>
-        <ul class="intro-bullets">
-          <li><span>📋</span> Build a list, then I'll point them out</li>
-          <li><span>🧭</span> Tell me a trip, I'll suggest what to pack</li>
-          <li><span>👀</span> Or just point the camera and I'll explain</li>
-        </ul>
-        <button type="button" class="primary intro-go" id="intro-go">${escapeHTML("Let's go")}</button>
-      </section>
-    </main>
-  `;
-  (root.querySelector("#intro-go")    as HTMLButtonElement).addEventListener("click", done);
-  (root.querySelector("#intro-skip")  as HTMLButtonElement).addEventListener("click", done);
-}
 
 export function renderHome(root: HTMLElement) {
   const activeSession = loadSession();

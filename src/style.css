@@ -3316,9 +3316,13 @@ body.has-cart .toto-companion {
   padding: 18px 18px 20px;
   box-shadow: var(--shadow-sm);
 }
-/* Make native form labels + selects + inputs feel like the rest of the app
-   instead of 1990s browser chrome. Applies inside any card-section. */
-.card-section label {
+/* Make native form labels + selects + inputs feel like the rest of the
+   app instead of 1990s browser chrome. Only applies to labels wrapping
+   a select or text-y input — leaves .toggle (checkbox) labels alone. */
+.card-section label:has(select),
+.card-section label:has(input[type="text"]),
+.card-section label:has(input[type="email"]),
+.card-section label:has(input[type="number"]) {
   display: flex;
   flex-direction: column;
   gap: 6px;
