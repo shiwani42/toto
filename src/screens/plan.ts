@@ -300,7 +300,6 @@ export function renderPlan(root: HTMLElement) {
       if (!answers.startDate) answers.startDate = today;
       stepBody = `
         <h1 class="wizard__q">${t("plan.q.when")}</h1>
-        <p class="tag">Pick a start. Add an end if you're out for more than a day.</p>
         <div class="wizard__date-grid">
           <label class="wizard__date-label">
             <span>Start</span>
@@ -327,7 +326,6 @@ export function renderPlan(root: HTMLElement) {
     if (step === "specifics") {
       stepBody = `
         <h1 class="wizard__q">Anything special?</h1>
-        <p class="tag">Pick anything that fits.</p>
         <div class="wizard-multi" id="specifics-grid">
           ${SPECIFICS_OPTIONS.map((o) => `
             <button class="wizard-multi__chip ${answers.specifics.includes(o.key) ? "wizard-multi__chip--on" : ""}"

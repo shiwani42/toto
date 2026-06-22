@@ -2263,6 +2263,15 @@ body.has-cart .toto-companion {
 .scan-switch:hover { background: rgba(0, 0, 0, 0.75); }
 .scan-switch:active { transform: scale(0.94); }
 
+/* Hide camera-only controls until the camera is actually running.
+   Torch / camera-switch / zoom have no purpose while the start overlay
+   is the only thing on screen, and they crowded the empty viewport. */
+.scan-viewport:has(.scan-start-overlay:not([hidden])) .scan-switch,
+.scan-viewport:has(.scan-start-overlay:not([hidden])) .scan-torch,
+.scan-viewport:has(.scan-start-overlay:not([hidden])) .scan-zoom {
+  display: none;
+}
+
 /* ─── Find list carousel (under the camera) ──────────────────────────────── */
 .find-carousel {
   display: flex;
@@ -2737,34 +2746,39 @@ body.has-cart .toto-companion {
 }
 
 /* Specifics multi-select: chip-style, multi-selectable. */
+/* Multi-select chip grid. Two columns, equal widths so the rows
+   align cleanly. Was previously a flex-wrap with variable widths
+   that made each row look ragged. */
 .wizard-multi {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
   margin-top: 14px;
 }
 .wizard-multi__chip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 14px 14px;
   background: var(--card);
   border: 1.5px solid var(--border);
-  border-radius: 999px;
+  border-radius: 14px;
   cursor: pointer;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--fg);
+  text-align: left;
+  min-width: 0;
   transition: border-color 0.15s, background 0.15s, transform 0.1s;
 }
-.wizard-multi__chip:active { transform: scale(0.96); }
+.wizard-multi__chip:active { transform: scale(0.97); }
 .wizard-multi__chip--on {
   border-color: var(--accent);
   background: var(--accent-bg);
   color: var(--accent-strong);
 }
-.wizard-multi__emoji { font-size: 16px; }
+.wizard-multi__emoji { font-size: 18px; flex-shrink: 0; }
 
 /* Sizes step: three blocks of chip rows. */
 .wizard-sizes {
@@ -3354,6 +3368,96 @@ body.has-cart .toto-companion {
 .screen-connect, .screen-connected { gap: 14px; }
 
 /* ─── Connect screen v2 (visual, low-text) ────────────────────────────────── */
+/* ─── Connect (minimal) ──────────────────────────────────────────────────── */
+.connect-min {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 32px;
+}
+.connect-min__notice {
+  padding: 10px 14px;
+  background: var(--accent-bg);
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--accent-strong);
+}
+.connect-min__resume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  text-decoration: none;
+  color: var(--fg);
+}
+.connect-min__resume-icon { font-size: 28px; line-height: 1; }
+.connect-min__resume-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.connect-min__resume-title { font-weight: 600; }
+.connect-min__resume-sub {
+  font-size: 12px;
+  color: var(--muted-fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.05em;
+}
+.connect-min__resume-cta { color: var(--accent-strong); font-weight: 500; font-size: 13px; }
+.connect-min__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.connect-min__input {
+  width: 100%;
+  padding: 16px 18px;
+  font-size: 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--fg);
+  outline: none;
+}
+.connect-min__input:focus { border-color: var(--accent); }
+.connect-min__input--code {
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.18em;
+  font-size: 22px;
+  text-transform: uppercase;
+}
+.connect-min__go {
+  width: 100%;
+  padding: 16px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 14px;
+}
+.connect-min__swap {
+  margin: 4px auto 0;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--accent-border);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.connect-min__swap:hover { color: var(--accent-strong); }
+.connect-min__back {
+  align-self: center;
+  margin-top: 6px;
+}
+
 .connect-v2 {
   display: flex;
   flex-direction: column;

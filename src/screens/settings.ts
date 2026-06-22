@@ -54,7 +54,7 @@ function accountSectionHTML(user: User | null, status: string): string {
   return `
     <section class="card-section" aria-labelledby="acct-h">
       <h2 id="acct-h">Account</h2>
-      <p class="tag">Optional. Sign in to keep your sizes and preferences when you switch phones.</p>
+      <p class="tag">Sync across devices. Optional.</p>
       <form id="sign-in-form" class="account-form" novalidate>
         <label class="account-form__label">
           Email
@@ -82,7 +82,6 @@ export function renderSettings(root: HTMLElement) {
 
       <section class="card-section" aria-labelledby="you-h">
         <h2 id="you-h">${t("settings.you")}</h2>
-        <p class="tag">${t("settings.you.help")}</p>
 
         <div class="row-group">
           <label>I am
@@ -189,7 +188,6 @@ export function renderSettings(root: HTMLElement) {
 
       <section class="card-section" aria-labelledby="lang-h">
         <h2 id="lang-h">${t("settings.lang")}</h2>
-        <p class="tag">${t("settings.lang.help")}</p>
         <div class="lang-picker" role="radiogroup" aria-labelledby="lang-h">
           ${LANGUAGES.map((l) => `
             <label class="lang-picker__option">
