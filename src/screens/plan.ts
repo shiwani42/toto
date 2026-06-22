@@ -619,7 +619,7 @@ export function renderPlan(root: HTMLElement) {
     if (!peekEl) return;
     if (!answers.location) {
       peekEl.classList.remove("wizard-when__peek--ready");
-      peekEl.textContent = "Tip: set a location in the previous step and I'll pull the forecast.";
+      peekEl.textContent = "Add a location and I'll pull the forecast.";
       return;
     }
     if (!date) return;
@@ -631,7 +631,7 @@ export function renderPlan(root: HTMLElement) {
       if (localToken !== peekToken) return;
       if (!w) {
         peekEl.classList.remove("wizard-when__peek--ready");
-        peekEl.textContent = "I couldn't grab a forecast for that spot. Continuing anyway.";
+        peekEl.textContent = "No forecast for that spot.";
         return;
       }
       const s = w.summary;
