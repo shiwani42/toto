@@ -155,6 +155,9 @@ export function renderListBuilder(root: HTMLElement) {
     const items = listProducts();
     if (items.length === 0) cartExpanded = false;
     cartMount.innerHTML = cartBar(items, cartExpanded);
+    // Tell the layout that a floating cart bar is occupying the bottom
+    // so Toto's companion bumps up to avoid the collision.
+    document.body.classList.toggle("has-cart", items.length > 0);
   }
 
   cartMount.addEventListener("click", (e) => {
@@ -180,11 +183,22 @@ export function renderListBuilder(root: HTMLElement) {
     const matches = search(q, 20);
     const onList = new Set(getList());
     if (q.trim() === "") {
-      resultsEl.innerHTML = "";
+      // Empty state — when there's nothing in the list and nothing typed,
+      // it's Toto's voice. With items already added, just keep it clean.
+      const hasItems = getList().length > 0;
+      resultsEl.innerHTML = hasItems
+        ? ""
+        : `<li class="empty-state">
+             <div class="empty-state__title">Nothing here yet.</div>
+             <div class="empty-state__sub">Type a name, size, or brand and I'll look.</div>
+           </li>`;
       return;
     }
     if (matches.length === 0) {
-      resultsEl.innerHTML = `<li class="hint">Nothing matching <code>${escapeHTML(q)}</code>.</li>`;
+      resultsEl.innerHTML = `<li class="empty-state">
+        <div class="empty-state__title">Hmm, nothing matching "${escapeHTML(q)}".</div>
+        <div class="empty-state__sub">Try a brand, color, or category.</div>
+      </li>`;
       return;
     }
     resultsEl.innerHTML = matches.map((p) => resultCard(p, onList.has(p.product_code))).join("");

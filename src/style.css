@@ -1569,16 +1569,23 @@ button, .primary { font: inherit; cursor: pointer; }
    page header for space. The bubble pops UPWARD from him. */
 .toto-companion {
   position: fixed;
-  /* Sit above the tab bar (var(--tab-h) = 72) + safe area + a small gap. */
+  /* Sit above the tab bar (var(--tab-h) = 72) + safe area + a small gap.
+     When body.has-cart is set (list screen with items), we bump Toto
+     higher so the floating cart bar above the tabs doesn't sit on top
+     of his avatar. */
   bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 10px);
   left: 12px;
   display: flex;
-  flex-direction: column-reverse;  /* bubble appears above the avatar row */
+  flex-direction: column-reverse;
   align-items: flex-start;
   gap: 8px;
   z-index: 50;
   pointer-events: none;
   max-width: calc(100vw - 24px);
+  transition: bottom 0.25s ease;
+}
+body.has-cart .toto-companion {
+  bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 76px);
 }
 .toto-companion__row {
   display: flex;
@@ -1628,51 +1635,107 @@ button, .primary { font: inherit; cursor: pointer; }
   border-color: #fff;
 }
 
-/* Reactions: pet-like movement library, triggered by lib/companion.totoReact(). */
-.toto-companion__breath--wag { animation: toto-wag 0.7s ease-in-out; }
-@keyframes toto-wag {
+/* ─── Real puppy motion ────────────────────────────────────────────────────
+   Each reaction now animates the actual SVG parts (ears, eyes, mouth,
+   head) instead of just rotating the whole avatar. Far more pet-like. */
+
+/* Make SVG groups respect transforms with anatomically-correct origins. */
+.toto-svg--avatar .toto-av-ear--left  { transform-origin: 32% 70%; transform-box: fill-box; }
+.toto-svg--avatar .toto-av-ear--right { transform-origin: 68% 70%; transform-box: fill-box; }
+.toto-svg--avatar .toto-av-head       { transform-origin: 50% 90%; transform-box: fill-box; }
+.toto-svg--avatar .toto-av-mouth      { transform-origin: 50% 0%;  transform-box: fill-box; }
+.toto-svg--avatar .toto-av-lid--left,
+.toto-svg--avatar .toto-av-lid--right { transform-origin: 50% 50%; transform-box: fill-box; opacity: 0; }
+
+/* wag: head bobs side-to-side + ears flap (no tail in the avatar, but
+   the full mascot SVG has one and gets a real tail wag too). */
+.toto-companion__breath--wag .toto-av-head    { animation: toto-head-wag 0.7s ease-in-out; }
+.toto-companion__breath--wag .toto-av-ear--left  { animation: toto-ear-flap-l 0.7s ease-in-out; }
+.toto-companion__breath--wag .toto-av-ear--right { animation: toto-ear-flap-r 0.7s ease-in-out; }
+.toto-svg--full .toto-tail { transform-origin: 70% 70%; transform-box: fill-box; }
+.toto-companion__breath--wag .toto-tail,
+.toto-svg--full .toto-tail.toto-tail--wag { animation: toto-tail-wag 0.7s ease-in-out; }
+
+@keyframes toto-head-wag {
   0%, 100% { transform: rotate(0deg); }
-  25%      { transform: rotate(-6deg); }
-  60%      { transform: rotate(6deg); }
-  85%      { transform: rotate(-3deg); }
+  25%      { transform: rotate(-4deg); }
+  60%      { transform: rotate(4deg); }
+  85%      { transform: rotate(-2deg); }
 }
-.toto-companion__breath--perk { animation: toto-perk 0.5s ease-out; }
-@keyframes toto-perk {
-  0%   { transform: translateY(0) scale(1); }
-  50%  { transform: translateY(-3px) scale(1.06); }
-  100% { transform: translateY(0) scale(1); }
+@keyframes toto-ear-flap-l {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  40%      { transform: rotate(-15deg) translateY(-2px); }
+  70%      { transform: rotate(8deg) translateY(0); }
 }
+@keyframes toto-ear-flap-r {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  40%      { transform: rotate(15deg) translateY(-2px); }
+  70%      { transform: rotate(-8deg) translateY(0); }
+}
+@keyframes toto-tail-wag {
+  0%, 100% { transform: rotate(0deg); }
+  25%      { transform: rotate(-18deg); }
+  50%      { transform: rotate(18deg); }
+  75%      { transform: rotate(-12deg); }
+}
+
+/* perk: ears stand up + tiny head lift. */
+.toto-companion__breath--perk .toto-av-ear--left,
+.toto-companion__breath--perk .toto-av-ear--right { animation: toto-ear-up 0.55s ease-out; }
+.toto-companion__breath--perk .toto-av-head { animation: toto-head-lift 0.55s ease-out; }
+@keyframes toto-ear-up {
+  0%   { transform: translateY(0) scaleY(1); }
+  60%  { transform: translateY(-3px) scaleY(1.12); }
+  100% { transform: translateY(0) scaleY(1); }
+}
+@keyframes toto-head-lift {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-2px); }
+  100% { transform: translateY(0); }
+}
+
+/* jump: whole avatar bounces. */
 .toto-companion__breath--jump { animation: toto-jump 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
 @keyframes toto-jump {
   0%   { transform: translateY(0); }
-  35%  { transform: translateY(-10px); }
+  35%  { transform: translateY(-12px); }
   60%  { transform: translateY(2px); }
   100% { transform: translateY(0); }
 }
-.toto-companion__breath--tilt { animation: toto-tilt 0.7s ease-out; }
-@keyframes toto-tilt {
+
+/* tilt: head rotates curiously. */
+.toto-companion__breath--tilt .toto-av-head { animation: toto-head-tilt 0.7s ease-out; }
+@keyframes toto-head-tilt {
   0%   { transform: rotate(0deg); }
   50%  { transform: rotate(-12deg); }
   100% { transform: rotate(0deg); }
 }
+
+/* sleep: eyelids close, slow breathing. */
 .toto-companion__breath--sleep {
   animation: toto-sleep 5s ease-in-out infinite !important;
-  opacity: 0.82;
+  opacity: 0.85;
 }
+.toto-companion__breath--sleep .toto-av-lid--left,
+.toto-companion__breath--sleep .toto-av-lid--right { opacity: 1; }
 @keyframes toto-sleep {
   0%, 100% { transform: scale(1); }
   50%      { transform: scale(1.012); }
 }
 
-/* Speaking: scale pulse synced with utterance. The mouth visually
-   "talks" even though the SVG doesn't have mouth shapes; the scale
-   wobble reads as articulation. */
-.toto-companion__breath--speaking {
-  animation: toto-speak 0.32s ease-in-out infinite !important;
-}
-@keyframes toto-speak {
+/* speaking: mouth opens-closes rhythmically. */
+.toto-companion__breath--speaking .toto-av-mouth { animation: toto-mouth-bob 0.32s ease-in-out infinite; }
+@keyframes toto-mouth-bob {
   0%, 100% { transform: scaleY(1); }
-  50%      { transform: scaleY(1.05); }
+  50%      { transform: scaleY(1.5) translateY(1px); }
+}
+
+/* Easter egg: 5-tap → happy spin. */
+.toto-companion__breath--spin { animation: toto-spin 0.9s cubic-bezier(0.22, 0.61, 0.36, 1); }
+@keyframes toto-spin {
+  0%   { transform: rotate(0) scale(1); }
+  60%  { transform: rotate(360deg) scale(1.08); }
+  100% { transform: rotate(360deg) scale(1); }
 }
 
 /* The avatar button is the visible body of Toto. */
@@ -2340,6 +2403,140 @@ button, .primary { font: inherit; cursor: pointer; }
 
 /* ─── Done screen ────────────────────────────────────────────────────────── */
 .screen-done { gap: 14px; }
+
+/* ─── First-run intro ────────────────────────────────────────────────────── */
+.screen-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 90vh;
+  padding: 24px 18px;
+}
+.intro-skip {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 14px);
+  right: 16px;
+  background: transparent;
+  border: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted-fg);
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 999px;
+  z-index: 10;
+}
+.intro-skip:hover { color: var(--fg); background: var(--panel-strong); }
+.intro-card {
+  background: linear-gradient(180deg, var(--bg-warm) 0%, var(--card) 100%);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 28px 22px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+  width: 100%;
+  max-width: 360px;
+}
+.intro-mascot { animation: intro-bounce 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes intro-bounce {
+  0%   { transform: translateY(20px) scale(0.85); opacity: 0; }
+  60%  { transform: translateY(-6px) scale(1.04); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.intro-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 6px 0 0;
+}
+.intro-line {
+  font-size: 14px;
+  color: var(--muted-fg);
+  margin: 2px 0 6px;
+}
+.intro-bullets {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.intro-bullets li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 14px;
+}
+.intro-bullets li span { font-size: 20px; }
+.intro-go { min-width: 200px; }
+
+/* Empty state, generic — used wherever a result list comes up dry. */
+.empty-state {
+  list-style: none;
+  padding: 32px 20px;
+  text-align: center;
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: 18px;
+}
+.empty-state__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 4px;
+}
+.empty-state__sub {
+  font-size: 13px;
+  color: var(--muted-fg);
+  line-height: 1.4;
+}
+
+/* All-found celebration: paw-print confetti fanning down from above. */
+.screen-done--celebrate {
+  position: relative;
+  overflow: hidden;
+}
+.paw-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+.paw-confetti__piece {
+  position: absolute;
+  top: -30px;
+  font-size: 18px;
+  animation-name: paw-fall;
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation-fill-mode: forwards;
+}
+@keyframes paw-fall {
+  0%   { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translate(var(--paw-sway, 0), 110vh) rotate(var(--paw-rot, 180deg)); opacity: 0; }
+}
+/* Toto celebrate animation on the done mascot: a bigger tail-wag dance. */
+.done-toto--celebrate { animation: done-toto-celebrate 0.9s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes done-toto-celebrate {
+  0%   { transform: scale(0.92) translateY(8px); opacity: 0; }
+  50%  { transform: scale(1.08) translateY(-6px); opacity: 1; }
+  70%  { transform: scale(0.96) translateY(2px); }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
 
 /* ─── Wrap-up done screen ─────────────────────────────────────────────────── */
 .done-card {
@@ -4378,12 +4575,13 @@ button, .primary { font: inherit; cursor: pointer; }
 }
 
 /* "In a rush" quick lane below the three doors. Soft, unstressed,
-   but clearly tappable. */
+   but clearly tappable. Bottom margin keeps it clear of the tab bar
+   on small viewports. */
 .home-quick {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 18px;
+  margin: 18px 0 24px;
   padding: 14px 16px;
   background: var(--accent-bg);
   border: 1px dashed var(--accent);

@@ -178,6 +178,9 @@ function mount() {
   const root = document.getElementById("app");
   if (!root) throw new Error("#app not found");
   const screen = currentScreen();
+  // Reset the cart-bar layout class; the list-builder re-applies it
+  // when it mounts and the list has items.
+  document.body.classList.remove("has-cart");
   switch (screen) {
     case "home":
       renderHome(root);

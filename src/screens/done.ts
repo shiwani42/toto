@@ -5,6 +5,7 @@ import { totoMascot } from "../lib/toto";
 import { getPrefs, setPrefs } from "../lib/prefs";
 import { t } from "../lib/i18n";
 import { recordTrip } from "../lib/history";
+import { playComplete } from "../lib/sounds";
 
 const FOUND_KEY = "toto.found";
 
@@ -14,6 +15,30 @@ function escapeHTML(s: string): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+/** Render ~14 paw-print confetti pieces, each with a randomized start
+ *  position, drift, rotation, and fall delay. Cheap, no canvas needed. */
+function pawConfettiHTML(): string {
+  const pieces: string[] = [];
+  // Deterministic-ish (uses Math.random) — runs once per render which is
+  // exactly when we want a fresh shuffle.
+  for (let i = 0; i < 14; i++) {
+    const left = Math.round(5 + Math.random() * 90);
+    const delay = Math.round(Math.random() * 600);
+    const dur = 1400 + Math.round(Math.random() * 900);
+    const rot = Math.round((Math.random() - 0.5) * 360);
+    const sway = Math.round((Math.random() - 0.5) * 60);
+    pieces.push(`
+      <span class="paw-confetti__piece"
+            style="left:${left}%; animation-delay:${delay}ms;
+                   animation-duration:${dur}ms;
+                   --paw-sway:${sway}px; --paw-rot:${rot}deg;">
+        🐾
+      </span>
+    `);
+  }
+  return pieces.join("");
 }
 
 function readFound(): Set<string> {
@@ -103,9 +128,10 @@ export function renderDone(root: HTMLElement) {
   const sub = allFound ? t("done.sub.all") : t("done.sub.some");
 
   root.innerHTML = `
-    <main class="screen-done">
+    <main class="screen-done ${allFound ? "screen-done--celebrate" : ""}">
+      ${allFound ? `<div class="paw-confetti" aria-hidden="true">${pawConfettiHTML()}</div>` : ""}
       <section class="done-card">
-        <div class="done-toto" aria-hidden="true">${totoMascot(120)}</div>
+        <div class="done-toto ${allFound ? "done-toto--celebrate" : ""}" aria-hidden="true">${totoMascot(120)}</div>
         <h1 class="done-headline">${escapeHTML(headline)}</h1>
         <p class="done-sub">${escapeHTML(sub)}</p>
       </section>
@@ -151,6 +177,11 @@ export function renderDone(root: HTMLElement) {
       </div>
     </main>
   `;
+
+  // Fire the celebration sound + dance on all-found.
+  if (allFound) {
+    window.setTimeout(() => playComplete(), 280);
+  }
 
   if (offerSaveSizes) {
     const btn = root.querySelector("#remember-sizes") as HTMLButtonElement;

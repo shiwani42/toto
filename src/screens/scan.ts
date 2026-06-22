@@ -6,6 +6,7 @@ import { startScanner, type DecodedBarcode, type ScannerHandle } from "../lib/sc
 import { cameraErrorMessage } from "../lib/camera-errors";
 import { t } from "../lib/i18n";
 import { totoReact } from "../lib/companion";
+import { playFound, playOff } from "../lib/sounds";
 
 const FOUND_KEY = "toto.found";
 
@@ -152,29 +153,6 @@ export function renderScan(root: HTMLElement) {
     return s.replace(/[^a-zA-Z0-9_-]/g, (c) => "\\" + c);
   }
 
-  // ─── Audio + haptic feedback ──────────────────────────────────────────────
-
-  let audioCtx: AudioContext | null = null;
-  function beep(matched: boolean): void {
-    if (!audioCtx) {
-      const C = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext
-              ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!C) return;
-      audioCtx = new C();
-    }
-    const ctx = audioCtx;
-    const t = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = matched ? 880 : 440;
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.12, t + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(t);
-    osc.stop(t + 0.2);
-  }
 
   // ─── Overlay rendering ────────────────────────────────────────────────────
 
@@ -342,7 +320,7 @@ export function renderScan(root: HTMLElement) {
           const matched = wantedSet.has(code.text);
           if (matched && !found.has(code.text)) {
             found.add(code.text);
-            beep(true);
+            playFound();
             if ("vibrate" in navigator) navigator.vibrate([20, 40, 30]);
             const p = getProduct(code.text);
             const label = p ? `Found: ${p.brand} ${p.name}` : `Found: ${code.text}`;
@@ -353,10 +331,10 @@ export function renderScan(root: HTMLElement) {
             totoReact("jump"); // he's excited you got it
           } else if (matched) {
             // Already-found re-detection: gentle beep, no log.
-            beep(true);
+            playFound();
           } else {
-            // Off-list barcode: low beep, log for analytics.
-            beep(false);
+            // Off-list barcode: muted tone, log for analytics.
+            playOff();
             track("scan_found", { code: code.text, in_list: false });
           }
         },

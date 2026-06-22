@@ -392,6 +392,23 @@ export function mountCompanion(screen: Screen) {
 
   dog.addEventListener("pointerdown", pressStart);
   dog.addEventListener("pointerup",   pressEnd);
+
+  // Easter egg: tap Toto 5 times rapidly → happy spin + chime.
+  let tapStreak = 0;
+  let tapStreakTimer: number | null = null;
+  dog.addEventListener("click", () => {
+    tapStreak++;
+    if (tapStreakTimer) window.clearTimeout(tapStreakTimer);
+    tapStreakTimer = window.setTimeout(() => { tapStreak = 0; }, 1500);
+    if (tapStreak >= 5) {
+      tapStreak = 0;
+      breath.classList.remove("toto-companion__breath--spin");
+      void breath.offsetWidth;
+      breath.classList.add("toto-companion__breath--spin");
+      if ("vibrate" in navigator) navigator.vibrate([30, 50, 30]);
+      window.setTimeout(() => breath.classList.remove("toto-companion__breath--spin"), 900);
+    }
+  });
   dog.addEventListener("pointerleave", () => {
     if (pressTimer !== null) {
       window.clearTimeout(pressTimer);
