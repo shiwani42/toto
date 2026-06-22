@@ -339,8 +339,13 @@ export function renderPlan(root: HTMLElement) {
     }
 
     const isLast = stepIdx === STEPS.length - 1;
-    const autoAdvance = step === "activity" || step === "shoppingFor" || step === "whoFor" || step === "experience";
-    const nextLabel = isLast ? t("plan.continue") : "Next";
+    // Cards (activity/shopping/whoFor/experience) auto-advance on tap.
+    // Inputs (location/when) auto-advance on enter or after a value
+    // change settles. Sizes auto-advances when all three are picked.
+    // Only specifics keeps an explicit button — it's a multi-select
+    // where the user needs a moment to choose and then commit.
+    const showNext = step === "specifics";
+    const nextLabel = isLast ? t("plan.continue") : "Continue";
 
     root.innerHTML = `
       <main class="screen-plan plan-one">
@@ -355,7 +360,7 @@ export function renderPlan(root: HTMLElement) {
         </section>
         <div class="plan-one__actions">
           <button class="wizard__skip" id="skip" type="button">${t("plan.skip")}</button>
-          ${autoAdvance ? "" : `<button class="primary plan-one__go" id="next" type="button">${nextLabel}</button>`}
+          ${showNext ? `<button class="primary plan-one__go" id="next" type="button">${nextLabel}</button>` : ""}
         </div>
         ${stepIdx === 0 ? `<a class="link-btn plan-one__alt" href="?screen=browse">Or just browse the store ›</a>` : ""}
       </main>
@@ -372,9 +377,14 @@ export function renderPlan(root: HTMLElement) {
     if (step === "specifics")    wireSpecifics();
 
     (root.querySelector("#back") as HTMLButtonElement).addEventListener("click", back);
-    (root.querySelector("#skip") as HTMLButtonElement).addEventListener("click", advance);
-    const nextBtn = root.querySelector("#next") as HTMLButtonElement | null;
-    nextBtn?.addEventListener("click", () => {
+    // The Skip button doubles as the "commit and move on" affordance —
+    // if the user filled in an input on this step and taps Skip, use
+    // what they typed rather than throwing it away.
+    (root.querySelector("#skip") as HTMLButtonElement).addEventListener("click", () => {
+      if (step === "location") {
+        const typed = (root.querySelector("#loc-input") as HTMLInputElement | null)?.value.trim();
+        if (typed) answers.location = typed;
+      }
       if (step === "when") {
         const s = (root.querySelector("#start-date") as HTMLInputElement | null)?.value || null;
         const e = (root.querySelector("#end-date")   as HTMLInputElement | null)?.value || null;
@@ -383,6 +393,8 @@ export function renderPlan(root: HTMLElement) {
       }
       advance();
     });
+    const nextBtn = root.querySelector("#next") as HTMLButtonElement | null;
+    nextBtn?.addEventListener("click", advance);
   }
 
   function wireActivityCards() {
@@ -433,7 +445,16 @@ export function renderPlan(root: HTMLElement) {
       if (prefix === "top")  setPrefs({ topSize: raw as "XS" | "S" | "M" | "L" | "XL", sizeSource: "manual" });
       if (prefix === "bot")  setPrefs({ bottomSize: raw as "XS" | "S" | "M" | "L" | "XL", sizeSource: "manual" });
       if (prefix === "shoe") setPrefs({ shoeSizeEU: Number(raw), sizeSource: "manual" });
-      render();   // visual-state update without leaving the step
+      // Auto-advance when every shown block has a selection. The
+      // wizard skips blocks the user already set in Settings, so this
+      // checks only what's actually on screen.
+      const blocks = host.querySelectorAll<HTMLDivElement>(".wizard-sizes__block").length;
+      const filled = host.querySelectorAll<HTMLDivElement>(".wizard-sizes__block:has(.wizard-sizes__chip--on)").length;
+      if (blocks > 0 && filled === blocks) {
+        window.setTimeout(advance, 220);
+      } else {
+        render();
+      }
     });
   }
   function wireSpecifics() {
@@ -462,6 +483,18 @@ export function renderPlan(root: HTMLElement) {
     startEl.addEventListener("change", readDates);
     endEl.addEventListener("change", readDates);
     if (startEl.value) runPeek(startEl.value);
+
+    // Enter on either field commits the dates and advances. Native
+    // date inputs don't fire Enter on iOS, but on Android/desktop
+    // this gives the user a keyboard-only path through the step.
+    function maybeAdvance(e: KeyboardEvent) {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      readDates();
+      advance();
+    }
+    startEl.addEventListener("keydown", maybeAdvance);
+    endEl.addEventListener("keydown", maybeAdvance);
   }
 
   // ─── Location autocomplete ─────────────────────────────────────────────────
@@ -510,6 +543,23 @@ export function renderPlan(root: HTMLElement) {
         advance();
       } catch {
         return;
+      }
+    });
+
+    // Enter on the search input commits whatever's typed and advances.
+    // If a result list is open, picks the first hit instead.
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const firstResult = list.querySelector<HTMLButtonElement>(".loc-results__item");
+      if (firstResult) {
+        firstResult.click();
+        return;
+      }
+      const typed = input.value.trim();
+      if (typed) {
+        answers.location = typed;
+        advance();
       }
     });
   }
