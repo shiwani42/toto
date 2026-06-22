@@ -294,12 +294,17 @@ export function renderPlan(root: HTMLElement) {
       `;
     }
     if (step === "when") {
+      // Default the start date to today so the field never looks empty
+      // and the user can immediately move on. End date stays optional.
+      const startValue = answers.startDate ?? today;
+      if (!answers.startDate) answers.startDate = today;
       stepBody = `
         <h1 class="wizard__q">${t("plan.q.when")}</h1>
+        <p class="tag">Pick a start. Add an end if you're out for more than a day.</p>
         <div class="wizard__date-grid">
           <label class="wizard__date-label">
             <span>Start</span>
-            <input id="start-date" type="date" min="${today}" value="${answers.startDate ?? ""}" />
+            <input id="start-date" type="date" min="${today}" value="${startValue}" />
           </label>
           <label class="wizard__date-label">
             <span>End <small class="muted">(optional)</small></span>
@@ -337,7 +342,7 @@ export function renderPlan(root: HTMLElement) {
 
     const isLast = stepIdx === STEPS.length - 1;
     const autoAdvance = step === "activity" || step === "shoppingFor" || step === "whoFor" || step === "experience";
-    const nextLabel = isLast ? t("plan.continue") : "Next ›";
+    const nextLabel = isLast ? t("plan.continue") : "Next";
 
     root.innerHTML = `
       <main class="screen-plan plan-one">
@@ -458,6 +463,8 @@ export function renderPlan(root: HTMLElement) {
     }
     startEl.addEventListener("change", readDates);
     endEl.addEventListener("change", readDates);
+    // Immediate peek using whatever's in the field on mount.
+    if (startEl.value) runPeek(startEl.value);
   }
 
   // ─── Location autocomplete ─────────────────────────────────────────────────

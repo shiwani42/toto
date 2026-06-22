@@ -1652,9 +1652,10 @@ body.has-cart .toto-companion {
 .toto-companion__breath--wag .toto-av-head    { animation: toto-head-wag 0.7s ease-in-out; }
 .toto-companion__breath--wag .toto-av-ear--left  { animation: toto-ear-flap-l 0.7s ease-in-out; }
 .toto-companion__breath--wag .toto-av-ear--right { animation: toto-ear-flap-r 0.7s ease-in-out; }
-.toto-svg--full .toto-tail { transform-origin: 70% 70%; transform-box: fill-box; }
-.toto-companion__breath--wag .toto-tail,
-.toto-svg--full .toto-tail.toto-tail--wag { animation: toto-tail-wag 0.7s ease-in-out; }
+/* (The full-mascot tail keeps its existing ambient wag — defined further
+   down in the file with the correct pixel transform-origin. We don't
+   override it here; the avatar-level wag below only animates the head
+   + ears of the small companion avatar.) */
 
 @keyframes toto-head-wag {
   0%, 100% { transform: rotate(0deg); }
@@ -1671,12 +1672,6 @@ body.has-cart .toto-companion {
   0%, 100% { transform: rotate(0deg) translateY(0); }
   40%      { transform: rotate(15deg) translateY(-2px); }
   70%      { transform: rotate(-8deg) translateY(0); }
-}
-@keyframes toto-tail-wag {
-  0%, 100% { transform: rotate(0deg); }
-  25%      { transform: rotate(-18deg); }
-  50%      { transform: rotate(18deg); }
-  75%      { transform: rotate(-12deg); }
 }
 
 /* perk: ears stand up + tiny head lift. */
@@ -2792,26 +2787,31 @@ body.has-cart .toto-companion {
 }
 .plan-one__actions {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   padding: 0 4px;
 }
 .plan-one__actions .wizard__skip {
-  background: transparent;
-  border: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
   color: var(--muted-fg);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  padding: 8px 4px;
+  padding: 12px 22px;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
 }
+.plan-one__actions .wizard__skip:hover { background: var(--panel-strong); color: var(--fg); }
+.plan-one__actions .wizard__skip:active { transform: scale(0.98); }
 .plan-one__actions .plan-one__go {
   flex: 1;
-  max-width: 240px;
   margin: 0;
-  padding: 12px 18px;
-  font-size: 14px;
+  padding: 12px 22px;
+  font-size: 14.5px;
+  border-radius: 14px;   /* match the skip button's corner radius */
 }
 .plan-one__field {
   display: flex;

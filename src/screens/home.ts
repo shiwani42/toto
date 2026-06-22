@@ -44,17 +44,9 @@ export function renderHome(root: HTMLElement) {
   const isReturning = insights.tripCount > 0;
   const lastCategory = insights.topCategories[0]?.category;
 
-  // First-run intro: shown once per device (localStorage flag). Toto
-  // introduces himself, sets the tone, then disappears. Skip is honored.
-  const INTRO_KEY = "toto.introSeen";
-  const introSeen = localStorage.getItem(INTRO_KEY);
-  if (!introSeen && !isReturning) {
-    renderFirstRunIntro(root, () => {
-      try { localStorage.setItem(INTRO_KEY, "1"); } catch { /* ignore */ }
-      renderHome(root);
-    });
-    return;
-  }
+  // First-run is just the home screen itself — the giant Toto mascot,
+  // three choice cards, and the in-a-rush chip are the welcome. A
+  // separate intro page added nothing the home page didn't already say.
 
   root.innerHTML = `
     <main class="screen-home">
