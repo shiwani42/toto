@@ -2417,14 +2417,15 @@ body.has-cart .toto-companion {
 .intro-skip {
   position: absolute;
   top: calc(env(safe-area-inset-top) + 14px);
-  right: 16px;
+  left: 16px;
   background: transparent;
   border: none;
   font: inherit;
   font-size: 13px;
+  font-weight: 500;
   color: var(--muted-fg);
   cursor: pointer;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 999px;
   z-index: 10;
 }
@@ -2616,9 +2617,10 @@ body.has-cart .toto-companion {
 .done-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
   margin-top: 4px;
+  margin-bottom: 90px;  /* clear room for the floating Toto avatar below */
 }
 .done-actions .primary { min-width: 240px; }
 .screen-done .results .result {

@@ -183,15 +183,19 @@ export function renderListBuilder(root: HTMLElement) {
     const matches = search(q, 20);
     const onList = new Set(getList());
     if (q.trim() === "") {
-      // Empty state — when there's nothing in the list and nothing typed,
-      // it's Toto's voice. With items already added, just keep it clean.
-      const hasItems = getList().length > 0;
-      resultsEl.innerHTML = hasItems
-        ? ""
-        : `<li class="empty-state">
-             <div class="empty-state__title">Nothing here yet.</div>
-             <div class="empty-state__sub">Type a name, size, or brand and I'll look.</div>
-           </li>`;
+      // With no query: if the user has items, render them as cards so
+      // the screen isn't a blank canvas. If the list is empty, show a
+      // friendly Toto-voiced empty state.
+      const listItems = listProducts();
+      if (listItems.length === 0) {
+        resultsEl.innerHTML = `<li class="empty-state">
+          <div class="empty-state__title">Nothing here yet.</div>
+          <div class="empty-state__sub">Type a name, size, or brand and I'll look.</div>
+        </li>`;
+        return;
+      }
+      // Show current list as cards (already-on-list state).
+      resultsEl.innerHTML = listItems.map((p) => resultCard(p, true)).join("");
       return;
     }
     if (matches.length === 0) {
