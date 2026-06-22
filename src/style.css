@@ -3039,6 +3039,16 @@ body.has-cart .toto-companion {
 }
 .slot--filled { border-color: var(--accent); background: var(--accent-bg); }
 
+.compare-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+.link-btn--muted { color: var(--muted-fg); }
+.link-btn--muted:hover { color: var(--fg); }
+
 .slot__header {
   width: 32px;
   height: 32px;
@@ -4293,7 +4303,7 @@ body.has-cart .toto-companion {
 /* ─── Home screen ────────────────────────────────────────────────────────── */
 .screen-home {
   gap: 14px;
-  padding: 32px 22px 24px;
+  padding: 32px 22px calc(var(--tab-h) + env(safe-area-inset-bottom) + 16px);
 }
 
 .home-banner {

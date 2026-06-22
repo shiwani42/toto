@@ -110,8 +110,10 @@ export function renderCompare(root: HTMLElement) {
 
       <div id="diff"></div>
 
-      <button id="reset" class="link-btn">${t("compare.reset")}</button>
-      <a class="link-btn" href="?screen=list">${t("compare.back")}</a>
+      <div class="compare-actions">
+        <a class="link-btn" href="?screen=list">${t("compare.back")}</a>
+        <button id="reset" class="link-btn link-btn--muted">${t("compare.reset")}</button>
+      </div>
     </main>
   `;
 
