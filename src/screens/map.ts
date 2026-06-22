@@ -198,7 +198,7 @@ export function renderMap(root: HTMLElement) {
   root.innerHTML = `
     <header>
       <h1>${t("map.title")}</h1>
-      <p class="tag">${list.length} ${list.length === 1 ? "item" : "items"} · ${pathDistance} m · ${t("map.from")} ${escapeHTML(startLabel)}</p>
+      <p class="tag">${list.length} ${list.length === 1 ? "item" : "items"} · ${pathDistance} m walk · ${t("map.from")} ${escapeHTML(startLabel)}</p>
     </header>
     <main class="screen-map">
       <div class="map-wrap">

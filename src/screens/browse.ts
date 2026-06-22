@@ -70,7 +70,19 @@ export function renderBrowse(root: HTMLElement) {
     </header>
     <main class="screen-browse">
       <div id="status" class="status" hidden></div>
-      <div id="capture-view" class="browse-cam"></div>
+      <div id="capture-view" class="browse-cam">
+        <div id="cam-fallback" class="cam-fallback" hidden>
+          <span class="cam-fallback__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </span>
+          <p class="cam-fallback__title">${escapeHTML(t("browse.fallback.title"))}</p>
+          <p class="cam-fallback__sub" id="cam-fallback-sub">${escapeHTML(t("browse.fallback.sub"))}</p>
+          <button type="button" id="cam-retry" class="cam-fallback__btn">${escapeHTML(t("browse.fallback.retry"))}</button>
+        </div>
+      </div>
       <div id="result"></div>
       <a class="link-btn" href="?screen=home">${t("browse.back")}</a>
     </main>
@@ -79,10 +91,22 @@ export function renderBrowse(root: HTMLElement) {
   const statusEl = root.querySelector("#status") as HTMLDivElement;
   const captureViewEl = root.querySelector("#capture-view") as HTMLDivElement;
   const resultEl = root.querySelector("#result") as HTMLDivElement;
+  const fallbackEl = root.querySelector("#cam-fallback") as HTMLDivElement;
+  const fallbackSubEl = root.querySelector("#cam-fallback-sub") as HTMLParagraphElement;
+  const retryBtn = root.querySelector("#cam-retry") as HTMLButtonElement;
 
   function setStatus(msg: string) {
     statusEl.textContent = msg;
     statusEl.hidden = !msg;
+  }
+
+  function showFallback(sub?: string) {
+    fallbackEl.hidden = false;
+    captureViewEl.classList.remove("browse-cam--active");
+    if (sub) fallbackSubEl.textContent = sub;
+  }
+  function hideFallback() {
+    fallbackEl.hidden = true;
   }
 
   let handle: ScannerHandle | null = null;
@@ -94,6 +118,7 @@ export function renderBrowse(root: HTMLElement) {
 
   async function boot() {
     setStatus("Warming up the camera…");
+    hideFallback();
     try {
       handle = await startScanner({
         host: captureViewEl,
@@ -133,9 +158,16 @@ export function renderBrowse(root: HTMLElement) {
       setStatus(t("browse.hint"));
     } catch (err) {
       console.error("Browse boot failed:", err);
-      setStatus(cameraErrorMessage(err));
+      // Camera failed to start — the empty gray box would feel broken,
+      // so swap in a friendly fallback with a retry button.
+      setStatus("");
+      showFallback(cameraErrorMessage(err));
     }
   }
+
+  retryBtn.addEventListener("click", () => {
+    void boot();
+  });
 
   resultEl.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;

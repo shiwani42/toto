@@ -646,6 +646,23 @@ button, .primary { font: inherit; cursor: pointer; }
 @media (hover: hover) {
   .result-card:hover { border-color: var(--accent); }
 }
+/* On-list state: a tinted background, accent border, and a check dot
+   leading the row. Reads immediately as "this one is in your basket". */
+.result-card--on {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  position: relative;
+}
+.result-card--on::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 0;
+  width: 4px;
+  height: 36px;
+  border-radius: 0 4px 4px 0;
+  background: var(--accent);
+}
 
 .result-card__row {
   display: flex;
@@ -4763,14 +4780,34 @@ body.has-cart .toto-companion {
   color: var(--fg);
 }
 .home-choice__icon svg { display: block; }
+/* Quiet status chip that sits opposite the choice icon. Outline-only
+   so it doesn't fight the card title for attention. A pulsing dot on
+   the left signals freshness without resorting to a fully saturated
+   pill. */
 .home-choice__badge {
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
   font-weight: 600;
-  padding: 3px 10px;
-  background: var(--accent-bg);
+  padding: 4px 10px 4px 8px;
+  background: transparent;
   color: var(--accent-strong);
+  border: 1px solid var(--accent-border);
   border-radius: 999px;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
+}
+.home-choice__badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: home-choice-pulse 2s ease-in-out infinite;
+}
+@keyframes home-choice-pulse {
+  0%, 100% { opacity: 1;    transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.85); }
 }
 .home-choice__title {
   margin: 0;
@@ -4885,7 +4922,61 @@ body.has-cart .toto-companion {
   position: relative;
   transition: opacity 0.2s ease;
 }
-.browse-cam:not(.browse-cam--active) { opacity: 0.55; }
+.browse-cam:not(.browse-cam--active):not(:has(#cam-fallback:not([hidden]))) { opacity: 0.55; }
+
+/* Friendly fallback when the camera can't start (denied / unsupported).
+   Lives inside .browse-cam so it occupies the same frame the camera
+   would. Reads as a prompt-and-retry card, not a broken state. */
+.cam-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 28px;
+  text-align: center;
+  background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
+  color: rgba(255, 255, 255, 0.9);
+}
+.cam-fallback[hidden] { display: none; }
+.cam-fallback__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.75);
+}
+.cam-fallback__title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: #fff;
+}
+.cam-fallback__sub {
+  font-size: 13px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.65);
+  max-width: 280px;
+  line-height: 1.4;
+}
+.cam-fallback__btn {
+  margin-top: 6px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+.cam-fallback__btn:hover { background: var(--accent-strong); }
+.cam-fallback__btn:active { transform: scale(0.97); }
 
 .browse-card {
   background: var(--card);
