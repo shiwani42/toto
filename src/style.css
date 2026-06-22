@@ -4791,7 +4791,11 @@ body.has-cart .toto-companion {
 
 .deck-stage {
   width: 100%;
-  min-height: 580px;
+  /* Size to viewport so the card fits without scroll. Subtract chrome:
+     ~80px header, ~80px tab bar, ~90px deck-progress + undo bar above. */
+  height: calc(100svh - 250px);
+  min-height: 420px;
+  max-height: 640px;
   position: relative;
 }
 
@@ -4800,7 +4804,8 @@ body.has-cart .toto-companion {
   top: 0;
   left: 0;
   right: 0;
-  min-height: 560px;
+  bottom: 0;
+  height: 100%;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 24px;

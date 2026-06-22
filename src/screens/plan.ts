@@ -965,6 +965,12 @@ function mountSwipeDeck(
     let startY = 0;
     let dragging = false;
     let captured = false;
+    // "axis" is settled after the user moves a few pixels: "x" locks in
+    // a swipe gesture (we eat the event and intercept), "y" releases the
+    // gesture so the page can scroll normally. Until axis is set we're
+    // observing only.
+    let axis: "" | "x" | "y" = "";
+    const AXIS_LOCK_PX = 10;
 
     function setTransform(dx: number, dy: number) {
       const x = Math.round(dx);
@@ -990,18 +996,44 @@ function mountSwipeDeck(
       if (Number(card.dataset.cardIndex) !== cursor) return;
       if ((e.target as HTMLElement).closest(".deck-card__hint-chip")) return;
       dragging = true;
+      axis = "";
       startX = e.clientX;
       startY = e.clientY;
-      card.classList.add("deck-card--grabbing");
-      try { card.setPointerCapture(e.pointerId); captured = true; } catch { /* ignore */ }
+      // Don't add the grabbing class until we know the gesture is horizontal —
+      // that way vertical-scroll gestures don't see any visual jump.
     });
     card.addEventListener("pointermove", (e) => {
       if (!dragging) return;
-      setTransform(e.clientX - startX, e.clientY - startY);
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      // Decide the axis once the finger has moved enough.
+      if (axis === "") {
+        if (Math.abs(dx) > AXIS_LOCK_PX || Math.abs(dy) > AXIS_LOCK_PX) {
+          axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+          if (axis === "x") {
+            // Lock the gesture: capture pointer + tell browser not to scroll.
+            card.classList.add("deck-card--grabbing");
+            try { card.setPointerCapture(e.pointerId); captured = true; } catch { /* ignore */ }
+          } else {
+            // Vertical scroll: release and let the page handle it.
+            dragging = false;
+            return;
+          }
+        } else {
+          return;     // not enough movement to decide yet
+        }
+      }
+      if (axis === "x") {
+        e.preventDefault?.();
+        setTransform(dx, dy);
+      }
     });
     function finish(e: PointerEvent) {
-      if (!dragging) return;
+      if (!dragging) { axis = ""; return; }
       dragging = false;
+      // Only finalize a swipe if we actually locked the horizontal axis.
+      if (axis !== "x") { axis = ""; return; }
+      axis = "";
       const dx = e.clientX - startX;
       if (captured) {
         try { card.releasePointerCapture(e.pointerId); } catch { /* ignore */ }

@@ -66,7 +66,6 @@ function resultCard(p: Product, alreadyOnList: boolean): string {
           <strong>CHF ${finalPrice}</strong>
         </span>
         ${stockLine(p)}
-        <span class="result-card__zone">Zone ${escapeHTML(p.zone)} · aisle ${escapeHTML(p.aisle)}</span>
       </div>
     </li>
   `;
