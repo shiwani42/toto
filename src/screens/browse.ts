@@ -119,6 +119,16 @@ export function renderBrowse(root: HTMLElement) {
   async function boot() {
     setStatus("Warming up the camera…");
     hideFallback();
+    // If the camera takes more than ~5s to come up, surface the
+    // fallback. On real devices this is a long wait — most likely the
+    // permission prompt is hanging or the browser is unhappy. The
+    // user shouldn't be staring at a gray rectangle indefinitely.
+    const slowTimer = window.setTimeout(() => {
+      if (!captureViewEl.classList.contains("browse-cam--active")) {
+        setStatus("");
+        showFallback(t("browse.fallback.slow"));
+      }
+    }, 5000);
     try {
       handle = await startScanner({
         host: captureViewEl,
@@ -154,9 +164,11 @@ export function renderBrowse(root: HTMLElement) {
           }
         },
       });
+      window.clearTimeout(slowTimer);
       captureViewEl.classList.add("browse-cam--active");
       setStatus(t("browse.hint"));
     } catch (err) {
+      window.clearTimeout(slowTimer);
       console.error("Browse boot failed:", err);
       // Camera failed to start — the empty gray box would feel broken,
       // so swap in a friendly fallback with a retry button.

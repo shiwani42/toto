@@ -48,8 +48,10 @@ for (const s of SCREENS) {
   const page = await ctx.newPage();
   try {
     await page.goto(BASE + s.url, { waitUntil: "domcontentloaded", timeout: 15000 });
-    // Let animations settle.
-    await page.waitForTimeout(1500);
+    // Let animations settle and let camera screens settle into their
+    // fallback or running state (camera boot can take a couple seconds
+    // to fail in headless Playwright).
+    await page.waitForTimeout(3500);
     const out = join(OUT, `${s.name}.png`);
     await page.screenshot({ path: out, fullPage: true });
     console.log(`✓ ${s.name}`);
