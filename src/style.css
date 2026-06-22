@@ -1625,6 +1625,60 @@ button, .primary { font: inherit; cursor: pointer; }
   50%      { box-shadow: 0 2px 20px rgba(220, 38, 38, 0.8); }
 }
 
+/* Voice mode is on (Toto reads things aloud): mic chip in accent. */
+.toto-companion__mic--vmode {
+  background: var(--accent);
+  color: #fff;
+  border-color: #fff;
+}
+
+/* Reactions: pet-like movement library, triggered by lib/companion.totoReact(). */
+.toto-companion__breath--wag { animation: toto-wag 0.7s ease-in-out; }
+@keyframes toto-wag {
+  0%, 100% { transform: rotate(0deg); }
+  25%      { transform: rotate(-6deg); }
+  60%      { transform: rotate(6deg); }
+  85%      { transform: rotate(-3deg); }
+}
+.toto-companion__breath--perk { animation: toto-perk 0.5s ease-out; }
+@keyframes toto-perk {
+  0%   { transform: translateY(0) scale(1); }
+  50%  { transform: translateY(-3px) scale(1.06); }
+  100% { transform: translateY(0) scale(1); }
+}
+.toto-companion__breath--jump { animation: toto-jump 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes toto-jump {
+  0%   { transform: translateY(0); }
+  35%  { transform: translateY(-10px); }
+  60%  { transform: translateY(2px); }
+  100% { transform: translateY(0); }
+}
+.toto-companion__breath--tilt { animation: toto-tilt 0.7s ease-out; }
+@keyframes toto-tilt {
+  0%   { transform: rotate(0deg); }
+  50%  { transform: rotate(-12deg); }
+  100% { transform: rotate(0deg); }
+}
+.toto-companion__breath--sleep {
+  animation: toto-sleep 5s ease-in-out infinite !important;
+  opacity: 0.82;
+}
+@keyframes toto-sleep {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.012); }
+}
+
+/* Speaking: scale pulse synced with utterance. The mouth visually
+   "talks" even though the SVG doesn't have mouth shapes; the scale
+   wobble reads as articulation. */
+.toto-companion__breath--speaking {
+  animation: toto-speak 0.32s ease-in-out infinite !important;
+}
+@keyframes toto-speak {
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(1.05); }
+}
+
 /* The avatar button is the visible body of Toto. */
 .toto-companion__avatar {
   width: 60px;
@@ -2419,8 +2473,121 @@ button, .primary { font: inherit; cursor: pointer; }
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 18px;
-  padding: 18px 18px 22px;
+  padding: 20px 20px 24px;
   min-height: 320px;
+}
+
+/* Big choice cards: 2-column grid, each with emoji + label + sub. */
+.wizard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+.wizard-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 18px 16px;
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: 16px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: var(--fg);
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  min-height: 96px;
+}
+.wizard-card:active { transform: scale(0.98); }
+.wizard-card--on {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.wizard-card__emoji {
+  font-size: 32px;
+  line-height: 1;
+}
+.wizard-card__title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.wizard-card__sub {
+  font-size: 12px;
+  color: var(--muted-fg);
+}
+
+/* Specifics multi-select: chip-style, multi-selectable. */
+.wizard-multi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.wizard-multi__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--fg);
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.wizard-multi__chip:active { transform: scale(0.96); }
+.wizard-multi__chip--on {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+.wizard-multi__emoji { font-size: 16px; }
+
+/* Sizes step: three blocks of chip rows. */
+.wizard-sizes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+.wizard-sizes__block { display: flex; flex-direction: column; gap: 6px; }
+.wizard-sizes__label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-fg);
+}
+.wizard-sizes__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wizard-sizes__chip {
+  padding: 8px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  cursor: pointer;
+  font-feature-settings: "tnum";
+  transition: background 0.15s, border-color 0.15s;
+  min-width: 48px;
+}
+.wizard-sizes__chip--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 .plan-one__step .wizard__q {
   margin: 0 0 14px;

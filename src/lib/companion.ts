@@ -17,25 +17,38 @@
 import { totoAvatar } from "./toto";
 import type { Screen } from "./types";
 import { t } from "./i18n";
-import { isVoiceSupported, startListening, speak, parseIntent, type ListenHandle } from "./voice";
+import {
+  isVoiceSupported, startListening, speak, parseIntent,
+  isVoiceModeOn, setVoiceMode,
+  type ListenHandle,
+} from "./voice";
 import { search } from "./catalog";
 
-// Map screens to their i18n key. Single source of truth. Add a screen
-// here when you want Toto present on it; omit to hide him.
-const TOTO_KEYS: Partial<Record<Screen, string>> = {
-  list:      "toto.list",
-  map:       "toto.map",
-  scan:      "toto.scan",
-  done:      "toto.done",
-  plan:      "toto.plan",
-  browse:    "toto.browse",
-  compare:   "toto.compare",
-  repair:    "toto.repair",
-  connect:   "toto.connect",
-  connected: "toto.connected",
-  settings:  "toto.settings",
-  fit:       "toto.fit",
+// Multiple lines per screen — randomly picked each render so the user
+// doesn't see the same greeting twice. Each entry is a list of i18n
+// keys; we resolve at call time. Pool size is small (3-4) so it stays
+// fresh without feeling overwhelming.
+const TOTO_KEYS: Partial<Record<Screen, string[]>> = {
+  list:      ["toto.list", "toto.list.alt1", "toto.list.alt2"],
+  map:       ["toto.map", "toto.map.alt1", "toto.map.alt2"],
+  scan:      ["toto.scan", "toto.scan.alt1", "toto.scan.alt2"],
+  done:      ["toto.done", "toto.done.alt1", "toto.done.alt2"],
+  plan:      ["toto.plan", "toto.plan.alt1"],
+  browse:    ["toto.browse", "toto.browse.alt1", "toto.browse.alt2"],
+  compare:   ["toto.compare"],
+  repair:    ["toto.repair"],
+  connect:   ["toto.connect"],
+  connected: ["toto.connected"],
+  settings:  ["toto.settings"],
+  fit:       ["toto.fit"],
 };
+
+function pickLine(screen: Screen): string {
+  const pool = TOTO_KEYS[screen];
+  if (!pool || pool.length === 0) return t("toto.fallback");
+  const k = pool[Math.floor(Math.random() * pool.length)];
+  return t(k);
+}
 
 // ─── Contextual suggestions ────────────────────────────────────────────────
 //
@@ -89,6 +102,46 @@ function refreshCompanion() {
   if (lastScreen) mountCompanion(lastScreen);
 }
 
+// ─── Reaction triggers (pet-like personality) ──────────────────────────────
+//
+// Toto reacts to events around the user. Each reaction is a short CSS
+// animation class applied to his "breath" wrapper. Calls are idempotent
+// and safe even when Toto isn't mounted (home screen).
+
+type Mood = "wag" | "perk" | "jump" | "tilt" | "sleep";
+
+function findBreath(): HTMLElement | null {
+  return document.querySelector("#toto-companion .toto-companion__breath") as HTMLElement | null;
+}
+
+/** React to an event. Tail wag (added item), perk ears (greet new screen),
+ *  jump (found something on the list), tilt (puzzled), sleep (idle). */
+export function totoReact(mood: Mood, ms = 700) {
+  const el = findBreath();
+  if (!el) return;
+  const cls = `toto-companion__breath--${mood}`;
+  el.classList.remove(cls);
+  // Force reflow so the same animation can be re-triggered.
+  void el.offsetWidth;
+  el.classList.add(cls);
+  if (mood === "sleep") return; // sleep is sticky until movement
+  window.setTimeout(() => el.classList.remove(cls), ms);
+}
+
+/** Idle watchdog: if there's no user input for a while, Toto drops into
+ *  a "resting" pose. Any tap/scroll wakes him. */
+let idleTimer: number | null = null;
+function bumpIdle() {
+  if (idleTimer) window.clearTimeout(idleTimer);
+  const el = findBreath();
+  el?.classList.remove("toto-companion__breath--sleep");
+  idleTimer = window.setTimeout(() => totoReact("sleep"), 60_000);
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("pointerdown", bumpIdle, { passive: true });
+  window.addEventListener("scroll",      bumpIdle, { passive: true });
+}
+
 let lastScreen: Screen | null = null;
 let open = false;
 let collapseTimer: number | undefined;
@@ -119,8 +172,7 @@ export function mountCompanion(screen: Screen) {
   // Skip admin too — that's staff-side, no companion needed.
   if (screen === "home" || screen === "admin") return;
 
-  const screenKey = TOTO_KEYS[screen];
-  const screenPhrase = screenKey ? t(screenKey) : t("toto.fallback");
+  const screenPhrase = pickLine(screen);
 
   // If there's a pending suggestion that hasn't been dismissed, surface it
   // instead of the static screen line, AND auto-open the bubble with a
@@ -353,9 +405,63 @@ export function mountCompanion(screen: Screen) {
   // Dedicated mic chip (shown only when voice is supported).
   const micBtn = root.querySelector("#toto-companion-mic") as HTMLButtonElement | null;
   if (micBtn) {
-    micBtn.addEventListener("click", () => {
+    // Reflect voice-mode visual state.
+    if (isVoiceModeOn()) micBtn.classList.add("toto-companion__mic--vmode");
+    let micPressTimer: number | null = null;
+    micBtn.addEventListener("pointerdown", () => {
+      micPressTimer = window.setTimeout(() => {
+        micPressTimer = null;
+        // Long-press toggles voice mode (mutes Toto).
+        const nowOn = !isVoiceModeOn();
+        setVoiceMode(nowOn);
+        micBtn.classList.toggle("toto-companion__mic--vmode", nowOn);
+        bubbleText(nowOn ? t("toto.voice.on") : t("toto.voice.off"));
+        if (nowOn) speakBubble(t("toto.voice.on"));
+        setOpen(true);
+      }, 600);
+    });
+    micBtn.addEventListener("pointerup", () => {
+      if (!micPressTimer) return;       // long-press already handled
+      window.clearTimeout(micPressTimer);
+      micPressTimer = null;
+      // Short tap: enable voice mode (if not already) and start listening.
+      if (!isVoiceModeOn()) {
+        setVoiceMode(true);
+        micBtn.classList.add("toto-companion__mic--vmode");
+      }
       if (voiceActive) endVoice();
       else startVoice();
     });
+    micBtn.addEventListener("pointerleave", () => {
+      if (micPressTimer) { window.clearTimeout(micPressTimer); micPressTimer = null; }
+    });
+  }
+
+  // Helper: speak the current bubble line with mouth/ears animation.
+  // Toto's "breath" wrapper gets a CSS class while speechSynthesis is
+  // playing, so the avatar visibly "talks."
+  function speakBubble(text: string) {
+    if (!isVoiceModeOn()) return;
+    if (!text) return;
+    speak(text, {
+      onStart: () => breath.classList.add("toto-companion__breath--speaking"),
+      onEnd:   () => breath.classList.remove("toto-companion__breath--speaking"),
+    });
+  }
+
+  // First-visit auto-open + speak. We open once per session so the user
+  // discovers Toto without being interrupted on every reload.
+  const FIRST_VISIT_KEY = "toto.firstSeen";
+  const firstSeen = sessionStorage.getItem(FIRST_VISIT_KEY);
+  if (!firstSeen && !isSuggestion) {
+    window.setTimeout(() => {
+      setOpen(true);
+      sessionStorage.setItem(FIRST_VISIT_KEY, "1");
+      speakBubble(phrase);
+      totoReact("perk");
+    }, 600);
+  } else if (open) {
+    // Already-open render (e.g. suggestion arrived): speak it.
+    speakBubble(phrase);
   }
 }

@@ -104,21 +104,62 @@ export function startListening(
 
 // ─── Synthesis (TTS) ────────────────────────────────────────────────────────
 
-/** Speak a short line in the user's selected language. Picks an available
- *  voice for the language; falls back to the default voice when none match. */
-export function speak(text: string): void {
+/** Pick the best voice for the user's language. Prefers "premium" or
+ *  "enhanced" voices on iOS / Chrome; falls back to any matching the
+ *  language; falls back to the default. */
+function pickVoice(lang: string): SpeechSynthesisVoice | null {
+  if (!("speechSynthesis" in window)) return null;
+  const all = window.speechSynthesis.getVoices();
+  if (all.length === 0) return null;
+  const matches = all.filter((v) => v.lang.toLowerCase().startsWith(lang.toLowerCase().split("-")[0]));
+  const preferred = matches.find((v) => /premium|enhanced|natural/i.test(v.name));
+  return preferred ?? matches[0] ?? null;
+}
+
+/** Speak a short line in the user's selected language. Calls onStart /
+ *  onEnd so the UI can show "Toto is talking" feedback (ear movement,
+ *  mouth open, etc.). */
+export function speak(text: string, opts?: { onStart?: () => void; onEnd?: () => void }): void {
   if (!("speechSynthesis" in window)) return;
   const u = new SpeechSynthesisUtterance(text);
   u.lang = STT_LANG[getLang()];
+  const v = pickVoice(u.lang);
+  if (v) u.voice = v;
   u.rate = 1.0;
-  u.pitch = 1.05;
+  u.pitch = 1.1;     // slightly higher = friendlier, more pet-like
   u.volume = 1;
+  u.onstart = () => opts?.onStart?.();
+  u.onend   = () => opts?.onEnd?.();
+  u.onerror = () => opts?.onEnd?.();
   try {
-    window.speechSynthesis.cancel(); // drop any prior utterance
+    window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   } catch {
     /* ignore */
   }
+}
+
+// ─── Voice mode (Toto reads things aloud) ─────────────────────────────────
+//
+// When the user enables voice mode, Toto speaks his bubble lines as well
+// as showing them. Persists in sessionStorage so it survives navigations
+// within a visit.
+
+const VOICE_MODE_KEY = "toto.voiceMode";
+
+export function isVoiceModeOn(): boolean {
+  try { return sessionStorage.getItem(VOICE_MODE_KEY) === "1"; } catch { return false; }
+}
+export function setVoiceMode(on: boolean): void {
+  try { sessionStorage.setItem(VOICE_MODE_KEY, on ? "1" : "0"); } catch { /* ignore */ }
+  if (!on && "speechSynthesis" in window) {
+    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+  }
+}
+export function toggleVoiceMode(): boolean {
+  const next = !isVoiceModeOn();
+  setVoiceMode(next);
+  return next;
 }
 
 // ─── Tiny intent router ────────────────────────────────────────────────────

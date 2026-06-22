@@ -5,6 +5,7 @@ import { track } from "../lib/analytics";
 import { startScanner, type DecodedBarcode, type ScannerHandle } from "../lib/scanner";
 import { cameraErrorMessage } from "../lib/camera-errors";
 import { t } from "../lib/i18n";
+import { totoReact } from "../lib/companion";
 
 const FOUND_KEY = "toto.found";
 
@@ -349,6 +350,7 @@ export function renderScan(root: HTMLElement) {
             track("scan_found", { code: code.text, in_list: true });
             renderCarousel();
             celebrateFind(code.text);
+            totoReact("jump"); // he's excited you got it
           } else if (matched) {
             // Already-found re-detection: gentle beep, no log.
             beep(true);

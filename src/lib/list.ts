@@ -1,5 +1,6 @@
 import { loadSession, Session } from "./session";
 import { track } from "./analytics";
+import { totoReact } from "./companion";
 
 const KEY = "toto.list";
 
@@ -32,6 +33,7 @@ export function addToList(code: string, source: string = "manual"): StoredList {
     list.push(code);
     broadcast("list:added", code);
     track("list_added", { code, source });
+    totoReact("wag"); // a real pet wags when you bring something home
   }
   write(list);
   return list;
