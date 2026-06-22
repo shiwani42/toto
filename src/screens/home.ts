@@ -5,6 +5,11 @@ import { totoMascot } from "../lib/toto";
 import { t } from "../lib/i18n";
 import { getInsights } from "../lib/history";
 
+// "In a rush" was a dashed quick chip below the three choice cards. It
+// pointed at /browse — the same destination as "I'm just looking" — so
+// it doubled the same affordance with a clashing visual treatment. The
+// three cards already cover every entry path.
+
 function escapeHTML(s: string): string {
   return s
     .replaceAll("&", "&amp;")
@@ -77,12 +82,6 @@ export function renderHome(root: HTMLElement) {
           </a>
         </li>
       </ul>
-
-      <a class="home-quick" href="?screen=browse">
-        ${icon("zap", 16)}
-        <span class="home-quick__main">${t("home.quick")}</span>
-        <span class="home-quick__sub">${t("home.quick.sub")}</span>
-      </a>
     </main>
   `;
 

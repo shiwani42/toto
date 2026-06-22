@@ -110,6 +110,22 @@ export function renderCompare(root: HTMLElement) {
 
       <div id="diff"></div>
 
+      <div id="empty-preview" class="empty-preview" aria-hidden="true">
+        <div class="empty-preview__label">${escapeHTML(t("preview.label"))}</div>
+        <div class="empty-preview__diff">
+          <div class="empty-preview__row">
+            <span class="empty-preview__bar empty-preview__bar--A">CHF 280</span>
+            <span class="empty-preview__bar empty-preview__bar--B">CHF 360</span>
+          </div>
+          <ul class="empty-preview__list">
+            <li><span>${escapeHTML(t("preview.material"))}</span><span class="empty-preview__delta">+~CHF 35</span></li>
+            <li><span>${escapeHTML(t("preview.waterproof"))}</span><span class="empty-preview__delta">+~CHF 18</span></li>
+            <li><span>${escapeHTML(t("preview.brand"))}</span><span class="empty-preview__delta">+~CHF 27</span></li>
+          </ul>
+          <div class="empty-preview__hint">${escapeHTML(t("compare.preview_hint"))}</div>
+        </div>
+      </div>
+
       <div class="compare-actions">
         <a class="link-btn" href="?screen=list">${t("compare.back")}</a>
         <button id="reset" class="link-btn link-btn--muted">${t("compare.reset")}</button>
@@ -199,6 +215,10 @@ export function renderCompare(root: HTMLElement) {
     renderSlot("A");
     renderSlot("B");
     renderDiff();
+    // Tuck the empty-state preview away as soon as one slot fills, since
+    // the real diff (or the prompt for the second slot) takes its place.
+    const previewEl = root.querySelector("#empty-preview") as HTMLDivElement | null;
+    if (previewEl) previewEl.hidden = Boolean(products.A || products.B);
   }
 
   const prefilledA = new URLSearchParams(window.location.search).get("a");

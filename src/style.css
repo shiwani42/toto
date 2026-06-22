@@ -2290,19 +2290,34 @@ body.has-cart .toto-companion {
   0%   { background: rgba(46, 204, 113, 0.18); }
   100% { background: transparent; }
 }
-.find-card__dot {
-  width: 22px;
-  height: 22px;
+/* Color swatch on the left of each find-card. Doubles as the found
+   indicator: when an item is checked off, a green ring and a check
+   appear over the swatch so the color is still visible. */
+.find-card__swatch {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--panel-strong);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  position: relative;
 }
-.find-card__dot--done {
-  background: var(--accent);
+.find-card--done .find-card__swatch {
+  box-shadow: 0 0 0 2px var(--accent), inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+.find-card--done .find-card__swatch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(46, 122, 60, 0.55);
+}
+.find-card--done .find-card__swatch svg {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
 }
 .find-card__body {
   flex: 1;
@@ -3048,6 +3063,196 @@ body.has-cart .toto-companion {
 }
 .link-btn--muted { color: var(--muted-fg); }
 .link-btn--muted:hover { color: var(--fg); }
+
+/* ─── Empty-state preview ────────────────────────────────────────────────── */
+/* Shown on compare / repair / fit / connect when the user hasn't given input
+   yet. A muted, dashed "this is what you'll see" mock so the screen isn't
+   a blank canvas. Reuses each screen's local feel through small modifier
+   blocks but shares the outer frame. */
+.empty-preview {
+  border: 1px dashed var(--border);
+  border-radius: 18px;
+  padding: 14px 16px 16px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  opacity: 0.92;
+}
+.empty-preview[hidden] { display: none; }
+.empty-preview__label {
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: var(--muted-fg);
+}
+.empty-preview__hint {
+  font-size: 12.5px;
+  color: var(--muted-fg);
+  line-height: 1.4;
+}
+.empty-preview__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.empty-preview__list li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--muted-fg);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+.empty-preview__list li:last-child { border-bottom: none; padding-bottom: 0; }
+.empty-preview__delta {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Compare-specific preview: two bars showing the price gap. */
+.empty-preview__diff {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.empty-preview__row {
+  display: grid;
+  grid-template-columns: 1fr 1.28fr;
+  gap: 6px;
+}
+.empty-preview__bar {
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+.empty-preview__bar--A { background: var(--accent-bg); }
+.empty-preview__bar--B { background: var(--accent-bg); color: var(--accent-strong); }
+
+/* Repair-specific preview: a verdict pill + cost ladder. */
+.empty-preview__verdict {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.empty-preview__verdict--ok { border-color: var(--ok, #2e7a3c); }
+.empty-preview__verdict-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ok, #2e7a3c);
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(46, 122, 60, 0.12);
+  flex-shrink: 0;
+}
+.empty-preview__verdict-line {
+  font-size: 13px;
+  color: var(--fg);
+  line-height: 1.35;
+}
+
+/* Fit-specific preview: three big sizes side-by-side. */
+.empty-preview__sizes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.empty-preview__sizes li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.empty-preview__sizes-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-fg);
+  font-weight: 600;
+}
+.empty-preview__sizes-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Connect-specific preview: a tiny chat thread between two people. */
+.empty-preview__chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--card);
+  border-radius: 12px;
+}
+.empty-preview__chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.empty-preview__chat-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: var(--muted-fg);
+}
+.empty-preview__chat-people {
+  display: flex;
+  gap: -8px;
+}
+.empty-preview__avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  background: var(--accent-bg);
+  border: 2px solid var(--card);
+}
+.empty-preview__avatar--b { margin-left: -8px; }
+.empty-preview__chat-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+}
+.empty-preview__chat-row--right {
+  justify-content: flex-end;
+  text-align: right;
+}
+.empty-preview__chat-name {
+  font-weight: 600;
+  color: var(--accent-strong);
+  flex-shrink: 0;
+}
+.empty-preview__chat-msg {
+  color: var(--fg);
+}
 
 .slot__header {
   width: 32px;

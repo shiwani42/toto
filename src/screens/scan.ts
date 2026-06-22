@@ -7,6 +7,7 @@ import { cameraErrorMessage } from "../lib/camera-errors";
 import { t } from "../lib/i18n";
 import { totoReact } from "../lib/companion";
 import { playFound, playOff } from "../lib/sounds";
+import { colorSwatch } from "../lib/colors";
 
 const FOUND_KEY = "toto.found";
 
@@ -110,15 +111,17 @@ export function renderScan(root: HTMLElement) {
       const p = getProduct(code);
       const isFound = found.has(code);
       const name = p ? `${p.brand} · ${p.name}` : code;
-      const size = p ? `size ${p.size}` : "";
+      const colorWord = p?.color ?? "";
+      const swatch = colorSwatch(colorWord);
+      const meta = p ? `${colorWord} · size ${p.size}` : "";
       return `
         <div class="find-card ${isFound ? "find-card--done" : ""}" data-code="${escapeHTML(code)}">
-          <div class="find-card__dot ${isFound ? "find-card__dot--done" : ""}">
-            ${isFound ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>` : ""}
+          <div class="find-card__swatch" style="background:${swatch}" aria-hidden="true">
+            ${isFound ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>` : ""}
           </div>
           <div class="find-card__body">
             <div class="find-card__name">${escapeHTML(name)}</div>
-            <div class="find-card__sub">${escapeHTML(size)}</div>
+            <div class="find-card__sub">${escapeHTML(meta)}</div>
           </div>
         </div>
       `;
