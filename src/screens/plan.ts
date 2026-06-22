@@ -524,7 +524,7 @@ export function renderPlan(root: HTMLElement) {
     if (!date) return;
     const localToken = ++peekToken;
     peekEl.classList.remove("wizard__peek--ready");
-    peekEl.textContent = "Pulling the forecast…";
+    peekEl.textContent = "Sniffing out the forecast…";
     try {
       const w = await forecast(answers.location, date, 1);
       if (localToken !== peekToken) return;
@@ -592,7 +592,7 @@ export function renderPlan(root: HTMLElement) {
         <div class="wizard__loading">
           <h1 class="wizard__q">${headline}</h1>
           ${subline ? `<p class="wizard__loading-sub">${subline}</p>` : ""}
-          <p class="wizard__progress-msg" id="progress">${isGeneral ? "Thinking it over…" : "Pulling the forecast…"}</p>
+          <p class="wizard__progress-msg" id="progress">${isGeneral ? "Thinking it over…" : "Sniffing out your picks…"}</p>
           <div id="weather"></div>
         </div>
         <div id="result"></div>

@@ -97,15 +97,9 @@ a { color: inherit; }
 
 /* ─── Header ─────────────────────────────────────────────────────────────── */
 header {
-  /* Right padding leaves room for the language pill (top-right);
-     left padding clears the floating Toto avatar + mic chip
-     (12 + 60 + 8 + 40 = 120 px wide). */
-  padding: 24px 56px 14px 132px;
-}
-/* Home screen has its own centered greeting; no need for the side padding. */
-.screen-home header,
-body:not(.no-tab-bar) .screen-home header {
-  padding: 24px 20px 14px;
+  /* Toto now sits at the bottom-left, so headers only need right padding
+     to clear the language pill (top-right). */
+  padding: 24px 64px 14px 20px;
 }
 
 header h1 {
@@ -1570,18 +1564,20 @@ button, .primary { font: inherit; cursor: pointer; }
 /* ─── Toto companion (top-right on non-home screens) ─────────────────────
    Avatar sits at top-right corner. Bubble drops DOWN below the avatar
    so it never spans horizontally over the screen headlines. */
-/* Ambient Toto companion — fixed top-left, persistent across screens. */
+/* Ambient Toto companion — fixed bottom-left, just above the tab bar.
+   This keeps him visible on every screen without ever fighting the
+   page header for space. The bubble pops UPWARD from him. */
 .toto-companion {
   position: fixed;
-  top: calc(env(safe-area-inset-top) + 10px);
+  /* Sit above the tab bar (var(--tab-h) = 72) + safe area + a small gap. */
+  bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 10px);
   left: 12px;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;  /* bubble appears above the avatar row */
   align-items: flex-start;
   gap: 8px;
   z-index: 50;
   pointer-events: none;
-  /* Cap width so the bubble never extends past the screen edge. */
   max-width: calc(100vw - 24px);
 }
 .toto-companion__row {
@@ -1769,24 +1765,24 @@ button, .primary { font: inherit; cursor: pointer; }
   50%      { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 0 0 6px rgba(46, 204, 113, 0.0); }
 }
 
-/* Speech bubble. Drops DOWN from the avatar so it never overlaps the
-   page header text. Hidden by default, spring-in on open. */
+/* Speech bubble. With Toto at bottom-left, the bubble appears ABOVE him
+   and the pointer triangle points DOWN at the avatar. */
 .toto-companion__bubble {
   position: relative;
-  max-width: min(280px, calc(100vw - 32px));
-  padding: 12px 16px;
+  max-width: min(300px, calc(100vw - 32px));
+  padding: 14px 16px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 20px;
   font: inherit;
   font-size: 14px;
-  line-height: 1.35;
+  line-height: 1.4;
   color: var(--fg);
   text-align: left;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.10), 0 2px 6px rgba(0, 0, 0, 0.04);
   opacity: 0;
-  transform: translateY(-6px) scale(0.94);
-  transform-origin: 18px 0;
+  transform: translateY(6px) scale(0.94);
+  transform-origin: 18px 100%;
   transition: opacity 0.18s ease, transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
   pointer-events: none;
   cursor: pointer;
@@ -1796,17 +1792,17 @@ button, .primary { font: inherit; cursor: pointer; }
   transform: translateY(0) scale(1);
   pointer-events: auto;
 }
-/* Pointer triangle on TOP of the bubble, pointing UP at the avatar. */
+/* Pointer triangle on the BOTTOM of the bubble, pointing DOWN at the avatar. */
 .toto-companion__bubble::before {
   content: "";
   position: absolute;
-  top: -7px;
+  bottom: -7px;
   left: 18px;
   width: 12px;
   height: 12px;
   background: var(--card);
-  border-top: 1px solid var(--border);
-  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   transform: rotate(45deg);
 }
 .toto-companion__text { display: block; }
@@ -3019,6 +3015,7 @@ button, .primary { font: inherit; cursor: pointer; }
   padding: 16px;
   animation: connect-panel-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+.connect-v2__panel[hidden] { display: none; }
 @keyframes connect-panel-in {
   0%   { opacity: 0; transform: translateY(-6px); }
   100% { opacity: 1; transform: translateY(0); }
@@ -3116,9 +3113,57 @@ button, .primary { font: inherit; cursor: pointer; }
 .card-section {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
+  border-radius: 18px;
+  padding: 18px 18px 20px;
   box-shadow: var(--shadow-sm);
+}
+/* Make native form labels + selects + inputs feel like the rest of the app
+   instead of 1990s browser chrome. Applies inside any card-section. */
+.card-section label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-fg);
+  margin-bottom: 10px;
+}
+.card-section select,
+.card-section input[type="text"],
+.card-section input[type="email"],
+.card-section input[type="number"] {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--fg);
+  text-transform: none;
+  letter-spacing: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+.card-section select {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='1 1.5 6 6.5 11 1.5'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+}
+.card-section select:focus,
+.card-section input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.card-section .row-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 /* ─── Admin dashboard ─────────────────────────────────────────────────────── */
