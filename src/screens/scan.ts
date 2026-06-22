@@ -226,6 +226,7 @@ export function renderScan(root: HTMLElement) {
     for (const pin of pinBuffer.values()) {
       const matched = wantedSet.has(pin.text);
       const already = found.has(pin.text);
+      const product = getProduct(pin.text);
       const p = pin.position;
       const cx = (p.topLeft.x + p.topRight.x + p.bottomLeft.x + p.bottomRight.x) / 4;
       const cy = (p.topLeft.y + p.topRight.y + p.bottomLeft.y + p.bottomRight.y) / 4;
@@ -237,15 +238,12 @@ export function renderScan(root: HTMLElement) {
         ? 1
         : Math.max(0, 1 - (age - PIN_FADE_AFTER_MS) / (PIN_TTL_MS - PIN_FADE_AFTER_MS));
 
-      // Color logic:
-      //   green        – on the list, not yet checked
-      //   green + ring – on the list, already found
-      //   white        – not on the list
       const fill = matched ? `rgba(46, 204, 113, ${alpha})` : `rgba(255, 255, 255, ${alpha * 0.85})`;
       const ring = matched && already;
 
+      // Dot at the barcode centroid.
       ctx.beginPath();
-      ctx.arc(c.x, c.y, 14 * dpr, 0, Math.PI * 2);
+      ctx.arc(c.x, c.y, 12 * dpr, 0, Math.PI * 2);
       ctx.fillStyle = fill;
       ctx.shadowColor = `rgba(0, 0, 0, ${alpha * 0.4})`;
       ctx.shadowBlur = 8 * dpr;
@@ -254,21 +252,115 @@ export function renderScan(root: HTMLElement) {
 
       if (ring) {
         ctx.beginPath();
-        ctx.arc(c.x, c.y, 22 * dpr, 0, Math.PI * 2);
+        ctx.arc(c.x, c.y, 19 * dpr, 0, Math.PI * 2);
         ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.lineWidth = 3 * dpr;
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(c.x - 6 * dpr, c.y);
-        ctx.lineTo(c.x - 2 * dpr, c.y + 4 * dpr);
-        ctx.lineTo(c.x + 6 * dpr, c.y - 4 * dpr);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.lineWidth = 3 * dpr;
-        ctx.lineCap = "round";
+        ctx.lineWidth = 2.5 * dpr;
         ctx.stroke();
       }
+
+      // Floating product label so the user knows WHAT they're looking
+      // at without checking the carousel.
+      if (product) {
+        drawProductLabel(ctx, dpr, c, product, matched, already, alpha);
+      }
     }
+  }
+
+  /** Draws a small label chip with brand + name + size next to a barcode pin.
+   *  Matched items get a green chip, off-list items a quiet white chip,
+   *  already-found items get a check icon prepended. */
+  function drawProductLabel(
+    ctx: CanvasRenderingContext2D,
+    dpr: number,
+    c: { x: number; y: number },
+    product: { brand: string; name: string; size: string },
+    matched: boolean,
+    already: boolean,
+    alpha: number,
+  ): void {
+    const padX = 12 * dpr;
+    const padY = 8 * dpr;
+    const fontSize = 13 * dpr;
+    const lineHeight = 15 * dpr;
+    ctx.font = `600 ${fontSize}px "Inter", system-ui, sans-serif`;
+
+    const titleLine = `${product.brand} · ${product.name}`;
+    const subLine = `size ${product.size}`;
+    const maxTitleWidth = 220 * dpr;
+    const titleText = truncateText(ctx, titleLine, maxTitleWidth);
+
+    const titleWidth = ctx.measureText(titleText).width;
+    ctx.font = `400 ${fontSize - dpr * 2}px "Inter", system-ui, sans-serif`;
+    const subWidth = ctx.measureText(subLine).width;
+
+    const contentWidth = Math.max(titleWidth, subWidth) + (already ? 18 * dpr : 0);
+    const w = contentWidth + padX * 2;
+    const h = lineHeight * 2 + padY * 2;
+
+    // Place above the dot when there's room, otherwise below.
+    const aboveY = c.y - 22 * dpr - h;
+    const belowY = c.y + 22 * dpr;
+    const y = aboveY < 4 * dpr ? belowY : aboveY;
+    let x = c.x - w / 2;
+    // Keep label fully within canvas bounds.
+    if (x < 6 * dpr) x = 6 * dpr;
+    if (x + w > overlay.width - 6 * dpr) x = overlay.width - 6 * dpr - w;
+
+    // Background chip.
+    const bg = matched
+      ? `rgba(34, 96, 64, ${alpha * 0.92})`         // accent-strong with alpha
+      : `rgba(28, 28, 28, ${alpha * 0.78})`;
+    roundedRect(ctx, x, y, w, h, 12 * dpr);
+    ctx.fillStyle = bg;
+    ctx.fill();
+
+    // Text.
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.textBaseline = "top";
+    let textX = x + padX;
+    if (already) {
+      // Check icon, drawn manually.
+      ctx.beginPath();
+      const cxIcon = textX + 6 * dpr;
+      const cyIcon = y + padY + lineHeight / 2;
+      ctx.moveTo(cxIcon - 4 * dpr, cyIcon);
+      ctx.lineTo(cxIcon - 1 * dpr, cyIcon + 3 * dpr);
+      ctx.lineTo(cxIcon + 5 * dpr, cyIcon - 3 * dpr);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.lineWidth = 2 * dpr;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+      textX += 14 * dpr;
+    }
+    ctx.font = `600 ${fontSize}px "Inter", system-ui, sans-serif`;
+    ctx.fillText(titleText, textX, y + padY);
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.8})`;
+    ctx.font = `400 ${fontSize - dpr * 2}px "Inter", system-ui, sans-serif`;
+    ctx.fillText(subLine, textX, y + padY + lineHeight);
+  }
+
+  function truncateText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let lo = 0, hi = text.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      const candidate = text.slice(0, mid) + "…";
+      if (ctx.measureText(candidate).width <= maxWidth) lo = mid + 1;
+      else hi = mid;
+    }
+    return text.slice(0, Math.max(1, lo - 1)) + "…";
+  }
+
+  function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    ctx.fill();
   }
 
   // ─── Status + boot ─────────────────────────────────────────────────────────
