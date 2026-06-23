@@ -3001,6 +3001,10 @@ body.has-cart .toto-companion {
   cursor: pointer;
   padding: 12px 22px;
   transition: background 0.15s, color 0.15s, transform 0.1s;
+  /* Wizard__skip's base rule sets text-decoration: underline for the
+     "plain text link" appearance. Inside the action bar it's a proper
+     pill button, not a link — kill the underline so it reads as such. */
+  text-decoration: none;
 }
 .plan-one__actions .wizard__skip:hover { background: var(--panel-strong); color: var(--fg); }
 .plan-one__actions .wizard__skip:active { transform: scale(0.98); }

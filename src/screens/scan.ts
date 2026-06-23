@@ -79,7 +79,7 @@ export function renderScan(root: HTMLElement) {
       </div>
       <div id="carousel" class="find-carousel" aria-label="Items to find"></div>
       <div class="find-controls">
-        <button id="finish" class="btn-primary" disabled>${t("scan.done")}</button>
+        <button id="finish" class="primary" disabled>${t("scan.done")}</button>
         <a class="link-btn" href="?screen=map">${t("scan.back_to_map")}</a>
       </div>
     </main>

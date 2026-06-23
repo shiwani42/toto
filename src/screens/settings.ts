@@ -61,7 +61,7 @@ function accountSectionHTML(user: User | null, status: string): string {
           <input id="sign-in-email" type="email" autocomplete="email"
                  inputmode="email" required placeholder="you@example.com" />
         </label>
-        <button type="submit" class="btn-primary account-form__submit">Send sign-in link</button>
+        <button type="submit" class="primary account-form__submit">Send sign-in link</button>
         <p class="account-form__status" role="status" aria-live="polite">${escapeHTML(status)}</p>
       </form>
     </section>

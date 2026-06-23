@@ -503,16 +503,19 @@ export function renderPlan(root: HTMLElement) {
 
   function wireDates() {
     const startEl = root.querySelector("#start-date") as HTMLInputElement;
-    const endEl = root.querySelector("#end-date") as HTMLInputElement;
+    // End date only exists for multi-day activities — we can't assume
+    // it's there. Guarding nullable saves the click handlers from
+    // crashing on day trips.
+    const endEl = root.querySelector("#end-date") as HTMLInputElement | null;
     function readDates() {
       const s = startEl.value;
-      const e = endEl.value;
+      const e = endEl?.value ?? "";
       answers.startDate = s || null;
       answers.endDate = e && (!s || e >= s) ? e : null;
       if (answers.startDate) runPeek(answers.startDate);
     }
     startEl.addEventListener("change", readDates);
-    endEl.addEventListener("change", readDates);
+    endEl?.addEventListener("change", readDates);
     if (startEl.value) runPeek(startEl.value);
 
     // Enter on either field commits the dates and advances. Native
@@ -525,7 +528,7 @@ export function renderPlan(root: HTMLElement) {
       advance();
     }
     startEl.addEventListener("keydown", maybeAdvance);
-    endEl.addEventListener("keydown", maybeAdvance);
+    endEl?.addEventListener("keydown", maybeAdvance);
   }
 
   // ─── Location autocomplete ─────────────────────────────────────────────────
