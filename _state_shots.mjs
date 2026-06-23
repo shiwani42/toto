@@ -46,6 +46,16 @@ await ctx.addInitScript(() => {
   await page.close();
 }
 
+// Admin sign-in screen
+{
+  const page = await ctx.newPage();
+  await page.goto(BASE + "/?screen=admin", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2200);
+  await page.screenshot({ path: join(OUT, "13-admin.png"), fullPage: true });
+  console.log("✓ admin");
+  await page.close();
+}
+
 // Plan wizard — walk to specific steps and capture each
 {
   const page = await ctx.newPage();

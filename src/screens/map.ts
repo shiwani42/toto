@@ -109,20 +109,56 @@ export function renderMap(root: HTMLElement) {
     return;
   }
 
-  // Current location: a zone code the user last tapped, or null = entry.
+  // Found set: codes already scanned in store. Persisted by scan.ts on
+  // every successful scan. Drives the "this zone is done" treatment.
+  const found = new Set<string>(
+    (() => {
+      try {
+        const raw = sessionStorage.getItem("toto.found");
+        return raw ? (JSON.parse(raw) as string[]) : [];
+      } catch { return []; }
+    })(),
+  );
+  // If every wanted item is already in hand, skip the map and jump
+  // straight to the wrap-up screen. The shopper has nothing to find here.
+  if (list.every((c) => found.has(c))) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("screen", "done");
+    window.location.replace(url.toString());
+    return;
+  }
+
+  // Current location: a zone code the user last tapped or just finished
+  // scanning, or null = entry.
   const currentLoc = sessionStorage.getItem(CURRENT_LOC_KEY);
   const startPt = currentLoc && ZONE_POS[currentLoc] ? ZONE_POS[currentLoc] : ENTRY;
   const startLabel = currentLoc && ZONE_POS[currentLoc] ? `Zone ${currentLoc}` : t("map.entry");
 
   const zoneAgg = zonesForCodes(list);
-  const routeNodes = zoneAgg
+  // Done = every item in this zone is in the found set.
+  function zoneDone(zone: string): boolean {
+    const codesHere = list.filter((c) => getProduct(c)?.zone === zone);
+    return codesHere.length > 0 && codesHere.every((c) => found.has(c));
+  }
+  // Route plans only across zones that still need a stop. The done
+  // ones already had their visit and are dropped from the path so the
+  // line stays meaningful as the shopper progresses.
+  const pendingZones = zoneAgg.filter((z) => !zoneDone(z.zone));
+  const routeNodes = pendingZones
     .filter((z) => ZONE_POS[z.zone] && z.zone !== currentLoc)
     .map((z) => ({ key: z.zone, pt: ZONE_POS[z.zone] }));
 
   const order = shortestPath(startPt, routeNodes, CHECKOUT);
 
-  // Re-attach metadata to the ordered list of zones to drive the row UI.
-  const zones = order.map((key) => zoneAgg.find((z) => z.zone === key)!).filter(Boolean);
+  // Done zones still appear in the row list so the shopper can see the
+  // checkmark and progress. They sit at the bottom of the list.
+  const doneZones = zoneAgg
+    .filter((z) => zoneDone(z.zone))
+    .map((z) => z.zone);
+  const zones = [
+    ...order.map((key) => zoneAgg.find((z) => z.zone === key)!).filter(Boolean),
+    ...doneZones.map((key) => zoneAgg.find((z) => z.zone === key)!).filter(Boolean),
+  ];
 
   // Group resolved products by zone for the per-zone item lists.
   const byZone = new Map<string, Product[]>();
@@ -144,15 +180,21 @@ export function renderMap(root: HTMLElement) {
     return Math.round(d * 0.4);
   })();
 
-  const pins = zones
-    .map(({ zone, count }, i) => {
+  // Pins on the map: only show pending zones in the route order. Done
+  // zones disappear from the map itself (they live in the row list as
+  // a quiet check) so the visual focus is on what's left.
+  const pins = order
+    .map((zone, i) => {
       const pos = ZONE_POS[zone];
       if (!pos) return "";
+      const meta = zoneAgg.find((z) => z.zone === zone);
+      if (!meta) return "";
+      const isNext = i === 0;
       return `
-        <button type="button" class="zone-pin" data-set-current="${zone}" style="left:${pos.x}%; top:${pos.y}%" aria-label="Set current location to zone ${zone}">
+        <button type="button" class="zone-pin ${isNext ? "zone-pin--next" : ""}" data-set-current="${zone}" style="left:${pos.x}%; top:${pos.y}%" aria-label="${isNext ? "Next stop: " : ""}Zone ${zone}, ${meta.count} item${meta.count > 1 ? "s" : ""}">
           <span class="zone-pin__order">${i + 1}</span>
           <span class="zone-pin__letter">${zone}</span>
-          <span class="zone-pin__count" aria-label="${count} item${count > 1 ? "s" : ""}">${count}</span>
+          <span class="zone-pin__count" aria-label="${meta.count} item${meta.count > 1 ? "s" : ""}">${meta.count}</span>
         </button>
       `;
     })
@@ -163,43 +205,76 @@ export function renderMap(root: HTMLElement) {
     ? `<circle cx="${startPt.x}" cy="${startPt.y}" r="3.4" class="route-start"/>`
     : `<circle cx="${ENTRY.x}" cy="${ENTRY.y}" r="3.4" class="route-start"/>`;
 
+  const pendingCount = order.length;
   const rows = zones
     .map(({ zone, zone_name, count }, i) => {
       const items = byZone.get(zone) ?? [];
+      const done = zoneDone(zone);
+      // The first row in the route is the "next stop" — heavier accent
+      // treatment with a pulsing dot to draw the shopper's eye.
+      const isNext = !done && i === 0;
+      const orderLabel = done ? "" : String(i + 1);
+      const itemsHTML = done
+        ? "" // collapse the item list once the zone is finished
+        : `<ul class="zone-items">
+             ${items
+               .map(
+                 (p) =>
+                   `<li>
+                      <span class="zone-items__name">${escapeHTML(p.name)}</span>
+                      <span class="zone-items__sub">· ${escapeHTML(p.size)} · aisle ${escapeHTML(p.aisle)}</span>
+                    </li>`,
+               )
+               .join("")}
+           </ul>`;
+      const cls = [
+        "zone-row",
+        isNext ? "zone-row--next" : "",
+        done ? "zone-row--done" : "",
+      ].filter(Boolean).join(" ");
+      const headIcon = done
+        ? `<span class="zone-row__check" aria-label="Done">
+             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+           </span>`
+        : `<span class="zone-row__letter">${escapeHTML(orderLabel)}</span>`;
+      const subText = done
+        ? `${count} found`
+        : `${count} item${count > 1 ? "s" : ""}`;
       return `
         <li>
-          <a class="zone-row${i === 0 ? " zone-row--first" : ""}" href="?screen=scan&zone=${zone}">
+          <a class="${cls}" href="${done ? "#" : `?screen=scan&zone=${zone}`}" ${done ? `aria-disabled="true"` : ""}>
             <div class="zone-row__head">
-              <span class="zone-row__letter">${i + 1}</span>
+              ${headIcon}
               <div class="zone-row__meta">
                 <div class="zone-row__name">Zone ${zone} · ${escapeHTML(zone_name)}</div>
-                <div class="zone-row__sub">${count} item${count > 1 ? "s" : ""}</div>
+                <div class="zone-row__sub">${subText}</div>
               </div>
-              <span class="zone-row__chev" aria-hidden="true">
+              ${isNext ? `<span class="zone-row__pulse" aria-hidden="true"></span>` : ""}
+              ${!done ? `<span class="zone-row__chev" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-              </span>
+              </span>` : ""}
             </div>
-            <ul class="zone-items">
-              ${items
-                .map(
-                  (p) =>
-                    `<li>
-                       <span class="zone-items__name">${escapeHTML(p.name)}</span>
-                       <span class="zone-items__sub">· ${escapeHTML(p.size)} · aisle ${escapeHTML(p.aisle)}</span>
-                     </li>`,
-                )
-                .join("")}
-            </ul>
+            ${itemsHTML}
           </a>
         </li>
       `;
     })
     .join("");
 
+  // Header reflects where the shopper is in the trip. Fresh start →
+  // "Here's the plan". Mid-trip → "Next stop", which is more directive.
+  const inMidTrip = doneZones.length > 0;
+  const headline = inMidTrip && order[0]
+    ? `Next stop: Zone ${order[0]}`
+    : t("map.title");
+  const subline = inMidTrip
+    ? `${pendingCount} stop${pendingCount === 1 ? "" : "s"} left · ${pathDistance} m walk`
+    : `${list.length} ${list.length === 1 ? "item" : "items"} · ${pathDistance} m walk · ${t("map.from")} ${escapeHTML(startLabel)}`;
+
   root.innerHTML = `
     <header>
-      <h1>${t("map.title")}</h1>
-      <p class="tag">${list.length} ${list.length === 1 ? "item" : "items"} · ${pathDistance} m walk · ${t("map.from")} ${escapeHTML(startLabel)}</p>
+      <h1>${escapeHTML(headline)}</h1>
+      <p class="tag">${subline}</p>
     </header>
     <main class="screen-map">
       <div class="map-wrap">

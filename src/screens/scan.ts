@@ -104,7 +104,30 @@ export function renderScan(root: HTMLElement) {
   // ─── List state ───────────────────────────────────────────────────────────
 
   const wantedSet = new Set(list);
-  const found = new Set<string>();
+  // Rehydrate the found set from sessionStorage so the user can leave
+  // and come back (e.g., walked to the map between zones) without losing
+  // progress. Only keep codes that are still wanted.
+  const found = new Set<string>(
+    (() => {
+      try {
+        const raw = sessionStorage.getItem(FOUND_KEY);
+        if (!raw) return [];
+        return (JSON.parse(raw) as string[]).filter((c) => wantedSet.has(c));
+      } catch { return []; }
+    })(),
+  );
+  // Items in the current zone (if a zone filter is in play). Drives the
+  // "zone done" detection that triggers the auto-return to map.
+  const zoneItems = zoneParam
+    ? list.filter((c) => getProduct(c)?.zone === zoneParam)
+    : list;
+
+  function persistFound() {
+    sessionStorage.setItem(FOUND_KEY, JSON.stringify(Array.from(found)));
+  }
+  function allZoneItemsFound(): boolean {
+    return zoneItems.length > 0 && zoneItems.every((c) => found.has(c));
+  }
 
   function renderCarousel() {
     const cards = list.map((code) => {
@@ -415,6 +438,7 @@ export function renderScan(root: HTMLElement) {
           const matched = wantedSet.has(code.text);
           if (matched && !found.has(code.text)) {
             found.add(code.text);
+            persistFound();
             playFound();
             if ("vibrate" in navigator) navigator.vibrate([20, 40, 30]);
             const p = getProduct(code.text);
@@ -424,6 +448,22 @@ export function renderScan(root: HTMLElement) {
             renderCarousel();
             celebrateFind(code.text);
             totoReact("jump"); // he's excited you got it
+            // Auto-flow: when every item in this zone is checked off,
+            // celebrate briefly then send the user back to the map for
+            // the next stop. If the whole list is done, jump to done.
+            if (allZoneItemsFound()) {
+              const allDone = list.every((c) => found.has(c));
+              // Remember where the shopper is — the map redraws its
+              // route from this point instead of always from the entry.
+              if (zoneParam) sessionStorage.setItem("toto.currentLoc", zoneParam);
+              handle?.stop();
+              window.setTimeout(() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set("screen", allDone ? "done" : "map");
+                url.searchParams.delete("zone");
+                window.location.href = url.toString();
+              }, 1100);
+            }
           } else if (matched) {
             // Already-found re-detection: gentle beep, no log.
             playFound();
