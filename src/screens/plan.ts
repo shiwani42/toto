@@ -12,6 +12,7 @@ import { illustrationForCategory } from "../lib/product-art";
 import { track } from "../lib/analytics";
 import { pushSuggestion } from "../lib/companion";
 import { t } from "../lib/i18n";
+import { icon, type IconName } from "../lib/icons";
 
 function escapeHTML(s: string): string {
   return s
@@ -47,52 +48,50 @@ type Gender = "man" | "woman" | "other";
 type ShoppingFor = "self" | "someone" | "family";
 type Experience = "new" | "comfortable" | "enthusiast" | "pro";
 
-type ActivityVisual = { key: ActivityKey; emoji: string; label: string };
-// Each activity gets a distinct scene-defining glyph: Multi-day used to
-// also be a tent (clashing with Camping's tent), and Something-else's
-// sparkles read as generic. Mountains and a backpack make the row read
-// as outdoor-coherent without two cards looking identical.
+// Each step uses monochrome line icons drawn from lib/icons.ts so the
+// wizard matches the rest of the app's icon system (tab bar, home
+// choices, connect tiles). Earlier emoji renders varied across
+// platforms; line icons are crisp, brand-aligned, and consistent.
+
+type ActivityVisual = { key: ActivityKey; iconName: IconName; label: string };
 const ACTIVITY_VISUALS: ActivityVisual[] = [
-  { key: "day-hike",  emoji: "🥾",  label: "Day hike" },
-  { key: "multi-day", emoji: "🏔️", label: "Multi-day trek" },
-  { key: "camping",   emoji: "⛺",  label: "Camping" },
-  { key: "climbing",  emoji: "🧗",  label: "Climbing" },
-  { key: "trail-run", emoji: "🏃",  label: "Trail run" },
-  { key: "skiing",    emoji: "⛷️", label: "Ski / snow" },
-  { key: "other",     emoji: "🎒",  label: "Something else" },
+  { key: "day-hike",  iconName: "boot",          label: "Day hike" },
+  { key: "multi-day", iconName: "mountain",      label: "Multi-day trek" },
+  { key: "camping",   iconName: "tent",          label: "Camping" },
+  { key: "climbing",  iconName: "climbing",      label: "Climbing" },
+  { key: "trail-run", iconName: "running",       label: "Trail run" },
+  { key: "skiing",    iconName: "snowflake",     label: "Ski / snow" },
+  { key: "other",     iconName: "backpack",      label: "Something else" },
 ];
 
-const SHOPPING_VISUALS: { key: ShoppingFor; emoji: string; label: string; sub: string }[] = [
-  // Single-codepoint emojis only — the ZWJ family sequence rendered as
-  // separate glyphs on some Android/older WebKit versions, breaking the
-  // grid rhythm.
-  { key: "self",    emoji: "🙂",  label: "Myself",   sub: "Just my gear" },
-  { key: "someone", emoji: "🎁",  label: "Someone else", sub: "Gift or partner" },
-  { key: "family",  emoji: "🏡",  label: "My family", sub: "Two or more" },
+const SHOPPING_VISUALS: { key: ShoppingFor; iconName: IconName; label: string; sub: string }[] = [
+  { key: "self",    iconName: "user",  label: "Myself",       sub: "Just my gear" },
+  { key: "someone", iconName: "gift",  label: "Someone else", sub: "Gift or partner" },
+  { key: "family",  iconName: "users", label: "My family",    sub: "Two or more" },
 ];
 
-const GENDER_VISUALS: { key: Gender; emoji: string; label: string; sub: string }[] = [
-  { key: "man",   emoji: "👔",  label: "Men's cut",   sub: "" },
-  { key: "woman", emoji: "👚",  label: "Women's cut", sub: "" },
-  { key: "other", emoji: "🌿",  label: "Unisex",      sub: "Either" },
+const GENDER_VISUALS: { key: Gender; iconName: IconName; label: string; sub: string }[] = [
+  { key: "man",   iconName: "man",   label: "Men's cut",   sub: "" },
+  { key: "woman", iconName: "woman", label: "Women's cut", sub: "" },
+  { key: "other", iconName: "leaf",  label: "Unisex",      sub: "Either" },
 ];
 
-const EXPERIENCE_VISUALS: { key: Experience; emoji: string; label: string; sub: string }[] = [
-  { key: "new",         emoji: "🌱", label: "New",          sub: "First time" },
-  { key: "comfortable", emoji: "🌳", label: "Comfortable",  sub: "Done a few" },
-  { key: "enthusiast",  emoji: "🏔️", label: "Enthusiast",  sub: "Out most weekends" },
-  { key: "pro",         emoji: "🎯", label: "Pro",          sub: "All the time" },
+const EXPERIENCE_VISUALS: { key: Experience; iconName: IconName; label: string; sub: string }[] = [
+  { key: "new",         iconName: "sprout",        label: "New",         sub: "First time" },
+  { key: "comfortable", iconName: "tree",          label: "Comfortable", sub: "Done a few" },
+  { key: "enthusiast",  iconName: "mountain-snow", label: "Enthusiast",  sub: "Out most weekends" },
+  { key: "pro",         iconName: "target",        label: "Pro",         sub: "All the time" },
 ];
 
-const SPECIFICS_OPTIONS: { key: string; emoji: string; label: string }[] = [
-  { key: "first-time",   emoji: "🆕", label: "First time" },
-  { key: "with-kids",    emoji: "👶", label: "With kids" },
-  { key: "tight-budget", emoji: "💸", label: "Tight budget" },
-  { key: "run-hot",      emoji: "🔥", label: "I run hot" },
-  { key: "going-cold",   emoji: "❄️", label: "Cold weather" },
-  { key: "long-days",    emoji: "☀️", label: "Long days out" },
-  { key: "weight-matter",emoji: "🪶", label: "Light is key" },
-  { key: "rain-likely",  emoji: "🌧", label: "Wet weather" },
+const SPECIFICS_OPTIONS: { key: string; iconName: IconName; label: string }[] = [
+  { key: "first-time",   iconName: "star",      label: "First time" },
+  { key: "with-kids",    iconName: "baby",      label: "With kids" },
+  { key: "tight-budget", iconName: "banknote",  label: "Tight budget" },
+  { key: "run-hot",      iconName: "flame",     label: "I run hot" },
+  { key: "going-cold",   iconName: "snowflake", label: "Cold weather" },
+  { key: "long-days",    iconName: "sun",       label: "Long days out" },
+  { key: "weight-matter",iconName: "feather",   label: "Light is key" },
+  { key: "rain-likely",  iconName: "rain",      label: "Wet weather" },
 ];
 
 const SIZE_CHIPS = ["XS", "S", "M", "L", "XL"] as const;
@@ -241,13 +240,13 @@ export function renderPlan(root: HTMLElement) {
     render();
   }
 
-  function bigCards(items: { key: string; emoji: string; label: string; sub?: string; on?: boolean }[], attrKey: string): string {
+  function bigCards(items: { key: string; iconName: IconName; label: string; sub?: string; on?: boolean }[], attrKey: string): string {
     return `
       <div class="wizard-grid" id="${attrKey}-grid">
         ${items.map((o) => `
           <button class="wizard-card ${o.on ? "wizard-card--on" : ""}" type="button"
                   data-${attrKey}="${escapeHTML(o.key)}">
-            <span class="wizard-card__emoji" aria-hidden="true">${o.emoji}</span>
+            <span class="wizard-card__icon" aria-hidden="true">${icon(o.iconName, 28)}</span>
             <span class="wizard-card__title">${escapeHTML(o.label)}</span>
             ${o.sub ? `<span class="wizard-card__sub">${escapeHTML(o.sub)}</span>` : ""}
           </button>
@@ -358,7 +357,7 @@ export function renderPlan(root: HTMLElement) {
           ${SPECIFICS_OPTIONS.map((o) => `
             <button class="wizard-multi__chip ${answers.specifics.includes(o.key) ? "wizard-multi__chip--on" : ""}"
                     type="button" data-spec="${o.key}">
-              <span class="wizard-multi__emoji" aria-hidden="true">${o.emoji}</span>
+              <span class="wizard-multi__icon" aria-hidden="true">${icon(o.iconName, 18)}</span>
               ${escapeHTML(o.label)}
             </button>
           `).join("")}

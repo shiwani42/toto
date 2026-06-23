@@ -3022,10 +3022,18 @@ body.has-cart .toto-companion {
   border-color: var(--accent);
   background: var(--accent-bg);
 }
-.wizard-card__emoji {
+.wizard-card__emoji,
+.wizard-card__icon {
   font-size: 32px;
-  line-height: 1;
+  line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  color: var(--accent);
 }
+.wizard-card--on .wizard-card__icon { color: var(--accent-strong); }
 .wizard-card__title {
   font-size: 14.5px;
   font-weight: 600;
@@ -3078,7 +3086,16 @@ body.has-cart .toto-companion {
 }
 /* Selected state is communicated by the chip going green — the user
    asked us not to add a check overlay on top. */
-.wizard-multi__emoji { font-size: 18px; flex-shrink: 0; }
+.wizard-multi__emoji,
+.wizard-multi__icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+.wizard-multi__chip--on .wizard-multi__icon { color: var(--accent-strong); }
 
 /* Sizes step: three blocks of chip rows. */
 .wizard-sizes {
