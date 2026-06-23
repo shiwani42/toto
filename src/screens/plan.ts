@@ -692,8 +692,20 @@ export function renderPlan(root: HTMLElement) {
         <div class="wizard__loading">
           <h1 class="wizard__q">${headline}</h1>
           ${subline ? `<p class="wizard__loading-sub">${subline}</p>` : ""}
-          <p class="wizard__progress-msg" id="progress">${isGeneral ? "Thinking it over…" : "Sniffing out your picks…"}</p>
+          <p class="wizard__progress-msg" id="progress">
+            <span class="wizard__progress-dot" aria-hidden="true"></span>
+            <span class="wizard__progress-text">${isGeneral ? "Thinking it over…" : "Sniffing out your picks…"}</span>
+          </p>
           <div id="weather"></div>
+          <!-- Anticipation skeleton: faint outline of the category cards
+               that are about to appear. Sets the shape of what's coming
+               so the wait reads as deliberate, not idle. -->
+          <ul class="plan-skeleton" aria-hidden="true">
+            <li class="plan-skeleton__row"></li>
+            <li class="plan-skeleton__row"></li>
+            <li class="plan-skeleton__row"></li>
+            <li class="plan-skeleton__row"></li>
+          </ul>
         </div>
         <div id="result"></div>
       </main>
@@ -714,7 +726,9 @@ export function renderPlan(root: HTMLElement) {
         bottomSize: cur.bottomSize,
         shoeSizeEU: cur.shoeSizeEU,
       }, (msg, w) => {
-        progressEl.textContent = msg;
+        const textEl = progressEl.querySelector(".wizard__progress-text");
+        if (textEl) textEl.textContent = msg;
+        else progressEl.textContent = msg;
         if (w) weatherEl.innerHTML = weatherCard(w);
       });
       if (result.weather && weatherEl.innerHTML === "") {
