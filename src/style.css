@@ -1363,6 +1363,23 @@ button, .primary { font: inherit; cursor: pointer; }
   gap: 12px;
   margin-top: 4px;
 }
+/* Single-day trips drop down to one column so the Date field gets the
+   full width and doesn't read as half a missing pair. */
+.wizard__date-grid--single { grid-template-columns: 1fr; }
+
+/* Brief shake to draw attention to a required End date the user hasn't
+   filled in yet. Fires from the Continue handler. */
+@keyframes wizard-date-shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-6px); }
+  40%      { transform: translateX(6px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(4px); }
+}
+.wizard__date-input--shake {
+  animation: wizard-date-shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  border-color: var(--bad, #c0392b) !important;
+}
 /* Date fields styled the way Apple's calendar fields read: small
    uppercase label sitting on top of a soft tinted card. The native
    date input gets a soft fill, generous padding, big tabular date

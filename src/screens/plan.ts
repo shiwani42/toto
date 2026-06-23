@@ -294,21 +294,28 @@ export function renderPlan(root: HTMLElement) {
       `;
     }
     if (step === "when") {
-      // Default the start date to today so the field never looks empty
-      // and the user can immediately move on. End date stays optional.
+      // Default the start date to today so the field never looks empty.
       const startValue = answers.startDate ?? today;
       if (!answers.startDate) answers.startDate = today;
+      // Show the End date only when the chosen activity implies multiple
+      // days (multi-day trek, camping). Day hikes, trail runs, ski day
+      // outs, etc. don't need it — and a lone End (optional) field added
+      // noise to the most common case. When shown, End is required, no
+      // "(optional)" tag.
+      const multiDay = answers.activity?.key === "multi-day" || answers.activity?.key === "camping";
       stepBody = `
         <h1 class="wizard__q">${t("plan.q.when")}</h1>
-        <div class="wizard__date-grid">
+        <div class="wizard__date-grid${multiDay ? "" : " wizard__date-grid--single"}">
           <label class="wizard__date-label">
-            <span>Start</span>
+            <span>${escapeHTML(multiDay ? t("plan.when.start") : t("plan.when.day"))}</span>
             <input id="start-date" type="date" min="${today}" value="${startValue}" />
           </label>
-          <label class="wizard__date-label">
-            <span>End <small class="muted">(optional)</small></span>
-            <input id="end-date" type="date" min="${today}" value="${answers.endDate ?? ""}" />
-          </label>
+          ${multiDay ? `
+            <label class="wizard__date-label">
+              <span>${escapeHTML(t("plan.when.end"))}</span>
+              <input id="end-date" type="date" min="${today}" value="${answers.endDate ?? ""}" />
+            </label>
+          ` : ""}
         </div>
         <p class="wizard__peek" id="peek"></p>
       `;
@@ -340,11 +347,12 @@ export function renderPlan(root: HTMLElement) {
 
     const isLast = stepIdx === STEPS.length - 1;
     // Cards (activity/shopping/whoFor/experience) auto-advance on tap.
-    // Inputs (location/when) auto-advance on enter or after a value
-    // change settles. Sizes auto-advances when all three are picked.
-    // Only specifics keeps an explicit button — it's a multi-select
-    // where the user needs a moment to choose and then commit.
-    const showNext = step === "specifics";
+    // Location commits on Enter or via the result list. Sizes
+    // auto-advances when all blocks are picked. When + Specifics keep
+    // an explicit Continue: When has native date inputs with no
+    // tappable commit on mobile, Specifics is a multi-select that
+    // needs an "I'm done picking" gesture.
+    const showNext = step === "specifics" || step === "when";
     const nextLabel = isLast ? t("plan.continue") : "Continue";
 
     root.innerHTML = `
@@ -394,7 +402,28 @@ export function renderPlan(root: HTMLElement) {
       advance();
     });
     const nextBtn = root.querySelector("#next") as HTMLButtonElement | null;
-    nextBtn?.addEventListener("click", advance);
+    nextBtn?.addEventListener("click", () => {
+      if (step === "when") {
+        const s = (root.querySelector("#start-date") as HTMLInputElement | null)?.value || null;
+        const e = (root.querySelector("#end-date")   as HTMLInputElement | null)?.value || null;
+        const multiDay = answers.activity?.key === "multi-day" || answers.activity?.key === "camping";
+        answers.startDate = s;
+        answers.endDate = e && (!s || e >= s) ? e : null;
+        // When the activity implies multiple days, End is required.
+        // Don't advance until the user picks it; nudge focus to the
+        // end field and shake it briefly so the ask is unmistakable.
+        if (multiDay && !answers.endDate) {
+          const endEl = root.querySelector("#end-date") as HTMLInputElement | null;
+          if (endEl) {
+            endEl.focus();
+            endEl.classList.add("wizard__date-input--shake");
+            window.setTimeout(() => endEl.classList.remove("wizard__date-input--shake"), 600);
+          }
+          return;
+        }
+      }
+      advance();
+    });
   }
 
   function wireActivityCards() {
@@ -580,7 +609,11 @@ export function renderPlan(root: HTMLElement) {
     peekEl.classList.remove("wizard__peek--ready");
     peekEl.textContent = "Sniffing out the forecast…";
     try {
-      const w = await forecast(answers.location, date, 1);
+      // For multi-day trips, pull the forecast across the whole
+      // duration so the picks reflect the worst day, not just the
+      // start. Single-day trips ask for 1 day.
+      const days = answers.endDate ? daysBetween(date, answers.endDate) : 1;
+      const w = await forecast(answers.location, date, days);
       if (localToken !== peekToken) return;
       if (!w) {
         peekEl.classList.remove("wizard__peek--ready");
@@ -600,14 +633,22 @@ export function renderPlan(root: HTMLElement) {
     }
   }
 
-  // Re-fire the peek when start date changes (debounced).
+  // Re-fire the peek when either date changes (debounced). End-date
+  // changes matter for multi-day trips so the forecast widens to the
+  // new range.
   let peekDebounce: number | undefined;
   root.addEventListener("change", (e) => {
     const t = e.target as HTMLElement;
-    if (t.id !== "start-date") return;
-    const v = (t as HTMLInputElement).value;
+    if (t.id !== "start-date" && t.id !== "end-date") return;
+    const start = (root.querySelector("#start-date") as HTMLInputElement | null)?.value;
+    if (!start) return;
+    // Sync end-date into answers immediately so runPeek sees it.
+    if (t.id === "end-date") {
+      const v = (t as HTMLInputElement).value;
+      answers.endDate = v && v >= start ? v : null;
+    }
     window.clearTimeout(peekDebounce);
-    peekDebounce = window.setTimeout(() => runPeek(v), 200);
+    peekDebounce = window.setTimeout(() => runPeek(start), 200);
   });
 
   // ─── Submit + result ───────────────────────────────────────────────────────
