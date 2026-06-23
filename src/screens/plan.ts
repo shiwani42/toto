@@ -97,6 +97,124 @@ const SPECIFICS_OPTIONS: { key: string; iconName: IconName; label: string }[] = 
 const SIZE_CHIPS = ["XS", "S", "M", "L", "XL"] as const;
 const SHOE_CHIPS = [36, 37, 38, 39, 40, 41, 42, 43, 44, 45];
 
+/** Slide-up sheet for editing a single party member's name + gender +
+ *  sizes. New members start blank; tapping save returns the populated
+ *  PartyMember to the caller. */
+function mountPartyEditor(
+  initial: import("../lib/prefs").PartyMember | null,
+  onSave: (m: import("../lib/prefs").PartyMember) => void,
+) {
+  const m: import("../lib/prefs").PartyMember = initial
+    ? { ...initial }
+    : {
+        id: `pm-${Math.random().toString(36).slice(2, 9)}`,
+        name: "",
+        gender: null,
+        topSize: null,
+        bottomSize: null,
+        shoeSizeEU: null,
+      };
+  const host = document.createElement("div");
+  host.className = "party-sheet-host";
+  host.innerHTML = `
+    <div class="party-sheet-backdrop"></div>
+    <form class="party-sheet" id="party-sheet" novalidate>
+      <h2 class="party-sheet__title">${initial ? "Edit person" : "Add a person"}</h2>
+
+      <label class="party-sheet__field">
+        <span class="party-sheet__label">Name</span>
+        <input id="pm-name" type="text" placeholder="e.g. Sam" value="${(m.name ?? "").replace(/"/g, "&quot;")}" />
+      </label>
+
+      <div class="party-sheet__field">
+        <span class="party-sheet__label">Cut</span>
+        <div class="party-sheet__row" data-row="gender">
+          ${(["man", "woman", "other"] as const).map((g) => `
+            <button type="button" class="party-pill ${m.gender === g ? "party-pill--on" : ""}" data-gender="${g}">
+              ${g === "man" ? "Men's" : g === "woman" ? "Women's" : "Unisex"}
+            </button>
+          `).join("")}
+        </div>
+      </div>
+
+      <div class="party-sheet__field">
+        <span class="party-sheet__label">Top</span>
+        <div class="party-sheet__row" data-row="top">
+          ${(["XS", "S", "M", "L", "XL"] as const).map((s) => `
+            <button type="button" class="party-pill ${m.topSize === s ? "party-pill--on" : ""}" data-top="${s}">${s}</button>
+          `).join("")}
+        </div>
+      </div>
+
+      <div class="party-sheet__field">
+        <span class="party-sheet__label">Bottom</span>
+        <div class="party-sheet__row" data-row="bottom">
+          ${(["XS", "S", "M", "L", "XL"] as const).map((s) => `
+            <button type="button" class="party-pill ${m.bottomSize === s ? "party-pill--on" : ""}" data-bottom="${s}">${s}</button>
+          `).join("")}
+        </div>
+      </div>
+
+      <div class="party-sheet__field">
+        <span class="party-sheet__label">Shoe (EU)</span>
+        <div class="party-sheet__row party-sheet__row--scroll" data-row="shoe">
+          ${[36, 37, 38, 39, 40, 41, 42, 43, 44, 45].map((s) => `
+            <button type="button" class="party-pill ${m.shoeSizeEU === s ? "party-pill--on" : ""}" data-shoe="${s}">${s}</button>
+          `).join("")}
+        </div>
+      </div>
+
+      <div class="party-sheet__actions">
+        <button type="button" id="pm-cancel" class="link-btn">Cancel</button>
+        <button type="submit" class="primary party-sheet__save">Save</button>
+      </div>
+    </form>
+  `;
+  document.body.appendChild(host);
+
+  // Trigger the slide-up animation on next frame.
+  requestAnimationFrame(() => host.classList.add("party-sheet-host--open"));
+
+  function close() {
+    host.classList.remove("party-sheet-host--open");
+    window.setTimeout(() => host.remove(), 250);
+  }
+
+  function activatePill(row: HTMLElement, btn: HTMLButtonElement) {
+    row.querySelectorAll(".party-pill--on").forEach((el) => el.classList.remove("party-pill--on"));
+    btn.classList.add("party-pill--on");
+  }
+
+  host.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    if (target === host.querySelector(".party-sheet-backdrop")) {
+      close();
+      return;
+    }
+    const row = target.closest(".party-sheet__row") as HTMLElement | null;
+    if (!row) return;
+    const btn = target.closest<HTMLButtonElement>(".party-pill");
+    if (!btn) return;
+    activatePill(row, btn);
+    if (btn.dataset.gender)   m.gender     = btn.dataset.gender as import("../lib/prefs").Gender;
+    if (btn.dataset.top)      m.topSize    = btn.dataset.top as import("../lib/prefs").Prefs["topSize"];
+    if (btn.dataset.bottom)   m.bottomSize = btn.dataset.bottom as import("../lib/prefs").Prefs["bottomSize"];
+    if (btn.dataset.shoe)     m.shoeSizeEU = Number(btn.dataset.shoe);
+  });
+
+  (host.querySelector("#pm-cancel") as HTMLButtonElement).addEventListener("click", close);
+  (host.querySelector("#party-sheet") as HTMLFormElement).addEventListener("submit", (e) => {
+    e.preventDefault();
+    const nameInput = host.querySelector("#pm-name") as HTMLInputElement;
+    m.name = nameInput.value.trim() || `Person`;
+    onSave(m);
+    close();
+  });
+  window.setTimeout(() => {
+    (host.querySelector("#pm-name") as HTMLInputElement)?.focus();
+  }, 100);
+}
+
 function todayIso(): string {
   const d = new Date();
   d.setHours(12, 0, 0, 0);
@@ -175,24 +293,30 @@ export function renderPlan(root: HTMLElement) {
     specifics: [],
   };
 
-  // The full question set, smart-skipped per prefs.
-  type Step = "activity" | "shoppingFor" | "whoFor" | "experience" | "location" | "when" | "sizes" | "specifics";
+  // The full question set, smart-skipped per prefs. Order matters: we
+  // ask "who are you shopping for?" before "what's your gender?" /
+  // "what are your sizes?" — those last two only make sense once we
+  // know who the gear is for. Family / someone-else routes through
+  // the dedicated `party` step (multi-person profile collector) and
+  // skips the self-focused whoFor + sizes.
+  type Step = "activity" | "shoppingFor" | "whoFor" | "experience" | "location" | "when" | "sizes" | "party" | "specifics";
 
   function computeSteps(): Step[] {
     const prefs = getPrefs();
-    const steps: Step[] = ["activity"];
-    if (!prefs.shoppingFor)                                 steps.push("shoppingFor");
-    if (!prefs.gender && prefs.shoppingFor !== "family")    steps.push("whoFor");
-    if (!prefs.experience)                                  steps.push("experience");
-    steps.push("location", "when");
-    // Personal sizes only make sense when the shopper is buying for
-    // themselves. For family or someone-else trips, the picks should
-    // be size-agnostic — the planner can keep it broad rather than
-    // asking sizes for people we don't have data on.
     const shoppingForSelf = !prefs.shoppingFor || prefs.shoppingFor === "self";
+    const steps: Step[] = ["activity"];
+    if (!prefs.shoppingFor)                                       steps.push("shoppingFor");
+    // Personal gender + sizes only make sense when shopping for self.
+    if (shoppingForSelf && !prefs.gender)                         steps.push("whoFor");
+    if (!prefs.experience)                                        steps.push("experience");
+    steps.push("location", "when");
     if (shoppingForSelf && (!prefs.topSize || !prefs.bottomSize || !prefs.shoeSizeEU)) {
       steps.push("sizes");
     }
+    // Multi-person profile collection: when shopping for family or
+    // someone else, gather each person's name + gender + sizes in
+    // one step instead of asking for self-prefs that don't apply.
+    if (!shoppingForSelf) steps.push("party");
     steps.push("specifics");
     return steps;
   }
@@ -266,6 +390,28 @@ export function renderPlan(root: HTMLElement) {
           `).join("")}
         </div>
       </div>
+    `;
+  }
+
+  function partyMemberCard(m: import("../lib/prefs").PartyMember, idx: number): string {
+    const summary: string[] = [];
+    if (m.gender === "man")     summary.push("Men's");
+    if (m.gender === "woman")   summary.push("Women's");
+    if (m.gender === "other")   summary.push("Unisex");
+    if (m.topSize)              summary.push(`top ${m.topSize}`);
+    if (m.bottomSize)           summary.push(`bottom ${m.bottomSize}`);
+    if (m.shoeSizeEU)           summary.push(`shoe ${m.shoeSizeEU}`);
+    const summaryText = summary.length ? summary.join(" · ") : "Tap to fill in";
+    return `
+      <li class="party-card" data-member-idx="${idx}">
+        <button type="button" class="party-card__head" data-edit-member="${idx}">
+          <span class="party-card__name">${escapeHTML(m.name || `Person ${idx + 1}`)}</span>
+          <span class="party-card__summary">${escapeHTML(summaryText)}</span>
+        </button>
+        <button type="button" class="party-card__remove" data-remove-member="${idx}" aria-label="Remove">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+        </button>
+      </li>
     `;
   }
 
@@ -349,6 +495,22 @@ export function renderPlan(root: HTMLElement) {
         </div>
       `;
     }
+    if (step === "party") {
+      const members = prefs.partyMembers ?? [];
+      stepBody = `
+        <h1 class="wizard__q">${escapeHTML(prefs.shoppingFor === "family" ? "Who's in your family?" : "Who is it for?")}</h1>
+        <p class="wizard__multi-hint">${escapeHTML(prefs.shoppingFor === "family" ? "Add each person and their sizes." : "Tell me about them.")}</p>
+
+        <ul class="party-list" id="party-list">
+          ${members.map((m, idx) => partyMemberCard(m, idx)).join("")}
+        </ul>
+
+        <button type="button" class="party-add" id="party-add">
+          <span class="party-add__icon">${icon("plus", 18)}</span>
+          ${escapeHTML(members.length === 0 ? "Add a person" : "Add another")}
+        </button>
+      `;
+    }
     if (step === "specifics") {
       stepBody = `
         <h1 class="wizard__q">Anything special?</h1>
@@ -372,7 +534,7 @@ export function renderPlan(root: HTMLElement) {
     // an explicit Continue: When has native date inputs with no
     // tappable commit on mobile, Specifics is a multi-select that
     // needs an "I'm done picking" gesture.
-    const showNext = step === "specifics" || step === "when";
+    const showNext = step === "specifics" || step === "when" || step === "party";
     const nextLabel = isLast ? t("plan.continue") : "Continue";
 
     root.innerHTML = `
@@ -405,6 +567,7 @@ export function renderPlan(root: HTMLElement) {
     if (step === "when")         wireDates();
     if (step === "sizes")        wireSizes();
     if (step === "specifics")    wireSpecifics();
+    if (step === "party")        wireParty();
 
     (root.querySelector("#back") as HTMLButtonElement).addEventListener("click", back);
     // The Skip button doubles as the "commit and move on" affordance —
@@ -532,6 +695,44 @@ export function renderPlan(root: HTMLElement) {
       if (i === -1) answers.specifics.push(key);
       else answers.specifics.splice(i, 1);
       btn.classList.toggle("wizard-multi__chip--on");
+    });
+  }
+
+  function wireParty() {
+    const list = root.querySelector("#party-list") as HTMLUListElement;
+    const addBtn = root.querySelector("#party-add") as HTMLButtonElement;
+
+    function openEditor(idx: number | null) {
+      const current = idx == null
+        ? null
+        : (getPrefs().partyMembers ?? [])[idx] ?? null;
+      mountPartyEditor(current, (saved) => {
+        const prefs = getPrefs();
+        const members = [...(prefs.partyMembers ?? [])];
+        if (idx == null) members.push(saved);
+        else members[idx] = saved;
+        setPrefs({ partyMembers: members });
+        render();
+      });
+    }
+
+    addBtn.addEventListener("click", () => openEditor(null));
+    list.addEventListener("click", (e) => {
+      const editBtn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-edit-member]");
+      if (editBtn) {
+        openEditor(Number(editBtn.dataset.editMember));
+        return;
+      }
+      const removeBtn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-remove-member]");
+      if (removeBtn) {
+        e.stopPropagation();
+        const idx = Number(removeBtn.dataset.removeMember);
+        const prefs = getPrefs();
+        const members = [...(prefs.partyMembers ?? [])];
+        members.splice(idx, 1);
+        setPrefs({ partyMembers: members });
+        render();
+      }
     });
   }
 
@@ -699,7 +900,25 @@ export function renderPlan(root: HTMLElement) {
     const dur = answers.endDate
       ? `for ${daysBetween(answers.startDate ?? answers.endDate, answers.endDate)} days`
       : answers.startDate ? `for a day trip` : "duration unspecified";
-    const base = `${a} near ${loc} ${dateText}, ${dur}.`;
+    let base = `${a} near ${loc} ${dateText}, ${dur}.`;
+
+    // Party context: when shopping for more than one person, give the
+    // planner each member's name + gender + sizes so it can suggest
+    // gear that fits the group instead of defaulting to one body.
+    const prefs = getPrefs();
+    const members = prefs.partyMembers ?? [];
+    if (members.length > 0) {
+      const lines = members.map((m) => {
+        const parts: string[] = [m.name || "Person"];
+        if (m.gender) parts.push(m.gender === "other" ? "unisex cut" : `${m.gender === "man" ? "men's" : "women's"} cut`);
+        if (m.topSize)    parts.push(`top ${m.topSize}`);
+        if (m.bottomSize) parts.push(`bottom ${m.bottomSize}`);
+        if (m.shoeSizeEU) parts.push(`shoe EU ${m.shoeSizeEU}`);
+        return `- ${parts.join(", ")}`;
+      });
+      base += ` Shopping for these people:\n${lines.join("\n")}`;
+    }
+
     if (answers.specifics.length === 0) return base;
     const specLabels = answers.specifics
       .map((k) => SPECIFICS_OPTIONS.find((o) => o.key === k)?.label)

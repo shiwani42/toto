@@ -3061,6 +3061,190 @@ body.has-cart .toto-companion {
   color: var(--muted-fg);
 }
 
+/* ─── Party step (multi-person profile collector) ───────────────────────── */
+.party-list {
+  list-style: none;
+  margin: 14px 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.party-card {
+  display: flex;
+  align-items: stretch;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.party-card__head {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.party-card__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.party-card__summary {
+  font-size: 12.5px;
+  color: var(--muted-fg);
+}
+.party-card__remove {
+  width: 44px;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted-fg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+.party-card__remove:hover {
+  background: var(--panel-strong);
+  color: var(--bad, #c0392b);
+}
+
+.party-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  background: var(--accent-bg);
+  border: 1px dashed var(--accent-border);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.party-add:hover { background: color-mix(in srgb, var(--accent-bg) 70%, #fff); }
+.party-add__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+/* Slide-up sheet for editing one person. */
+.party-sheet-host {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  pointer-events: none;
+}
+.party-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 22, 26, 0.4);
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  pointer-events: auto;
+}
+.party-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 92svh;
+  overflow-y: auto;
+  background: var(--card);
+  border-radius: 22px 22px 0 0;
+  padding: 22px 22px calc(env(safe-area-inset-bottom) + 24px);
+  transform: translateY(110%);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: auto;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18);
+}
+.party-sheet-host--open .party-sheet-backdrop { opacity: 1; }
+.party-sheet-host--open .party-sheet { transform: translateY(0); }
+.party-sheet__title {
+  margin: 0 0 18px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.party-sheet__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.party-sheet__label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-fg);
+}
+.party-sheet__field input[type="text"] {
+  padding: 14px 16px;
+  font: inherit;
+  font-size: 15px;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.party-sheet__field input[type="text"]:focus {
+  background: var(--card);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-bg);
+}
+.party-sheet__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.party-sheet__row--scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.party-pill {
+  padding: 9px 14px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+.party-pill:hover { border-color: var(--accent); }
+.party-pill--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.party-sheet__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.party-sheet__save { flex: 1; }
+
 /* Multi-select chip grid. Two columns, equal widths so the rows
    align cleanly. Was previously a flex-wrap with variable widths
    that made each row look ragged. */

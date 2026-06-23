@@ -8,6 +8,17 @@ export type Experience = "new" | "comfortable" | "enthusiast" | "pro";
 export type AgeBucket = "u20" | "20-30" | "30-45" | "45-60" | "60+";
 export type ShoppingFor = "self" | "someone" | "family";
 
+/** One person we're shopping for. Captured when shoppingFor isn't "self"
+ *  so the planner knows whose sizes / gender each pick should fit. */
+export type PartyMember = {
+  id: string;
+  name: string;
+  gender: Gender | null;
+  topSize: "XS" | "S" | "M" | "L" | "XL" | null;
+  bottomSize: "XS" | "S" | "M" | "L" | "XL" | null;
+  shoeSizeEU: number | null;
+};
+
 export type Prefs = {
   highContrast: boolean;
   largeText: boolean;
@@ -23,6 +34,9 @@ export type Prefs = {
   experience: Experience | null;
   shoppingFor: ShoppingFor | null;
   familyCount: number | null;
+  /** People we're shopping for (when shoppingFor is "family" or
+   *  "someone"). Empty list means we haven't collected them yet. */
+  partyMembers: PartyMember[];
   language: "en" | "de" | "fr" | "it" | null;
   /** Compact trip history — most recent first. See lib/history.ts. */
   history: Array<{
@@ -45,6 +59,7 @@ const DEFAULTS: Prefs = {
   experience: null,
   shoppingFor: null,
   familyCount: null,
+  partyMembers: [],
   language: null,
   history: [],
 };
