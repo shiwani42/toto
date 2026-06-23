@@ -130,6 +130,20 @@ main {
   min-height: 0;
 }
 
+/* Screen transition: a subtle fade + tiny rise on every route change.
+   Stamped on #app by main.ts. Just enough motion to feel intentional,
+   not enough to delay interaction. */
+@keyframes app-enter-in {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+#app.app-enter {
+  animation: app-enter-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  #app.app-enter { animation: none; }
+}
+
 /* ─── Buttons ────────────────────────────────────────────────────────────── */
 button, .primary { font: inherit; cursor: pointer; }
 

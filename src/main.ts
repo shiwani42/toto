@@ -181,6 +181,12 @@ function mount() {
   // Reset the cart-bar layout class; the list-builder re-applies it
   // when it mounts and the list has items.
   document.body.classList.remove("has-cart");
+  // Subtle screen-in fade: stamp a one-shot class on #app so the new
+  // content rises in over ~200ms. Hard cuts read like a 90s site;
+  // a tiny ease makes the app feel native.
+  root.classList.remove("app-enter");
+  void root.offsetWidth;
+  root.classList.add("app-enter");
   switch (screen) {
     case "home":
       renderHome(root);
