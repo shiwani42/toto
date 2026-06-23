@@ -59,9 +59,12 @@ const ACTIVITY_VISUALS: ActivityVisual[] = [
 ];
 
 const SHOPPING_VISUALS: { key: ShoppingFor; emoji: string; label: string; sub: string }[] = [
+  // Single-codepoint emojis only — the ZWJ family sequence rendered as
+  // separate glyphs on some Android/older WebKit versions, breaking the
+  // grid rhythm.
   { key: "self",    emoji: "🙂",  label: "Myself",   sub: "Just my gear" },
-  { key: "someone", emoji: "🎁", label: "Someone else", sub: "Gift or partner" },
-  { key: "family",  emoji: "👨‍👩‍👧", label: "My family", sub: "Two or more" },
+  { key: "someone", emoji: "🎁",  label: "Someone else", sub: "Gift or partner" },
+  { key: "family",  emoji: "🏡",  label: "My family", sub: "Two or more" },
 ];
 
 const GENDER_VISUALS: { key: Gender; emoji: string; label: string; sub: string }[] = [
