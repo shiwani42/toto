@@ -36,7 +36,7 @@ export function renderHome(root: HTMLElement) {
       ${activeSession ? `
         <a class="home-banner" href="?screen=connected">
           <span>${escapeHTML(activeSession.me.emoji)} ${t("home.banner.with")} ${escapeHTML(activeSession.me.name)}</span>
-          <span class="home-banner__open">${t("home.banner.open")} ›</span>
+          <span class="home-banner__open">${t("home.banner.open")}</span>
         </a>
       ` : ""}
 

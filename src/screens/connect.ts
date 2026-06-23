@@ -54,7 +54,7 @@ export function renderConnect(root: HTMLElement) {
               <span class="connect-v2__resume-title">${escapeHTML(existing.me.name)}</span>
               <span class="connect-v2__resume-sub">${escapeHTML(existing.code)}</span>
             </span>
-            <span class="connect-v2__resume-cta">${t("home.banner.open")} ›</span>
+            <span class="connect-v2__resume-cta">${t("home.banner.open")}</span>
           </a>
         ` : ""}
 

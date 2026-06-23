@@ -156,7 +156,7 @@ export function renderFit(root: HTMLElement) {
 
       ${existing.sizeSource ? `<p class="tag">Last saved: ${escapeHTML(`top ${existing.topSize ?? "?"}, bottom ${existing.bottomSize ?? "?"}, shoe EU ${existing.shoeSizeEU ?? "?"}`)} <a class="inline-link" href="?screen=settings">edit</a></p>` : ""}
 
-      <a class="link-btn" href="?screen=settings">‹ Back to settings</a>
+      <a class="link-btn" href="?screen=settings">Back to settings</a>
     </main>
   `;
 

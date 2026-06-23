@@ -175,7 +175,9 @@ export function renderMap(root: HTMLElement) {
                 <div class="zone-row__name">Zone ${zone} · ${escapeHTML(zone_name)}</div>
                 <div class="zone-row__sub">${count} item${count > 1 ? "s" : ""}</div>
               </div>
-              <span class="zone-row__chev" aria-hidden="true">›</span>
+              <span class="zone-row__chev" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              </span>
             </div>
             <ul class="zone-items">
               ${items

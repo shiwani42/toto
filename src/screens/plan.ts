@@ -361,7 +361,9 @@ export function renderPlan(root: HTMLElement) {
           ${STEPS.map((_, i) => `<span class="plan-one__dot ${i <= stepIdx ? "plan-one__dot--on" : ""}"></span>`).join("")}
         </div>
         <header class="plan-one__head">
-          <button class="wizard__back" id="back" aria-label="Back">‹</button>
+          <button class="wizard__back" id="back" aria-label="Back">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
         </header>
         <section class="plan-one__step">
           ${stepBody}
@@ -370,7 +372,7 @@ export function renderPlan(root: HTMLElement) {
           <button class="wizard__skip" id="skip" type="button">${t("plan.skip")}</button>
           ${showNext ? `<button class="primary plan-one__go" id="next" type="button">${nextLabel}</button>` : ""}
         </div>
-        ${stepIdx === 0 ? `<a class="link-btn plan-one__alt" href="?screen=browse">Or just browse the store ›</a>` : ""}
+        ${stepIdx === 0 ? `<a class="link-btn plan-one__alt" href="?screen=browse">Or just browse the store</a>` : ""}
       </main>
     `;
 
@@ -822,7 +824,9 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
             ${c.why ? `<span class="cat-pick__why">${escapeHTML(c.why)}</span>` : ""}
             <span class="cat-pick__status">${escapeHTML(status)}</span>
           </span>
-          <span class="cat-pick__chev" aria-hidden="true">›</span>
+          <span class="cat-pick__chev" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </span>
         </button>
       `;
     }).join("");
@@ -831,9 +835,9 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
 
     return `
       <div class="cat-flow">
-        <button class="cat-flow__back" id="cat-back">‹ Back</button>
+        <button class="cat-flow__back" id="cat-back">Back</button>
         <div class="cat-picks">${rows}</div>
-        <a class="primary cat-flow__cta" href="?screen=map">${totalAdded > 0 ? `Find ${totalAdded} in the store ›` : "Find them in the store ›"}</a>
+        <a class="primary cat-flow__cta" href="?screen=map">${totalAdded > 0 ? `Find ${totalAdded} in the store` : "Find them in the store"}</a>
       </div>
     `;
   }
@@ -846,7 +850,9 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
     if (!cat) return "";
     return `
       <div class="cat-flow cat-flow--swipe">
-        <button class="cat-flow__back cat-flow__back--float" id="swipe-back" aria-label="Back to categories">‹</button>
+        <button class="cat-flow__back cat-flow__back--float" id="swipe-back" aria-label="Back to categories">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
         <div class="deck-frame">
           <div class="deck-progress" id="deck-progress"></div>
           <div class="deck-stage" id="deck-stage"></div>

@@ -86,7 +86,7 @@ function unconfiguredHTML(): string {
       <p>The dashboard needs Supabase to read anonymous usage events.
          Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>
          and re-deploy, then run the migrations in <code>supabase/migrations/</code>.</p>
-      <a class="link-btn" href="?screen=home">‹ Back</a>
+      <a class="link-btn" href="?screen=home">Back</a>
     </div>
   `;
 }
@@ -98,7 +98,7 @@ function notAdminHTML(email: string): string {
       <p>Signed in as <strong>${escapeHTML(email)}</strong>, but this account is not on the
          admin allow-list for this shop. Ask the shop owner to add your email by
          inserting a row into <code>public.admins</code>.</p>
-      <a class="link-btn" href="?screen=home">‹ Back</a>
+      <a class="link-btn" href="?screen=home">Back</a>
     </div>
   `;
 }
@@ -221,7 +221,7 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
       </section>
     </div>
 
-    <a class="link-btn" href="?screen=home">‹ Back to the app</a>
+    <a class="link-btn" href="?screen=home">Back to the app</a>
   `;
 }
 

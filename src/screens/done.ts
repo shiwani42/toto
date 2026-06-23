@@ -151,7 +151,7 @@ export function renderDone(root: HTMLElement) {
           <ul class="results">
             ${missingProducts.map((p) => row(p, false)).join("")}
           </ul>
-          <a class="link-btn" href="?screen=scan">${t("done.keep_looking")} ›</a>
+          <a class="link-btn" href="?screen=scan">${t("done.keep_looking")}</a>
         </section>
       ` : ""}
 

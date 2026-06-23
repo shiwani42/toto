@@ -76,7 +76,7 @@ function cartBar(items: Product[], expanded: boolean): string {
           </span>
           <span class="cart-bar__count">${items.length} on your list</span>
         </button>
-        <a class="cart-bar__cta" href="?screen=map">Find them ›</a>
+        <a class="cart-bar__cta" href="?screen=map">Find them</a>
       </div>
     </div>
   `;
@@ -89,7 +89,7 @@ export function renderListBuilder(root: HTMLElement) {
     ${activeSession ? `
     <div class="session-banner" id="session-banner">
       <span>${escapeHTML(activeSession.me.emoji)} Shopping with ${escapeHTML(activeSession.me.name)}, code ${escapeHTML(activeSession.code)}</span>
-      <a class="session-banner__btn" href="?screen=connected">Open ›</a>
+      <a class="session-banner__btn" href="?screen=connected">Open</a>
     </div>` : ""}
     <header>
       <h1>What are you after?</h1>
