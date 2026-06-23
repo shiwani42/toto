@@ -765,12 +765,14 @@ export function renderPlan(root: HTMLElement) {
         else progressEl.textContent = msg;
         if (w) weatherEl.innerHTML = weatherCard(w);
       });
-      // Loading state served its purpose — drop the whole wizard__loading
-      // wrapper so the trip headline + date sub don't sit above the
-      // category checklist and (more importantly) the swipe deck screen.
-      const loadingWrap = root.querySelector(".wizard__loading") as HTMLDivElement | null;
-      if (loadingWrap) loadingWrap.remove();
-      void weatherEl; // weather lived inside loadingWrap; dropped with it
+      // Loading served its purpose. The trip headline + date sub stay
+      // visible on the categories + per-list screens (they're useful
+      // context: "what am I planning for"). They only need to be
+      // hidden on the swipe deck, which mountCategoryFlow handles via
+      // a body class that the CSS keys off.
+      progressEl.remove();
+      root.querySelector(".plan-skeleton")?.remove();
+      void weatherEl;
       const empty = result.categories.filter((c) => c.products.length === 0).map((c) => c.key);
       track("plan_returned", {
         categories: result.categories.map((c) => c.key),
@@ -831,6 +833,10 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
     else if (screen === "products") host.innerHTML = renderCategoryList();
     else host.innerHTML = renderSwipe();
     if (screen === "swipe") bindSwipe();
+    // Body class drives a CSS rule that hides the wizard headline +
+    // date sub on the swipe deck only. Categories and per-list keep
+    // the context.
+    document.body.classList.toggle("on-swipe", screen === "swipe");
   }
 
   // Screen 1: checklist

@@ -1563,7 +1563,9 @@ button, .primary { font: inherit; cursor: pointer; }
   margin-left: 4px;
 }
 .wizard__date-label input[type="date"] {
-  padding: 16px 16px;
+  /* Generous right padding so the native calendar glyph sits comfortably
+     inside the field instead of hugging the rounded edge. */
+  padding: 16px 20px 16px 16px;
   font: inherit;
   font-size: 16px;
   font-weight: 600;
@@ -1578,6 +1580,14 @@ button, .primary { font: inherit; cursor: pointer; }
   font-feature-settings: "tnum";
   width: 100%;
   box-sizing: border-box;
+}
+/* Webkit's calendar picker glyph sits flush with the right edge by
+   default. Push it inward and give it a muted color so it lives
+   inside the field. */
+.wizard__date-label input[type="date"]::-webkit-calendar-picker-indicator {
+  margin-right: 2px;
+  opacity: 0.55;
+  cursor: pointer;
 }
 .wizard__date-label input[type="date"]:hover {
   border-color: var(--accent-border);
@@ -5874,16 +5884,23 @@ body.has-cart .toto-companion {
 }
 
 /* Swipe screen: drop the wizard's normal vertical padding so the
-   deck claims the whole viewport. The deck card is the content. */
+   deck claims the whole viewport. The deck card is the content.
+   Top padding clears the floating back/undo buttons so they don't
+   overlap the deck rectangle. */
 .cat-flow--swipe {
-  padding: 0;
+  padding: 56px 0 0;
   gap: 8px;
   position: relative;
 }
+/* On the swipe screen we hide the wizard's loading-state headline +
+   date sub so the cards stand alone. They stay visible on the
+   categories + per-list screens (useful context for picking). */
+body.on-swipe .wizard__loading { display: none; }
+
 .cat-flow__back--float {
   position: absolute;
-  top: 8px;
-  left: 6px;
+  top: 12px;
+  left: 14px;
   z-index: 5;
   width: 38px;
   height: 38px;
@@ -5904,8 +5921,8 @@ body.has-cart .toto-companion {
    the swipe view, so the only big things on screen are the cards. */
 .cat-flow__undo--float {
   position: absolute;
-  top: 8px;
-  right: 6px;
+  top: 12px;
+  right: 14px;
   z-index: 5;
   width: 38px;
   height: 38px;
