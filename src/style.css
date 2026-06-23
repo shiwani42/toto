@@ -720,6 +720,7 @@ button, .primary { font: inherit; cursor: pointer; }
 }
 .zone-row__chev {
   margin-left: auto;
+  margin-right: 2px;
   color: var(--muted-fg);
   flex-shrink: 0;
   display: inline-flex;
@@ -2969,12 +2970,14 @@ body.has-cart .toto-companion {
 .plan-one__dot--on { background: var(--accent); }
 /* Back arrow + progress dots share one row so they read as a real
    nav header instead of two stacked elements. The back button sits
-   against the left edge, the progress dots flow to its right. */
+   against the left edge, the progress dots flow to its right.
+   Right padding clears the floating language FAB (~60px wide + 12px
+   margin) so dots don't sit under it. */
 .plan-one__head {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 4px 0 8px;
+  padding: 4px 80px 8px 0;
 }
 .plan-one__head h1 {
   font-size: 22px;
@@ -3034,6 +3037,12 @@ body.has-cart .toto-companion {
 }
 
 /* Specifics multi-select: chip-style, multi-selectable. */
+.wizard__multi-hint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted-fg);
+}
+
 /* Multi-select chip grid. Two columns, equal widths so the rows
    align cleanly. Was previously a flex-wrap with variable widths
    that made each row look ragged. */
@@ -3059,12 +3068,29 @@ body.has-cart .toto-companion {
   text-align: left;
   min-width: 0;
   transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  position: relative;
 }
 .wizard-multi__chip:active { transform: scale(0.97); }
 .wizard-multi__chip--on {
   border-color: var(--accent);
   background: var(--accent-bg);
   color: var(--accent-strong);
+}
+/* Make multi-select unmistakable: a small green check pill in the
+   chip's top-right corner appears only when the chip is selected. */
+.wizard-multi__chip--on::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><path d='M20 6L9 17l-5-5'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 11px 11px;
 }
 .wizard-multi__emoji { font-size: 18px; flex-shrink: 0; }
 
@@ -5853,8 +5879,8 @@ body.has-cart .toto-companion {
 }
 .cat-flow__back--float {
   position: absolute;
-  top: 6px;
-  left: 0;
+  top: 8px;
+  left: 6px;
   z-index: 5;
   width: 38px;
   height: 38px;
@@ -5869,6 +5895,47 @@ body.has-cart .toto-companion {
   font-weight: 500;
   color: var(--fg);
   padding: 0;
+}
+
+/* Undo: small floating mirror to the back button on the right edge of
+   the swipe view, so the only big things on screen are the cards. */
+.cat-flow__undo--float {
+  position: absolute;
+  top: 8px;
+  right: 6px;
+  z-index: 5;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  color: var(--fg);
+  padding: 0;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.cat-flow__undo--float:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.cat-flow__undo--float:not(:disabled):active { transform: scale(0.94); }
+
+/* Standard accessibility utility: visible to screen readers but not
+   on screen. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .deck-card {

@@ -186,7 +186,14 @@ export function renderPlan(root: HTMLElement) {
     if (!prefs.gender && prefs.shoppingFor !== "family")    steps.push("whoFor");
     if (!prefs.experience)                                  steps.push("experience");
     steps.push("location", "when");
-    if (!prefs.topSize || !prefs.bottomSize || !prefs.shoeSizeEU) steps.push("sizes");
+    // Personal sizes only make sense when the shopper is buying for
+    // themselves. For family or someone-else trips, the picks should
+    // be size-agnostic — the planner can keep it broad rather than
+    // asking sizes for people we don't have data on.
+    const shoppingForSelf = !prefs.shoppingFor || prefs.shoppingFor === "self";
+    if (shoppingForSelf && (!prefs.topSize || !prefs.bottomSize || !prefs.shoeSizeEU)) {
+      steps.push("sizes");
+    }
     steps.push("specifics");
     return steps;
   }
@@ -199,11 +206,17 @@ export function renderPlan(root: HTMLElement) {
   function advance() {
     // Re-derive in case a setPrefs from this step affected later visibility.
     const newSteps = computeSteps();
-    // Keep our position relative to where we just answered.
+    // Keep our position relative to where we just answered. If the
+    // current step still exists in newSteps, jump to the next one.
+    // If it was removed (the user just answered a question that this
+    // wizard now drops from the path — e.g. picking shoppingFor
+    // removes the shoppingFor step itself), every later step has
+    // already shifted down by one slot, so we should land at the same
+    // stepIdx rather than stepIdx + 1.
     const currentKey = STEPS[stepIdx];
     STEPS = newSteps;
     const newIdx = STEPS.indexOf(currentKey);
-    stepIdx = (newIdx === -1 ? stepIdx : newIdx) + 1;
+    stepIdx = newIdx === -1 ? stepIdx : newIdx + 1;
     if (stepIdx >= STEPS.length) {
       const prefs = getPrefs();
       track("wizard_complete", {
@@ -340,6 +353,7 @@ export function renderPlan(root: HTMLElement) {
     if (step === "specifics") {
       stepBody = `
         <h1 class="wizard__q">Anything special?</h1>
+        <p class="wizard__multi-hint">Pick any that apply.</p>
         <div class="wizard-multi" id="specifics-grid">
           ${SPECIFICS_OPTIONS.map((o) => `
             <button class="wizard-multi__chip ${answers.specifics.includes(o.key) ? "wizard-multi__chip--on" : ""}"
@@ -476,6 +490,13 @@ export function renderPlan(root: HTMLElement) {
   }
   function wireSizes() {
     const host = root.querySelector(".wizard-sizes") as HTMLDivElement;
+    // Capture which blocks the user landed on. These are the ones the
+    // wizard rendered because the matching pref wasn't already saved.
+    const renderedBlocks: ("top" | "bot" | "shoe")[] = [];
+    if (host.querySelector('[data-size^="top:"]'))  renderedBlocks.push("top");
+    if (host.querySelector('[data-size^="bot:"]'))  renderedBlocks.push("bot");
+    if (host.querySelector('[data-size^="shoe:"]')) renderedBlocks.push("shoe");
+
     host.addEventListener("click", (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-size]");
       if (!btn) return;
@@ -483,12 +504,19 @@ export function renderPlan(root: HTMLElement) {
       if (prefix === "top")  setPrefs({ topSize: raw as "XS" | "S" | "M" | "L" | "XL", sizeSource: "manual" });
       if (prefix === "bot")  setPrefs({ bottomSize: raw as "XS" | "S" | "M" | "L" | "XL", sizeSource: "manual" });
       if (prefix === "shoe") setPrefs({ shoeSizeEU: Number(raw), sizeSource: "manual" });
-      // Auto-advance when every shown block has a selection. The
-      // wizard skips blocks the user already set in Settings, so this
-      // checks only what's actually on screen.
-      const blocks = host.querySelectorAll<HTMLDivElement>(".wizard-sizes__block").length;
-      const filled = host.querySelectorAll<HTMLDivElement>(".wizard-sizes__block:has(.wizard-sizes__chip--on)").length;
-      if (blocks > 0 && filled === blocks) {
+
+      // Auto-advance once every block the user was shown has a value.
+      // Read prefs fresh — the DOM hasn't re-rendered yet at this point
+      // so a DOM-based check was always one click behind, which was
+      // why filling in any non-default order felt broken.
+      const fresh = getPrefs();
+      const allPicked = renderedBlocks.every((b) => {
+        if (b === "top")  return Boolean(fresh.topSize);
+        if (b === "bot")  return Boolean(fresh.bottomSize);
+        if (b === "shoe") return Boolean(fresh.shoeSizeEU);
+        return true;
+      });
+      if (allPicked) {
         window.setTimeout(advance, 220);
       } else {
         render();
@@ -742,6 +770,10 @@ export function renderPlan(root: HTMLElement) {
         weatherEl.innerHTML = weatherCard(result.weather);
       }
       progressEl.remove();
+      // Clear the anticipation skeleton too — the actual category cards
+      // are about to mount in #result and the skeleton would otherwise
+      // keep shimmering above them forever.
+      root.querySelector(".plan-skeleton")?.remove();
       const empty = result.categories.filter((c) => c.products.length === 0).map((c) => c.key);
       track("plan_returned", {
         categories: result.categories.map((c) => c.key),
@@ -866,9 +898,11 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
     `;
   }
 
-  // Swipe deck: stripped of top text so the cards fill the screen and
-  // there's nothing to scroll past. A small floating back button and
-  // the undo control are the only chrome.
+  // Swipe deck: only the cards on the screen. Chrome (back + undo)
+  // are small floating icon buttons in the corners so they don't
+  // compete with the deck. Progress count is kept as an aria-only
+  // node for screen readers but hidden visually — the deck card and
+  // remaining count are enough visual signal on their own.
   function renderSwipe(): string {
     const cat = activeCategory();
     if (!cat) return "";
@@ -877,19 +911,18 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
         <button class="cat-flow__back cat-flow__back--float" id="swipe-back" aria-label="Back to categories">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
         </button>
+        <button class="cat-flow__undo cat-flow__undo--float" id="deck-undo" disabled
+                title="Undo last" aria-label="Undo last">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+               stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 7v6h6"/>
+            <path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>
+          </svg>
+        </button>
         <div class="deck-frame">
-          <div class="deck-progress" id="deck-progress"></div>
+          <div class="deck-progress sr-only" id="deck-progress" aria-live="polite"></div>
           <div class="deck-stage" id="deck-stage"></div>
-          <button class="deck-undo-link" id="deck-undo" disabled
-                  title="Undo last" aria-label="Undo last">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
-                 stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
-                 stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 7v6h6"/>
-              <path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>
-            </svg>
-            Undo
-          </button>
         </div>
       </div>
     `;
