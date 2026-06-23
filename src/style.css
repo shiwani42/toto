@@ -3880,81 +3880,247 @@ body.has-cart .toto-companion {
 
 /* ─── Admin dashboard ─────────────────────────────────────────────────────── */
 .screen-admin {
-  padding: 16px;
+  padding: 28px 20px 40px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   max-width: 1100px;
   margin: 0 auto;
 }
-.admin-loading {
-  padding: 32px;
-  text-align: center;
-  color: var(--muted-fg);
+
+/* Loading skeleton — soft pulsing blocks that mirror the dashboard
+   shape (hero + KPI strip + content block). Beats a stark "Loading…". */
+.admin-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
+.admin-skeleton__hero,
+.admin-skeleton__block,
+.admin-skeleton__row span {
+  background: linear-gradient(90deg, var(--panel-strong) 0%, var(--panel) 50%, var(--panel-strong) 100%);
+  background-size: 200% 100%;
+  border-radius: 14px;
+  animation: admin-shimmer 1.4s ease-in-out infinite;
+}
+.admin-skeleton__hero { height: 120px; }
+.admin-skeleton__row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.admin-skeleton__row span { height: 76px; }
+.admin-skeleton__block { height: 240px; }
+@keyframes admin-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Sign-in / unconfigured / not-an-admin gate. Single card that
+   centers vertically and lets the page breathe. */
 .admin-gate {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 24px;
+  border-radius: 20px;
+  padding: 36px 32px;
+  margin: 32px auto;
+  max-width: 440px;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.03);
 }
-.admin-gate h2 { margin: 0; font-size: 18px; }
-.admin-gate p { margin: 0; color: var(--muted-fg); font-size: 14px; line-height: 1.5; }
+.admin-gate__art {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.admin-gate__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+.admin-gate__sub {
+  margin: 0;
+  color: var(--muted-fg);
+  font-size: 14px;
+  line-height: 1.55;
+}
 .admin-gate code {
   background: var(--panel-strong);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.admin-gate__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+}
+.admin-gate__input {
+  width: 100%;
+  font: inherit;
+  font-size: 15px;
+  padding: 14px 16px;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--fg);
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.admin-gate__input:focus {
+  background: var(--card);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-bg);
+}
+.admin-gate__submit {
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 14px;
+}
+.admin-gate__status {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted-fg);
+  min-height: 18px;
 }
 
-.admin-headline {
+/* Hero metric: one big number that reads at a glance. */
+.admin-hero {
+  background: linear-gradient(135deg, var(--accent-bg) 0%, var(--panel) 100%);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.admin-hero__eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+.admin-hero__metric {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.admin-hero__value {
+  font-size: 64px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--fg);
+  line-height: 0.95;
+  font-feature-settings: "tnum";
+}
+.admin-hero__label {
+  font-size: 14px;
+  color: var(--muted-fg);
+  font-weight: 500;
+}
+
+/* KPI strip: 4 supporting metrics under the hero. */
+.admin-kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
 }
-.admin-headline__card {
+.admin-kpi {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: 16px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
-.admin-headline__value {
+.admin-kpi:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.admin-kpi__value {
   font-size: 26px;
   font-weight: 700;
   color: var(--fg);
+  letter-spacing: -0.02em;
   font-feature-settings: "tnum";
+  line-height: 1;
 }
-.admin-headline__label {
-  font-size: 11.5px;
+.admin-kpi__label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.admin-kpi__label-main {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.admin-kpi__label-sub {
+  font-size: 11px;
   color: var(--muted-fg);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .admin-card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
+  border-radius: 20px;
+  padding: 22px 24px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  box-shadow: var(--shadow-sm);
+  gap: 14px;
 }
 .admin-card h2 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--fg);
+}
+.admin-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.admin-card__pill {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+.admin-card__pill--alert {
+  background: rgba(217, 119, 6, 0.1);
+  color: #b45309;
+}
+.admin-card__meta {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-fg);
+  margin-left: 6px;
 }
 .admin-card h3 {
   margin: 0 0 6px;
@@ -4057,13 +4223,81 @@ body.has-cart .toto-companion {
 .admin-mix {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  gap: 20px;
 }
 
 .admin-hourly {
   width: 100%;
   height: auto;
   display: block;
+}
+
+/* Visual funnel: vertical list of bars with conversion percentages
+   between them. Reads top-to-bottom like a real funnel and lets you
+   see the biggest drops at a glance. */
+.admin-funnel {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.admin-funnel__row {
+  display: grid;
+  grid-template-columns: 1fr 56px;
+  align-items: center;
+  gap: 12px;
+}
+.admin-funnel__bar {
+  position: relative;
+  height: 44px;
+  background: var(--panel-strong);
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.admin-funnel__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--accent-bg) 0%, color-mix(in srgb, var(--accent) 20%, var(--accent-bg)) 100%);
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.admin-funnel__label {
+  position: relative;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.admin-funnel__value {
+  position: relative;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted-fg);
+  font-feature-settings: "tnum";
+}
+.admin-funnel__drop {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  font-feature-settings: "tnum";
+  text-align: center;
+  letter-spacing: -0.01em;
+}
+.admin-funnel__drop--start {
+  color: var(--muted-fg);
+  font-weight: 500;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-back {
+  align-self: flex-start;
+  margin-top: 8px;
 }
 
 /* ─── Floating language picker (top-right of every screen) ───────────────── */

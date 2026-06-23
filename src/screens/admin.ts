@@ -47,12 +47,14 @@ type ProductPerfRow = {
 
 export function renderAdmin(root: HTMLElement) {
   root.innerHTML = `
-    <header>
-      <h1>Shop dashboard</h1>
-      <p class="tag">What shoppers are asking the assistant, where they drop off, and which products land.</p>
-    </header>
     <main class="screen-admin" id="admin-root">
-      <div class="admin-loading">Loading…</div>
+      <div class="admin-skeleton">
+        <div class="admin-skeleton__hero"></div>
+        <div class="admin-skeleton__row">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="admin-skeleton__block"></div>
+      </div>
     </main>
   `;
 
@@ -78,15 +80,20 @@ export function renderAdmin(root: HTMLElement) {
 }
 
 // ─── Gating screens ─────────────────────────────────────────────────────────
+//
+// Three doors: unconfigured (no Supabase keys), not-an-admin (allow-list
+// miss), and sign-in (the welcome). All three share a single calm card
+// layout so the dashboard's "first impression" is always the same shape.
 
 function unconfiguredHTML(): string {
   return `
     <div class="admin-gate">
-      <h2>Setup needed</h2>
-      <p>The dashboard needs Supabase to read anonymous usage events.
-         Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>
-         and re-deploy, then run the migrations in <code>supabase/migrations/</code>.</p>
-      <a class="link-btn" href="?screen=home">Back</a>
+      <div class="admin-gate__art" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+      </div>
+      <h2 class="admin-gate__title">Setup needed</h2>
+      <p class="admin-gate__sub">The dashboard reads anonymous usage from Supabase. Configure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>, then run the migrations in <code>supabase/migrations/</code>.</p>
+      <a class="link-btn" href="?screen=home">Back to the app</a>
     </div>
   `;
 }
@@ -94,11 +101,12 @@ function unconfiguredHTML(): string {
 function notAdminHTML(email: string): string {
   return `
     <div class="admin-gate">
-      <h2>Not authorized</h2>
-      <p>Signed in as <strong>${escapeHTML(email)}</strong>, but this account is not on the
-         admin allow-list for this shop. Ask the shop owner to add your email by
-         inserting a row into <code>public.admins</code>.</p>
-      <a class="link-btn" href="?screen=home">Back</a>
+      <div class="admin-gate__art" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <h2 class="admin-gate__title">You're in, just not here</h2>
+      <p class="admin-gate__sub">Signed in as <strong>${escapeHTML(email)}</strong>. Ask the shop owner to add you to <code>public.admins</code> to unlock this view.</p>
+      <a class="link-btn" href="?screen=home">Back to the app</a>
     </div>
   `;
 }
@@ -106,16 +114,16 @@ function notAdminHTML(email: string): string {
 function mountSignIn(host: HTMLElement) {
   host.innerHTML = `
     <div class="admin-gate">
-      <h2>Sign in to view the dashboard</h2>
-      <p>Admins only. You'll get a one-time sign-in link by email.</p>
-      <form id="admin-sign-in" class="account-form" novalidate>
-        <label class="account-form__label">
-          Email
-          <input id="admin-email" type="email" required autocomplete="email"
-                 inputmode="email" placeholder="you@example.com" />
-        </label>
-        <button type="submit" class="btn-primary account-form__submit">Send sign-in link</button>
-        <p id="admin-sign-in-status" class="account-form__status" role="status" aria-live="polite"></p>
+      <div class="admin-gate__art" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18v10H3z"/><path d="m3 7 9 6 9-6"/></svg>
+      </div>
+      <h2 class="admin-gate__title">Shop dashboard</h2>
+      <p class="admin-gate__sub">A one-time link by email. Admins only.</p>
+      <form id="admin-sign-in" class="admin-gate__form" novalidate>
+        <input id="admin-email" type="email" required autocomplete="email"
+               inputmode="email" placeholder="you@example.com" class="admin-gate__input" />
+        <button type="submit" class="primary admin-gate__submit">Send the link</button>
+        <p id="admin-sign-in-status" class="admin-gate__status" role="status" aria-live="polite"></p>
       </form>
     </div>
   `;
@@ -129,7 +137,7 @@ function mountSignIn(host: HTMLElement) {
     status.textContent = "Sending…";
     try {
       await signInWithEmail(email);
-      status.textContent = "Check your email for the sign-in link.";
+      status.textContent = "Check your inbox for the sign-in link.";
     } catch (err) {
       status.textContent = err instanceof Error ? err.message : "Couldn't send the link. Try again.";
     }
@@ -139,8 +147,6 @@ function mountSignIn(host: HTMLElement) {
 // ─── Dashboard ──────────────────────────────────────────────────────────────
 
 async function mountDashboard(host: HTMLElement): Promise<void> {
-  host.innerHTML = `<div class="admin-loading">Crunching the numbers…</div>`;
-
   const [
     headline,
     funnel,
@@ -163,33 +169,56 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
     fetchMany<{ hour_utc: number; sessions: number }>("v_hourly_usage"),
   ]);
 
+  // Headline: one big hero number (7-day sessions) with a small set of
+  // companion metrics underneath. Reads like Apple Health's hero stat
+  // rather than five identical-weight tiles competing for attention.
+  const hero = headline?.sessions_7d ?? 0;
+  // Sum the last 14 days of funnel to compute conversion through the
+  // wizard — gives the dashboard a "how's the funnel doing?" answer
+  // up front instead of forcing the viewer to read a table.
+  const totalStarted = funnel.reduce((n, r) => n + r.wizard_started, 0);
+  const totalAdded = funnel.reduce((n, r) => n + r.added_to_list, 0);
+  const overallConvPct = totalStarted > 0 ? Math.round((totalAdded / totalStarted) * 100) : null;
+
   host.innerHTML = `
-    <section class="admin-headline">
-      ${headlineCard("Last 24h sessions",   headline?.sessions_24h ?? 0)}
-      ${headlineCard("Last 7d sessions",    headline?.sessions_7d  ?? 0)}
-      ${headlineCard("Last 30d sessions",   headline?.sessions_30d ?? 0)}
-      ${headlineCard("Items added (7d)",    headline?.adds_7d      ?? 0)}
-      ${headlineCard("Scans (7d)",          headline?.scans_7d     ?? 0)}
+    <header class="admin-hero">
+      <div class="admin-hero__eyebrow">Shop dashboard</div>
+      <div class="admin-hero__metric">
+        <div class="admin-hero__value">${hero.toLocaleString()}</div>
+        <div class="admin-hero__label">sessions, last 7 days</div>
+      </div>
+    </header>
+
+    <section class="admin-kpis">
+      ${kpiCard("Today",        headline?.sessions_24h ?? 0, "sessions")}
+      ${kpiCard("30 days",      headline?.sessions_30d ?? 0, "sessions")}
+      ${kpiCard("Added to list", headline?.adds_7d ?? 0, "in 7d")}
+      ${kpiCard("Scanned",      headline?.scans_7d ?? 0, "in 7d")}
     </section>
 
     <section class="admin-card">
-      <h2>14-day conversion funnel</h2>
-      <p class="tag">Daily counts. How many sessions reached each step.</p>
-      ${funnelTable(funnel.slice().reverse())}
+      <div class="admin-card__head">
+        <h2>Funnel, last 14 days</h2>
+        ${overallConvPct == null
+          ? ""
+          : `<span class="admin-card__pill">${overallConvPct}% reached list</span>`}
+      </div>
+      ${funnelVisual(funnel)}
     </section>
 
     <div class="admin-grid">
       <section class="admin-card">
-        <h2>Top categories asked for</h2>
-        <p class="tag">Which categories the assistant returned most.</p>
+        <h2>Categories in demand</h2>
         ${barList(topCategories.map((r) => ({ label: r.category, value: r.appeared_in_plans })))}
       </section>
 
       <section class="admin-card admin-card--alert">
-        <h2>Demand gaps</h2>
-        <p class="tag">Shoppers asked for these, but the plan came back empty. Stock signal.</p>
+        <div class="admin-card__head">
+          <h2>Demand gaps</h2>
+          <span class="admin-card__pill admin-card__pill--alert">Stock signal</span>
+        </div>
         ${demandGaps.length === 0
-          ? `<p class="admin-empty">No gaps detected. Keep this view in mind as data grows.</p>`
+          ? `<p class="admin-empty">Nothing missed yet.</p>`
           : barList(demandGaps.map((r) => ({ label: r.category, value: r.sessions })), "alert")}
       </section>
 
@@ -204,24 +233,86 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
       </section>
 
       <section class="admin-card admin-card--wide">
-        <h2>Customer profile mix</h2>
-        <p class="tag">Aggregated who's walking in (anonymous). Helps decide assortment.</p>
+        <h2>Who's walking in</h2>
         ${profileMixHTML(profileMix)}
       </section>
 
       <section class="admin-card admin-card--wide">
         <h2>Product performance</h2>
-        <p class="tag">Views from the swipe deck, picks (right-swipes), adds to list, in-store scans, and pick rate.</p>
         ${productPerfTable(productPerf.slice(0, 25))}
       </section>
 
       <section class="admin-card admin-card--wide">
-        <h2>Usage by hour (UTC, last 14 days)</h2>
+        <h2>Usage by hour <span class="admin-card__meta">UTC, last 14 days</span></h2>
         ${hourlyHTML(hourly)}
       </section>
     </div>
 
-    <a class="link-btn" href="?screen=home">Back to the app</a>
+    <a class="link-btn admin-back" href="?screen=home">Back to the app</a>
+  `;
+}
+
+// ─── New rendering helpers ──────────────────────────────────────────────────
+
+function kpiCard(label: string, value: number, unit: string): string {
+  return `
+    <div class="admin-kpi">
+      <div class="admin-kpi__value">${value.toLocaleString()}</div>
+      <div class="admin-kpi__label">
+        <span class="admin-kpi__label-main">${escapeHTML(label)}</span>
+        <span class="admin-kpi__label-sub">${escapeHTML(unit)}</span>
+      </div>
+    </div>
+  `;
+}
+
+/** Visual funnel: each step is a horizontal bar whose width reflects
+ *  its absolute count relative to the top of funnel. Conversion %
+ *  shown next to each bar. Reads top-to-bottom like a real funnel. */
+function funnelVisual(rows: FunnelRow[]): string {
+  if (rows.length === 0) return `<p class="admin-empty">No sessions yet.</p>`;
+  const totals = rows.reduce(
+    (acc, r) => {
+      acc.wizard_started   += r.wizard_started;
+      acc.wizard_completed += r.wizard_completed;
+      acc.plan_returned    += r.plan_returned;
+      acc.added_to_list    += r.added_to_list;
+      acc.scanned_item     += r.scanned_item;
+      acc.completed_scan   += r.completed_scan;
+      return acc;
+    },
+    { wizard_started: 0, wizard_completed: 0, plan_returned: 0, added_to_list: 0, scanned_item: 0, completed_scan: 0 },
+  );
+  const steps: { label: string; value: number }[] = [
+    { label: "Started a plan",     value: totals.wizard_started },
+    { label: "Finished the wizard", value: totals.wizard_completed },
+    { label: "Got a list back",    value: totals.plan_returned },
+    { label: "Added items",        value: totals.added_to_list },
+    { label: "Scanned in store",   value: totals.scanned_item },
+    { label: "Wrapped a trip",     value: totals.completed_scan },
+  ];
+  const top = Math.max(steps[0].value, 1);
+  return `
+    <ol class="admin-funnel">
+      ${steps.map((s, i) => {
+        const pct = Math.round((s.value / top) * 100);
+        const drop = i > 0 && steps[i - 1].value > 0
+          ? Math.round((s.value / steps[i - 1].value) * 100)
+          : null;
+        return `
+          <li class="admin-funnel__row">
+            <div class="admin-funnel__bar">
+              <div class="admin-funnel__fill" style="width:${pct}%"></div>
+              <span class="admin-funnel__label">${escapeHTML(s.label)}</span>
+              <span class="admin-funnel__value">${s.value.toLocaleString()}</span>
+            </div>
+            ${drop != null && i > 0
+              ? `<div class="admin-funnel__drop">${drop}%</div>`
+              : `<div class="admin-funnel__drop admin-funnel__drop--start">start</div>`}
+          </li>
+        `;
+      }).join("")}
+    </ol>
   `;
 }
 
@@ -267,15 +358,6 @@ async function fetchMany<T>(
 
 // ─── Rendering helpers ──────────────────────────────────────────────────────
 
-function headlineCard(label: string, value: number): string {
-  return `
-    <div class="admin-headline__card">
-      <div class="admin-headline__value">${value.toLocaleString()}</div>
-      <div class="admin-headline__label">${escapeHTML(label)}</div>
-    </div>
-  `;
-}
-
 function barList(items: Bucket[], variant: "default" | "alert" = "default"): string {
   if (items.length === 0) {
     return `<p class="admin-empty">No data yet.</p>`;
@@ -294,45 +376,6 @@ function barList(items: Bucket[], variant: "default" | "alert" = "default"): str
         </li>
       `).join("")}
     </ul>
-  `;
-}
-
-function funnelTable(rows: FunnelRow[]): string {
-  if (rows.length === 0) return `<p class="admin-empty">No sessions yet.</p>`;
-  return `
-    <div class="admin-table-wrap">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>Day</th>
-            <th>Wizard started</th>
-            <th>Wizard completed</th>
-            <th>Plan returned</th>
-            <th>Added to list</th>
-            <th>Scanned item</th>
-            <th>Finished scan</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.map((r) => {
-            const conv = r.wizard_started > 0
-              ? Math.round(100 * (r.added_to_list / r.wizard_started))
-              : 0;
-            return `
-              <tr>
-                <td>${escapeHTML(r.day)}</td>
-                <td>${r.wizard_started}</td>
-                <td>${r.wizard_completed}</td>
-                <td>${r.plan_returned}</td>
-                <td>${r.added_to_list} <span class="admin-table__sub">(${conv}%)</span></td>
-                <td>${r.scanned_item}</td>
-                <td>${r.completed_scan}</td>
-              </tr>
-            `;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
   `;
 }
 
@@ -421,22 +464,31 @@ function hourlyHTML(rows: Array<{ hour_utc: number; sessions: number }>): string
   for (let h = 0; h < 24; h++) buckets.set(h, 0);
   for (const r of rows) buckets.set(r.hour_utc, r.sessions);
   const max = Math.max(...Array.from(buckets.values()), 1);
+  // SVG bars with rounded tops, label only every 3rd hour for breathing
+  // room, and a baseline rule. Each bar carries its raw count as a
+  // tooltip so curious admins can hover.
   const w = 600;
   const barW = w / 24;
-  const h = 120;
+  const h = 140;
+  const baseY = h - 24;
   const bars = Array.from(buckets.entries()).map(([hour, v]) => {
-    const bh = max > 0 ? (v / max) * (h - 24) : 0;
+    const bh = max > 0 ? (v / max) * (baseY - 12) : 0;
+    const showLabel = hour % 3 === 0;
     return `
       <g>
-        <rect x="${hour * barW + 2}" y="${h - 20 - bh}" width="${barW - 4}" height="${bh}"
-              fill="var(--accent)" rx="2"></rect>
-        <text x="${hour * barW + barW / 2}" y="${h - 6}" font-size="10" fill="var(--muted-fg)"
-              text-anchor="middle">${hour}</text>
+        <rect x="${hour * barW + 3}" y="${baseY - bh}" width="${barW - 6}" height="${Math.max(bh, 2)}"
+              rx="3"
+              fill="var(--accent)"
+              opacity="${v === 0 ? 0.15 : 1}">
+          <title>${v.toLocaleString()} session${v === 1 ? "" : "s"} at ${hour}:00</title>
+        </rect>
+        ${showLabel ? `<text x="${hour * barW + barW / 2}" y="${h - 6}" font-size="10" fill="var(--muted-fg)" text-anchor="middle">${hour}</text>` : ""}
       </g>
     `;
   }).join("");
   return `
-    <svg viewBox="0 0 ${w} ${h}" class="admin-hourly" aria-label="Sessions per hour">
+    <svg viewBox="0 0 ${w} ${h}" class="admin-hourly" aria-label="Sessions per hour" preserveAspectRatio="none">
+      <line x1="0" y1="${baseY}" x2="${w}" y2="${baseY}" stroke="var(--border)" stroke-width="1"/>
       ${bars}
     </svg>
   `;
