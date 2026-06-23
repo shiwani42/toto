@@ -136,7 +136,8 @@ function mountSignIn(host: HTMLElement) {
     if (!email) { status.textContent = "Type your email first."; return; }
     status.textContent = "Sending…";
     try {
-      await signInWithEmail(email);
+      // Land them back on the admin dashboard after the link click.
+      await signInWithEmail(email, "admin");
       status.textContent = "Check your inbox for the sign-in link.";
     } catch (err) {
       status.textContent = err instanceof Error ? err.message : "Couldn't send the link. Try again.";

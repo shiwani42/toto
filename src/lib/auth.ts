@@ -25,14 +25,21 @@ export async function getCurrentUser(): Promise<User | null> {
 
 /** Sends a magic-link email. User clicks the link, lands back on the app
  *  authenticated. We don't sit on this promise — UI shows a 'check your
- *  email' state immediately. */
-export async function signInWithEmail(email: string): Promise<void> {
+ *  email' state immediately.
+ *
+ *  `landingScreen` controls where the user is sent after the link click:
+ *  admins want to come back to the dashboard; settings sign-ins go home.
+ *
+ *  Note: the URL passed as `emailRedirectTo` only works if it matches
+ *  an entry in the Supabase project's allowed Redirect URLs list. If
+ *  the magic link is landing on localhost, fix it in
+ *  Supabase Dashboard → Authentication → URL Configuration. */
+export async function signInWithEmail(email: string, landingScreen: string = "home"): Promise<void> {
   if (!authConfigured) throw new Error("Sign-in isn't available here yet.");
   const { error } = await getSupabase().auth.signInWithOtp({
     email,
     options: {
-      // Land them back on the home screen after the link click.
-      emailRedirectTo: `${window.location.origin}/?screen=home`,
+      emailRedirectTo: `${window.location.origin}/?screen=${landingScreen}`,
     },
   });
   if (error) {
