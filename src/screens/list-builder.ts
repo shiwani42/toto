@@ -163,8 +163,14 @@ export function renderListBuilder(root: HTMLElement) {
       const listItems = listProducts();
       if (listItems.length === 0) {
         resultsEl.innerHTML = `<li class="empty-state">
-          <div class="empty-state__title">Nothing here yet.</div>
-          <div class="empty-state__sub">Type a name, size, or brand and I'll look.</div>
+          <div class="empty-state__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7"/>
+              <path d="m21 21-4.3-4.3"/>
+            </svg>
+          </div>
+          <div class="empty-state__title">Your list is empty.</div>
+          <div class="empty-state__sub">Search for what you're after, or tell me where you're heading and I'll suggest gear.</div>
         </li>`;
         return;
       }

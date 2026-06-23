@@ -48,14 +48,18 @@ type ShoppingFor = "self" | "someone" | "family";
 type Experience = "new" | "comfortable" | "enthusiast" | "pro";
 
 type ActivityVisual = { key: ActivityKey; emoji: string; label: string };
+// Each activity gets a distinct scene-defining glyph: Multi-day used to
+// also be a tent (clashing with Camping's tent), and Something-else's
+// sparkles read as generic. Mountains and a backpack make the row read
+// as outdoor-coherent without two cards looking identical.
 const ACTIVITY_VISUALS: ActivityVisual[] = [
   { key: "day-hike",  emoji: "🥾",  label: "Day hike" },
-  { key: "multi-day", emoji: "🏕️", label: "Multi-day trek" },
+  { key: "multi-day", emoji: "🏔️", label: "Multi-day trek" },
   { key: "camping",   emoji: "⛺",  label: "Camping" },
   { key: "climbing",  emoji: "🧗",  label: "Climbing" },
   { key: "trail-run", emoji: "🏃",  label: "Trail run" },
   { key: "skiing",    emoji: "⛷️", label: "Ski / snow" },
-  { key: "other",     emoji: "✨",  label: "Something else" },
+  { key: "other",     emoji: "🎒",  label: "Something else" },
 ];
 
 const SHOPPING_VISUALS: { key: ShoppingFor; emoji: string; label: string; sub: string }[] = [
@@ -360,13 +364,13 @@ export function renderPlan(root: HTMLElement) {
 
     root.innerHTML = `
       <main class="screen-plan plan-one">
-        <div class="plan-one__progress" aria-label="Step ${stepIdx + 1} of ${STEPS.length}">
-          ${STEPS.map((_, i) => `<span class="plan-one__dot ${i <= stepIdx ? "plan-one__dot--on" : ""}"></span>`).join("")}
-        </div>
-        <header class="plan-one__head">
+        <header class="plan-one__head" aria-label="Step ${stepIdx + 1} of ${STEPS.length}">
           <button class="wizard__back" id="back" aria-label="Back">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
           </button>
+          <div class="plan-one__progress">
+            ${STEPS.map((_, i) => `<span class="plan-one__dot ${i <= stepIdx ? "plan-one__dot--on" : ""}"></span>`).join("")}
+          </div>
         </header>
         <section class="plan-one__step">
           ${stepBody}

@@ -206,6 +206,17 @@ button, .primary { font: inherit; cursor: pointer; }
   border-radius: var(--radius-sm);
   text-align: center;
   color: var(--accent-strong);
+  /* Subtle in-animation so the banner reads as a live indicator
+     rather than static info. Long-form messages stay calm; short
+     "Warming up…" / "Looking for…" feel alive. */
+  animation: status-breathe 1.8s ease-in-out infinite;
+}
+@keyframes status-breathe {
+  0%, 100% { background-color: var(--accent-bg); }
+  50%      { background-color: color-mix(in srgb, var(--accent-bg) 70%, #fff); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status { animation: none; }
 }
 
 /* ─── Cards ──────────────────────────────────────────────────────────────── */
@@ -2773,22 +2784,38 @@ body.has-cart .toto-companion {
 /* Empty state, generic — used wherever a result list comes up dry. */
 .empty-state {
   list-style: none;
-  padding: 32px 20px;
+  padding: 40px 24px;
   text-align: center;
   background: var(--card);
   border: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   border-radius: 18px;
 }
-.empty-state__title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--fg);
+.empty-state__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--panel-strong);
+  color: var(--muted-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-bottom: 4px;
 }
+.empty-state__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+}
 .empty-state__sub {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--muted-fg);
-  line-height: 1.4;
+  line-height: 1.5;
+  max-width: 280px;
 }
 
 /* All-found celebration: paw-print confetti fanning down from above. */
@@ -2928,9 +2955,9 @@ body.has-cart .toto-companion {
 .plan-one__progress {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 4px 0;
+  gap: 6px;
+  flex: 1;
+  justify-content: flex-end;
 }
 .plan-one__dot {
   width: 28px;
@@ -2940,9 +2967,14 @@ body.has-cart .toto-companion {
   transition: background 0.25s ease;
 }
 .plan-one__dot--on { background: var(--accent); }
+/* Back arrow + progress dots share one row so they read as a real
+   nav header instead of two stacked elements. The back button sits
+   against the left edge, the progress dots flow to its right. */
 .plan-one__head {
-  position: relative;
-  padding: 4px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 0 8px;
 }
 .plan-one__head h1 {
   font-size: 22px;
@@ -5140,22 +5172,11 @@ body.has-cart .toto-companion {
   background: var(--panel-strong);
 }
 
-/* Active tab gets a soft pill background plus the accent color so the
-   selected state reads more like a destination than a hover. Tiny
-   dot under the icon marks the live position the way iOS does. */
+/* Active tab: just the accent color. The icon + label turning green is
+   plenty of signal; the leading-dot variant added noise without
+   communicating anything extra. */
 .tab-btn--active {
   color: var(--accent);
-}
-.tab-btn--active::after {
-  content: "";
-  position: absolute;
-  bottom: -2px;
-  left: 50%;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent);
-  transform: translateX(-50%);
 }
 
 .tab-btn__icon {
