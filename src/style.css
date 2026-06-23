@@ -6154,12 +6154,66 @@ body.has-cart .toto-companion {
 
 /* Swipe screen: drop the wizard's normal vertical padding so the
    deck claims the whole viewport. The deck card is the content.
-   Top padding clears the floating back/undo buttons so they don't
-   overlap the deck rectangle. */
+   Top padding clears the floating back button. */
 .cat-flow--swipe {
   padding: 56px 0 0;
   gap: 8px;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Picks view: clean list of what the shopper already added in this
+   category. Re-entry should reassure them their choices stuck, not
+   redeal the deck from zero. */
+.cat-flow--picks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.picks-list {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.picks-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 14px;
+}
+.picks-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.picks-row__name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.picks-row__sub {
+  font-size: 12.5px;
+  color: var(--muted-fg);
+}
+.picks-row__price {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+.picks-more {
+  align-self: flex-start;
+  margin-top: 4px;
 }
 /* On the swipe screen we hide the wizard's loading-state headline +
    date sub so the cards stand alone. They stay visible on the
@@ -6186,9 +6240,39 @@ body.on-swipe .wizard__loading { display: none; }
   padding: 0;
 }
 
-/* Undo: small floating mirror to the back button. On the right edge
-   the language FAB also lives, so we slide the undo button left of it
-   to keep both tappable. */
+/* Undo: a pill button below the swipe deck, centered so the user's
+   thumb can hit it without leaving the deck area. Moved away from the
+   top-right where it used to clash with the floating language FAB. */
+.cat-flow__undo--bottom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 14px auto 0;
+  padding: 9px 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted-fg);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+.cat-flow__undo--bottom:not(:disabled):hover {
+  background: var(--panel-strong);
+  color: var(--fg);
+}
+.cat-flow__undo--bottom:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.cat-flow__undo--bottom:not(:disabled):active { transform: scale(0.97); }
+
+/* Legacy float position kept for non-swipe screens that may still
+   reference it, but its top-right spot clashed with the language
+   FAB on swipe — the new bottom pill is the active one. */
 .cat-flow__undo--float {
   position: absolute;
   top: 12px;

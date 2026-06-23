@@ -1019,7 +1019,7 @@ export function renderPlan(root: HTMLElement) {
 
 // ─── Result UI: category checklist → tappable list → swipe deck per cat ────
 
-type FlowScreen = "categories" | "products" | "swipe";
+type FlowScreen = "categories" | "products" | "swipe" | "picks";
 
 function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
   if (result.categories.length === 0) {
@@ -1040,14 +1040,26 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
   }
 
   function render() {
-    if (screen === "categories") host.innerHTML = renderCategories();
+    if (screen === "categories")    host.innerHTML = renderCategories();
     else if (screen === "products") host.innerHTML = renderCategoryList();
-    else host.innerHTML = renderSwipe();
+    else if (screen === "picks")    host.innerHTML = renderPicks();
+    else                            host.innerHTML = renderSwipe();
     if (screen === "swipe") bindSwipe();
     // Body class drives a CSS rule that hides the wizard headline +
-    // date sub on the swipe deck only. Categories and per-list keep
-    // the context.
+    // date sub on the swipe deck only. Categories + per-list + picks
+    // all keep the context.
     document.body.classList.toggle("on-swipe", screen === "swipe");
+  }
+
+  /** Helper: which products from a category did the shopper add? */
+  function addedProductsForCategory(catKey: string) {
+    const cat = result.categories.find((c) => c.key === catKey);
+    if (!cat) return [];
+    const list = new Set(getList());
+    return cat.products
+      .map((entry) => getProduct(entry.code))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      .filter((p) => list.has(p.product_code));
   }
 
   // Screen 1: checklist
@@ -1112,6 +1124,38 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
     `;
   }
 
+  // Picks view: shown when re-entering a category the shopper already
+  // added items from, so they can SEE what they chose and know it
+  // stuck. No swipe deck on re-entry — that felt like the picks were
+  // never saved.
+  function renderPicks(): string {
+    const cat = activeCategory();
+    if (!cat) return "";
+    const items = addedProductsForCategory(cat.key);
+    const rows = items.map((p) => {
+      const finalPrice = p.discount_pct > 0
+        ? (p.price_chf * (1 - p.discount_pct / 100)).toFixed(0)
+        : p.price_chf.toFixed(0);
+      return `
+        <li class="picks-row">
+          <div class="picks-row__body">
+            <div class="picks-row__name">${escapeHTML(p.name)}</div>
+            <div class="picks-row__sub">${escapeHTML(p.brand)} · ${escapeHTML(p.color)} · size ${escapeHTML(p.size)}</div>
+          </div>
+          <div class="picks-row__price">CHF ${finalPrice}</div>
+        </li>
+      `;
+    }).join("");
+    return `
+      <div class="cat-flow cat-flow--picks">
+        <button class="cat-flow__back" id="cat-back">Back</button>
+        <h2 class="cat-flow__title">Your ${escapeHTML(cat.label.toLowerCase())} picks</h2>
+        <ul class="picks-list">${rows}</ul>
+        <button type="button" class="link-btn picks-more" data-re-swipe>Pick another option</button>
+      </div>
+    `;
+  }
+
   // Swipe deck: only the cards on the screen. Chrome (back + undo)
   // are small floating icon buttons in the corners so they don't
   // compete with the deck. Progress count is kept as an aria-only
@@ -1125,19 +1169,20 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
         <button class="cat-flow__back cat-flow__back--float" id="swipe-back" aria-label="Back to categories">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
         </button>
-        <button class="cat-flow__undo cat-flow__undo--float" id="deck-undo" disabled
+        <div class="deck-frame">
+          <div class="deck-progress sr-only" id="deck-progress" aria-live="polite"></div>
+          <div class="deck-stage" id="deck-stage"></div>
+        </div>
+        <button class="cat-flow__undo cat-flow__undo--bottom" id="deck-undo" disabled
                 title="Undo last" aria-label="Undo last">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
                stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
                stroke-linejoin="round" aria-hidden="true">
             <path d="M3 7v6h6"/>
             <path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>
           </svg>
+          <span>Undo</span>
         </button>
-        <div class="deck-frame">
-          <div class="deck-progress sr-only" id="deck-progress" aria-live="polite"></div>
-          <div class="deck-stage" id="deck-stage"></div>
-        </div>
       </div>
     `;
   }
@@ -1205,6 +1250,16 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
       activeCatKey = open.dataset.open!;
       const cat = result.categories.find((c) => c.key === activeCatKey);
       track("category_opened", { category: activeCatKey, product_count: cat?.products.length ?? 0 });
+      // If the shopper already picked items from this category,
+      // route to the picks view instead of dealing the swipe deck
+      // all over again. The deck would feel like their choices
+      // weren't saved.
+      screen = addedProductsForCategory(activeCatKey).length > 0 ? "picks" : "swipe";
+      render();
+      return;
+    }
+    // Re-enter swipe from the picks view (the "Pick more" button).
+    if (target.closest<HTMLButtonElement>("[data-re-swipe]")) {
       screen = "swipe";
       render();
       return;
