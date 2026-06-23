@@ -5101,8 +5101,22 @@ body.has-cart .toto-companion {
   background: var(--panel-strong);
 }
 
+/* Active tab gets a soft pill background plus the accent color so the
+   selected state reads more like a destination than a hover. Tiny
+   dot under the icon marks the live position the way iOS does. */
 .tab-btn--active {
   color: var(--accent);
+}
+.tab-btn--active::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateX(-50%);
 }
 
 .tab-btn__icon {
