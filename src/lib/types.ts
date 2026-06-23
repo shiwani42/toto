@@ -37,4 +37,5 @@ export type Screen =
   | "settings"
   | "fit"
   | "admin"
-  | "shop-onboarding";
+  | "shop-onboarding"
+  | "nearby";

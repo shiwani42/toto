@@ -18,6 +18,7 @@ import { renderSettings } from "./screens/settings";
 import { renderSmoke } from "./screens/smoke";
 import { renderAdmin } from "./screens/admin";
 import { renderShopOnboarding } from "./screens/shop-onboarding";
+import { renderNearby } from "./screens/nearby";
 import { fetchShopBySlug, setActiveShop, getActiveShop } from "./lib/shops";
 import { primeCatalog, resetCatalog } from "./lib/catalog";
 import { loadSession, initGlobalSession } from "./lib/session";
@@ -42,6 +43,7 @@ const VALID_SCREENS: Screen[] = [
   "fit",
   "admin",
   "shop-onboarding",
+  "nearby",
 ];
 
 function currentScreen(): Screen {
@@ -273,6 +275,9 @@ function mount() {
       break;
     case "shop-onboarding":
       renderShopOnboarding(root);
+      break;
+    case "nearby":
+      renderNearby(root);
       break;
   }
 

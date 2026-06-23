@@ -267,6 +267,13 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
         ${hourlyHTML(hourly)}
       </section>
 
+      <section class="admin-card admin-card--wide" id="shop-settings-card">
+        <div class="admin-card__head">
+          <h2>Shop settings</h2>
+        </div>
+        <div id="shop-settings-body"><p class="admin-empty">Loading…</p></div>
+      </section>
+
       <section class="admin-card admin-card--wide">
         <div class="admin-card__head">
           <h2>Catalog <span class="admin-card__meta">${catalog.length} ${catalog.length === 1 ? "product" : "products"}</span></h2>
@@ -284,12 +291,97 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
   `;
 
   wireCatalogActions(host, catalog);
+  void mountShopSettings(host, catalog[0]?.shop_id ?? null);
+}
+
+/** Render the per-shop settings card (name + zone map upload). The
+ *  shop row is fetched via fetchMyShops so we don't have to thread it
+ *  through the dashboard fetch fan-out. */
+async function mountShopSettings(host: HTMLElement, shopId: string | null) {
+  const body = host.querySelector("#shop-settings-body") as HTMLDivElement | null;
+  if (!body) return;
+  if (!shopId) {
+    body.innerHTML = `<p class="admin-empty">Sign in with a shop owner account, or seed a catalog first.</p>`;
+    return;
+  }
+  const { data, error } = await getSupabase()
+    .from("shops")
+    .select("*")
+    .eq("id", shopId)
+    .maybeSingle<{ id: string; name: string; slug: string; zone_map_url: string | null }>();
+  if (error || !data) {
+    body.innerHTML = `<p class="admin-empty">Couldn't load shop details.</p>`;
+    return;
+  }
+  body.innerHTML = `
+    <div class="shop-settings">
+      <div class="shop-settings__row">
+        <span class="shop-settings__label">Name</span>
+        <span class="shop-settings__value">${escapeHTML(data.name)}</span>
+      </div>
+      <div class="shop-settings__row">
+        <span class="shop-settings__label">Handle</span>
+        <span class="shop-settings__value"><code>${escapeHTML(data.slug)}</code></span>
+      </div>
+      <div class="shop-settings__row shop-settings__row--map">
+        <span class="shop-settings__label">Zone map</span>
+        <div class="shop-settings__map">
+          ${data.zone_map_url
+            ? `<img src="${escapeHTML(data.zone_map_url)}" alt="Current zone map" class="shop-settings__map-preview" />`
+            : `<div class="shop-settings__map-empty">No map uploaded yet.</div>`}
+          <div class="shop-settings__map-actions">
+            <label class="link-btn">
+              <input type="file" id="zone-map-input" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden />
+              ${data.zone_map_url ? "Replace zone map" : "Upload a zone map"}
+            </label>
+            <p class="shop-settings__map-status" id="zone-map-status" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const input = body.querySelector("#zone-map-input") as HTMLInputElement;
+  const status = body.querySelector("#zone-map-status") as HTMLParagraphElement;
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    status.textContent = "Uploading…";
+    try {
+      const path = `${data.id}/zone-map-${Date.now()}.${(file.name.split(".").pop() || "png").toLowerCase()}`;
+      const { error: upErr } = await getSupabase()
+        .storage.from("shop-assets")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) throw new Error(upErr.message);
+      const { data: pub } = getSupabase().storage.from("shop-assets").getPublicUrl(path);
+      const url = pub.publicUrl;
+      const { error: updErr } = await getSupabase()
+        .from("shops")
+        .update({ zone_map_url: url, updated_at: new Date().toISOString() })
+        .eq("id", data.id);
+      if (updErr) throw new Error(updErr.message);
+      status.textContent = "Saved. Reloading…";
+      window.setTimeout(() => window.location.reload(), 500);
+    } catch (err) {
+      status.textContent = err instanceof Error ? `Couldn't upload: ${err.message}` : "Upload failed.";
+    }
+  });
 }
 
 function wireCatalogActions(host: HTMLElement, catalog: CatalogRow[]) {
   const seedBtn = host.querySelector("#catalog-seed") as HTMLButtonElement | null;
   const importBtn = host.querySelector("#catalog-import") as HTMLButtonElement | null;
   const shopId = catalog[0]?.shop_id ?? null;
+
+  // Open the editor when an admin taps any product row in the table.
+  host.querySelectorAll<HTMLTableRowElement>("tr[data-edit-code]").forEach((tr) => {
+    tr.addEventListener("click", () => {
+      const code = tr.dataset.editCode!;
+      const row = catalog.find((r) => r.product_code === code);
+      if (!row) return;
+      mountCatalogEditor(row, () => window.location.reload());
+    });
+  });
 
   seedBtn?.addEventListener("click", async () => {
     if (!shopId) {
@@ -355,7 +447,7 @@ function catalogHTML(rows: CatalogRow[]): string {
   const shown = rows.slice(0, 50);
   return `
     <div class="admin-table-wrap">
-      <table class="admin-table">
+      <table class="admin-table admin-table--clickable">
         <thead>
           <tr>
             <th>Code</th>
@@ -369,7 +461,7 @@ function catalogHTML(rows: CatalogRow[]): string {
         </thead>
         <tbody>
           ${shown.map((r) => `
-            <tr>
+            <tr data-edit-code="${escapeHTML(r.product_code)}">
               <td><code class="admin-table__code">${escapeHTML(r.product_code)}</code></td>
               <td>${escapeHTML(r.brand)} ${escapeHTML(r.name)}</td>
               <td>${escapeHTML(r.category)}</td>
@@ -384,6 +476,109 @@ function catalogHTML(rows: CatalogRow[]): string {
     </div>
     ${rows.length > shown.length ? `<p class="admin-table__more">+ ${rows.length - shown.length} more not shown</p>` : ""}
   `;
+}
+
+/** Slide-up sheet to edit one catalog row. Lets the admin tweak the
+ *  fields they're most likely to change day-to-day — price, stock,
+ *  zone, aisle. Heavier edits (name, category) are deferred to the
+ *  CSV-import flow for now. */
+function mountCatalogEditor(row: CatalogRow, onSaved: () => void) {
+  const host = document.createElement("div");
+  host.className = "party-sheet-host";
+  host.innerHTML = `
+    <div class="party-sheet-backdrop"></div>
+    <form class="party-sheet" id="cat-sheet" novalidate>
+      <h2 class="party-sheet__title">${escapeHTML(row.brand)} ${escapeHTML(row.name)}</h2>
+      <p class="shop-onb__hint" style="margin-top:-12px;margin-bottom:16px">
+        <code>${escapeHTML(row.product_code)}</code> · ${escapeHTML(row.category)} · size ${escapeHTML(row.size)}
+      </p>
+
+      <div class="party-sheet__field">
+        <span class="party-sheet__label">Price (CHF)</span>
+        <input id="cat-price" type="number" min="0" step="0.5" value="${Number(row.price_chf).toFixed(2)}" />
+      </div>
+
+      <div class="shop-onb__row">
+        <div class="party-sheet__field">
+          <span class="party-sheet__label">Stock on shelf</span>
+          <input id="cat-stock-front" type="number" min="0" step="1" value="${row.stock_front}" />
+        </div>
+        <div class="party-sheet__field">
+          <span class="party-sheet__label">Stock total</span>
+          <input id="cat-stock-total" type="number" min="0" step="1" value="${row.stock_total}" />
+        </div>
+      </div>
+
+      <div class="shop-onb__row">
+        <div class="party-sheet__field">
+          <span class="party-sheet__label">Zone</span>
+          <input id="cat-zone" type="text" value="${escapeHTML(row.zone)}" placeholder="A" />
+        </div>
+        <div class="party-sheet__field">
+          <span class="party-sheet__label">Aisle</span>
+          <input id="cat-aisle" type="text" value="" placeholder="A1" />
+        </div>
+      </div>
+
+      <div class="party-sheet__field">
+        <span class="party-sheet__label">Zone name</span>
+        <input id="cat-zone-name" type="text" value="${escapeHTML(row.zone_name)}" placeholder="Jackets & Shells" />
+      </div>
+
+      <p id="cat-sheet-status" class="shop-onb__status" role="status" aria-live="polite"></p>
+
+      <div class="party-sheet__actions">
+        <button type="button" id="cat-cancel" class="link-btn">Cancel</button>
+        <button type="submit" class="primary party-sheet__save">Save</button>
+      </div>
+    </form>
+  `;
+  document.body.appendChild(host);
+  requestAnimationFrame(() => host.classList.add("party-sheet-host--open"));
+
+  function close() {
+    host.classList.remove("party-sheet-host--open");
+    window.setTimeout(() => host.remove(), 250);
+  }
+  (host.querySelector(".party-sheet-backdrop") as HTMLDivElement).addEventListener("click", close);
+  (host.querySelector("#cat-cancel") as HTMLButtonElement).addEventListener("click", close);
+
+  (host.querySelector("#cat-sheet") as HTMLFormElement).addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const status = host.querySelector("#cat-sheet-status") as HTMLParagraphElement;
+    const price = Number((host.querySelector("#cat-price") as HTMLInputElement).value);
+    const stockFront = Number((host.querySelector("#cat-stock-front") as HTMLInputElement).value);
+    const stockTotal = Number((host.querySelector("#cat-stock-total") as HTMLInputElement).value);
+    const zone = (host.querySelector("#cat-zone") as HTMLInputElement).value.trim();
+    const aisle = (host.querySelector("#cat-aisle") as HTMLInputElement).value.trim();
+    const zoneName = (host.querySelector("#cat-zone-name") as HTMLInputElement).value.trim();
+
+    if (!Number.isFinite(price) || price < 0)            { status.textContent = "Price must be a number."; return; }
+    if (!Number.isFinite(stockFront) || stockFront < 0)  { status.textContent = "Stock on shelf must be 0 or more."; return; }
+    if (!Number.isFinite(stockTotal) || stockTotal < 0)  { status.textContent = "Stock total must be 0 or more."; return; }
+    if (stockFront > stockTotal)                         { status.textContent = "Stock on shelf can't exceed total."; return; }
+
+    status.textContent = "Saving…";
+    const { error } = await getSupabase()
+      .from("products")
+      .update({
+        price_chf: price,
+        stock_front: stockFront,
+        stock_total: stockTotal,
+        zone,
+        aisle,
+        zone_name: zoneName,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("shop_id", row.shop_id)
+      .eq("product_code", row.product_code);
+    if (error) {
+      status.textContent = `Couldn't save: ${error.message}`;
+      return;
+    }
+    status.textContent = "Saved.";
+    window.setTimeout(() => { close(); onSaved(); }, 350);
+  });
 }
 
 // ─── Catalog actions ────────────────────────────────────────────────────────

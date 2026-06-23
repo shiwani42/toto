@@ -199,6 +199,19 @@ export function renderSettings(root: HTMLElement) {
         </div>
       </section>
 
+      <section class="card-section" aria-labelledby="tools-h">
+        <h2 id="tools-h">Tools</h2>
+        <a class="settings-tool" href="?screen=nearby">
+          <span class="settings-tool__body">
+            <span class="settings-tool__name">Find a shop near you</span>
+            <span class="settings-tool__sub">See which shops nearby carry items from your list.</span>
+          </span>
+          <span class="settings-tool__chev" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </span>
+        </a>
+      </section>
+
       <a class="link-btn" href="?screen=list">${t("settings.back")}</a>
     </main>
   `;

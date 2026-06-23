@@ -8,12 +8,14 @@
 
 import { getSupabase, supabaseConfigured } from "./supabase";
 import { getCurrentUser } from "./auth";
+import { getActiveShop } from "./shops";
 
 const SESSION_KEY = "toto.analytics.session";
 const FLUSH_INTERVAL_MS = 5_000;
 const MAX_BATCH = 25;
 
 type Row = {
+  shop_id: string;
   session_id: string;
   user_id: string | null;
   event: string;
@@ -97,7 +99,14 @@ function sanitize(payload: Record<string, unknown> | undefined): Record<string, 
 }
 
 export function track(event: string, payload?: Record<string, unknown>): void {
+  // Stamp the active shop's uuid when the shopper is in a shop
+  // context (?shop=<slug> resolved on boot). Without a shop, send
+  // 'default' so legacy analytics views keep working through the
+  // transition. The events.shop_id column is text for exactly this
+  // reason — uuid strings sit alongside the literal 'default'.
+  const activeShop = getActiveShop();
   queue.push({
+    shop_id: activeShop?.id ?? "default",
     session_id: sessionId(),
     user_id: cachedUserId,
     event,
