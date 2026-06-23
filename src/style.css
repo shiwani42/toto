@@ -1392,8 +1392,8 @@ button, .primary { font: inherit; cursor: pointer; }
   font-size: 16px;
   font-weight: 600;
   color: var(--fg);
-  background: var(--panel);
-  border: 1px solid transparent;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
   border-radius: 14px;
   outline: none;
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
@@ -1404,7 +1404,7 @@ button, .primary { font: inherit; cursor: pointer; }
   box-sizing: border-box;
 }
 .wizard__date-label input[type="date"]:hover {
-  background: var(--panel-strong);
+  border-color: var(--accent-border);
 }
 .wizard__date-label input[type="date"]:focus {
   background: var(--card);
@@ -1501,8 +1501,8 @@ button, .primary { font: inherit; cursor: pointer; }
   font-size: 17px;
   font-weight: 500;
   padding: 20px 20px;
-  background: var(--panel);
-  border: 1px solid transparent;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
   border-radius: 16px;
   outline: none;
   color: var(--fg);
@@ -1514,7 +1514,7 @@ button, .primary { font: inherit; cursor: pointer; }
   font-weight: 400;
 }
 .loc-search input:hover {
-  background: var(--panel-strong);
+  border-color: var(--accent-border);
 }
 .loc-search input:focus {
   background: var(--card);
