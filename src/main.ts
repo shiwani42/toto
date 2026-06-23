@@ -19,6 +19,7 @@ import { renderSmoke } from "./screens/smoke";
 import { renderAdmin } from "./screens/admin";
 import { renderShopOnboarding } from "./screens/shop-onboarding";
 import { fetchShopBySlug, setActiveShop, getActiveShop } from "./lib/shops";
+import { primeCatalog, resetCatalog } from "./lib/catalog";
 import { loadSession, initGlobalSession } from "./lib/session";
 import { initProfileSync } from "./lib/profile";
 import { initAnalytics } from "./lib/analytics";
@@ -182,18 +183,33 @@ function mountLangPicker() {
 
 // ─── Screen router ───────────────────────────────────────────────────────────
 
-// Resolve the shop context from ?shop=<slug> in the URL, if present.
-// Cached in sessionStorage so subsequent navigations don't re-fetch.
-// Falls back silently when offline / Supabase not configured.
+// Resolve the shop context from ?shop=<slug> in the URL, if present,
+// then prime the catalog cache with that shop's Supabase products so
+// the existing sync getProduct() / search() calls keep working.
+// Without ?shop the app falls back to the bundled demo catalog —
+// shopper UI doesn't change.
 async function resolveShopContext() {
   const slug = new URLSearchParams(location.search).get("shop");
-  if (!slug) return;
+  if (!slug) {
+    // No shop in URL: use whatever's in sessionStorage if anything;
+    // otherwise the bundled demo catalog stays active.
+    const active = getActiveShop();
+    if (active) await primeCatalog(active.id);
+    return;
+  }
   const current = getActiveShop();
-  if (current && current.slug === slug) return;
+  if (current && current.slug === slug) {
+    await primeCatalog(current.id);
+    return;
+  }
   const shop = await fetchShopBySlug(slug);
-  if (shop) setActiveShop(shop);
+  if (shop) {
+    setActiveShop(shop);
+    await primeCatalog(shop.id);
+  }
 }
 void resolveShopContext();
+void resetCatalog; // keep export referenced; admin UI uses it on shop switch
 
 function mount() {
   const root = document.getElementById("app");

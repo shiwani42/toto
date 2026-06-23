@@ -6,6 +6,7 @@ import { getSupabase, supabaseConfigured } from "../lib/supabase";
 import { authConfigured, getCurrentUser, signInWithEmail } from "../lib/auth";
 import { isAdmin } from "../lib/admin";
 import { getProduct } from "../lib/catalog";
+import productsRaw from "../../data/products.json";
 
 function escapeHTML(s: string): string {
   return s
@@ -147,6 +148,22 @@ function mountSignIn(host: HTMLElement) {
 
 // ─── Dashboard ──────────────────────────────────────────────────────────────
 
+type CatalogRow = {
+  shop_id: string;
+  product_code: string;
+  product_id: string;
+  name: string;
+  brand: string;
+  category: string;
+  color: string;
+  size: string;
+  price_chf: number;
+  stock_total: number;
+  stock_front: number;
+  zone: string;
+  zone_name: string;
+};
+
 async function mountDashboard(host: HTMLElement): Promise<void> {
   const [
     headline,
@@ -158,6 +175,7 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
     productPerf,
     demandGaps,
     hourly,
+    catalog,
   ] = await Promise.all([
     fetchOne<Headline>("v_headline_counters"),
     fetchMany<FunnelRow>("v_funnel_daily", { limit: 14, order: "day", asc: false }),
@@ -168,6 +186,7 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
     fetchMany<ProductPerfRow>("v_product_performance", { limit: 200 }),
     fetchMany<{ category: string; sessions: number }>("v_demand_gaps", { limit: 10 }),
     fetchMany<{ hour_utc: number; sessions: number }>("v_hourly_usage"),
+    fetchMany<CatalogRow>("v_my_products", { limit: 500 }),
   ]);
 
   // Headline: one big hero number (7-day sessions) with a small set of
@@ -247,10 +266,202 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
         <h2>Usage by hour <span class="admin-card__meta">UTC, last 14 days</span></h2>
         ${hourlyHTML(hourly)}
       </section>
+
+      <section class="admin-card admin-card--wide">
+        <div class="admin-card__head">
+          <h2>Catalog <span class="admin-card__meta">${catalog.length} ${catalog.length === 1 ? "product" : "products"}</span></h2>
+          <span class="admin-card__pill">Manage</span>
+        </div>
+        ${catalogHTML(catalog)}
+        <div class="admin-card__foot">
+          <button type="button" id="catalog-import" class="link-btn">Import from CSV</button>
+          <button type="button" id="catalog-seed" class="link-btn">Seed with demo catalog</button>
+        </div>
+      </section>
     </div>
 
     <a class="link-btn admin-back" href="?screen=home">Back to the app</a>
   `;
+
+  wireCatalogActions(host, catalog);
+}
+
+function wireCatalogActions(host: HTMLElement, catalog: CatalogRow[]) {
+  const seedBtn = host.querySelector("#catalog-seed") as HTMLButtonElement | null;
+  const importBtn = host.querySelector("#catalog-import") as HTMLButtonElement | null;
+  const shopId = catalog[0]?.shop_id ?? null;
+
+  seedBtn?.addEventListener("click", async () => {
+    if (!shopId) {
+      alert("No shop in context. Sign in with a shop owner account first.");
+      return;
+    }
+    if (catalog.length > 0 && !confirm(`This will upsert the demo catalog (~${(productsRaw as unknown[]).length} rows) into the current shop. Existing rows with matching codes will be updated. Continue?`)) {
+      return;
+    }
+    seedBtn.disabled = true;
+    seedBtn.textContent = "Seeding…";
+    try {
+      const { inserted } = await seedCatalog(shopId);
+      seedBtn.textContent = `Seeded ${inserted} rows. Reloading…`;
+      window.setTimeout(() => window.location.reload(), 600);
+    } catch (err) {
+      seedBtn.textContent = err instanceof Error ? `Failed: ${err.message}` : "Failed.";
+      seedBtn.disabled = false;
+    }
+  });
+
+  importBtn?.addEventListener("click", () => {
+    if (!shopId) {
+      alert("No shop in context. Sign in with a shop owner account first.");
+      return;
+    }
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".csv,text/csv";
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      importBtn.disabled = true;
+      importBtn.textContent = "Reading file…";
+      try {
+        const text = await file.text();
+        const rows = parseCatalogCsv(text, shopId);
+        if (rows.length === 0) throw new Error("No data rows found in the CSV.");
+        importBtn.textContent = `Uploading ${rows.length} rows…`;
+        const { error } = await getSupabase()
+          .from("products")
+          .upsert(rows, { onConflict: "shop_id,product_code" });
+        if (error) throw new Error(error.message);
+        importBtn.textContent = `Uploaded ${rows.length}. Reloading…`;
+        window.setTimeout(() => window.location.reload(), 600);
+      } catch (err) {
+        importBtn.textContent = err instanceof Error ? `Failed: ${err.message}` : "Failed.";
+        importBtn.disabled = false;
+      }
+    });
+    input.click();
+  });
+}
+
+// ─── Catalog rendering ──────────────────────────────────────────────────────
+
+function catalogHTML(rows: CatalogRow[]): string {
+  if (rows.length === 0) {
+    return `<p class="admin-empty">No products yet. Seed the demo catalog or import a CSV to get started.</p>`;
+  }
+  // Cap rendered rows so a 2k-product catalog doesn't lock up the
+  // page. The full count is shown in the heading.
+  const shown = rows.slice(0, 50);
+  return `
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Product</th>
+            <th>Category</th>
+            <th>Size</th>
+            <th>Price</th>
+            <th>Stock</th>
+            <th>Zone</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${shown.map((r) => `
+            <tr>
+              <td><code class="admin-table__code">${escapeHTML(r.product_code)}</code></td>
+              <td>${escapeHTML(r.brand)} ${escapeHTML(r.name)}</td>
+              <td>${escapeHTML(r.category)}</td>
+              <td>${escapeHTML(r.size)}</td>
+              <td>CHF ${Number(r.price_chf).toFixed(0)}</td>
+              <td>${r.stock_front}/${r.stock_total}</td>
+              <td>${escapeHTML(r.zone)} · ${escapeHTML(r.zone_name)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+    ${rows.length > shown.length ? `<p class="admin-table__more">+ ${rows.length - shown.length} more not shown</p>` : ""}
+  `;
+}
+
+// ─── Catalog actions ────────────────────────────────────────────────────────
+
+/** Pull the bundled demo catalog and insert it into the active shop.
+ *  Idempotent on (shop_id, product_code) — re-running is a noop. */
+async function seedCatalog(shopId: string): Promise<{ inserted: number; skipped: number }> {
+  const rows = (productsRaw as Array<Record<string, unknown>>).map((p) => ({
+    shop_id: shopId,
+    product_code: p.product_code,
+    product_id: p.product_id,
+    name: p.name,
+    brand: p.brand,
+    category: p.category,
+    color: p.color,
+    size: p.size,
+    price_chf: p.price_chf,
+    discount_pct: p.discount_pct,
+    weight_g: p.weight_g,
+    waterproof_rating_mm: p.waterproof_rating_mm,
+    temp_rating_c: p.temp_rating_c,
+    material: p.material,
+    tags: p.tags,
+    zone: p.zone,
+    zone_name: p.zone_name,
+    aisle: p.aisle,
+    stock_total: p.stock_total,
+    stock_front: p.stock_front,
+    description: p.description,
+  }));
+  const { error, count } = await getSupabase()
+    .from("products")
+    .upsert(rows, { onConflict: "shop_id,product_code", count: "exact" });
+  if (error) throw new Error(error.message);
+  return { inserted: count ?? rows.length, skipped: 0 };
+}
+
+/** Parse a CSV blob into product rows. Header row required.
+ *  Accepts the same columns as products.json; missing optional ones
+ *  default to sensible zeros / empty strings. */
+function parseCatalogCsv(text: string, shopId: string): Record<string, unknown>[] {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n").filter((l) => l.trim().length > 0);
+  if (lines.length < 2) return [];
+  const header = splitCsvLine(lines[0]).map((h) => h.trim());
+  const rows: Record<string, unknown>[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = splitCsvLine(lines[i]);
+    const obj: Record<string, unknown> = { shop_id: shopId };
+    header.forEach((h, idx) => {
+      const raw = (cells[idx] ?? "").trim();
+      if (h === "tags") obj[h] = raw ? raw.split(/[|;,]/).map((s) => s.trim()).filter(Boolean) : [];
+      else if (/^(price_chf|discount_pct)$/.test(h)) obj[h] = Number(raw || "0");
+      else if (/^(weight_g|waterproof_rating_mm|temp_rating_c|stock_total|stock_front)$/.test(h)) {
+        obj[h] = raw === "" ? null : Number(raw);
+      }
+      else obj[h] = raw;
+    });
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function splitCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (ch === "," && !inQ) {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out;
 }
 
 // ─── New rendering helpers ──────────────────────────────────────────────────
