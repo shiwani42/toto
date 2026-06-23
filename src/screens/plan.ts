@@ -1159,6 +1159,7 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
     return product?.category ?? key;
   }
 
+
   function bindSwipe() {
     const cat = activeCategory();
     if (!cat) return;
@@ -1221,6 +1222,65 @@ function mountCategoryFlow(host: HTMLElement, result: PlanResult): void {
   render();
 }
 
+// ─── Per-product → party member matching ──
+// When the shopper is buying for multiple people, each swipe card is
+// labeled "for [name]" based on size + gender match. The heuristic:
+// categorize the product as top / bottom / shoe (by catalog category
+// string, falling back to size shape), then find the member whose
+// corresponding size + gender both match. Two passes — strict (size
+// AND gender) then size-only — so a man's-cut item still matches a
+// "men's M" party member even if the tag list is thin. No match
+// returns null and we render the card without a tag (silence beats
+// a confident-wrong label).
+import type { PartyMember as PM } from "../lib/prefs";
+
+type ProductFitKind = "top" | "bottom" | "shoe" | "other";
+function productFitKind(p: ReturnType<typeof getProduct>): ProductFitKind {
+  if (!p) return "other";
+  const cat = (p.category || "").toLowerCase();
+  if (/shoe|boot|sandal|trainer/.test(cat))   return "shoe";
+  if (/pant|trouser|short|legging/.test(cat)) return "bottom";
+  if (/jacket|fleece|insulator|top|shirt|tee|base|hoodie|vest|coat|midlayer|sweater/.test(cat)) return "top";
+  const sz = (p.size || "").trim();
+  if (/^\d+$/.test(sz))                       return "shoe";
+  if (/^(XS|S|M|L|XL)$/i.test(sz))            return "top";
+  return "other";
+}
+function genderCompatible(productTags: string[], memberGender: "man" | "woman" | "other" | null): boolean {
+  if (!memberGender || memberGender === "other") return true;
+  const t = (productTags ?? []).map((x) => x.toLowerCase());
+  const hasMens   = t.includes("mens");
+  const hasWomens = t.includes("womens");
+  const hasUnisex = t.includes("unisex") || (!hasMens && !hasWomens);
+  if (memberGender === "man")   return hasMens || hasUnisex;
+  if (memberGender === "woman") return hasWomens || hasUnisex;
+  return true;
+}
+function matchPartyMember(
+  p: ReturnType<typeof getProduct>,
+  members: PM[],
+): { name: string } | null {
+  if (!p || members.length === 0) return null;
+  const kind = productFitKind(p);
+  if (kind === "other") return null;
+  const wantedSize = (p.size || "").trim();
+  for (const pass of ["both", "size-only"] as const) {
+    const hits = members.filter((m) => {
+      const memberSize =
+        kind === "shoe"   ? (m.shoeSizeEU == null ? "" : String(m.shoeSizeEU))
+      : kind === "bottom" ? (m.bottomSize ?? "")
+                          : (m.topSize ?? "");
+      if (!memberSize) return false;
+      if (memberSize.toLowerCase() !== wantedSize.toLowerCase()) return false;
+      if (pass === "both" && !genderCompatible(p.tags ?? [], m.gender)) return false;
+      return true;
+    });
+    if (hits.length === 1) return { name: hits[0].name || "this person" };
+    if (hits.length > 1)   return { name: hits.map((h) => h.name || "?").join(" / ") };
+  }
+  return null;
+}
+
 // ─── Swipe deck (scoped to a single category's products) ────────────────────
 
 const SWIPE_THRESHOLD_PX = 110;
@@ -1254,6 +1314,10 @@ function mountSwipeDeck(
     }
   }
 
+  // Cache the party once per deck mount — getPrefs() reads localStorage
+  // and parses JSON; doing it for every card render would be wasteful.
+  const partyMembers = getPrefs().partyMembers ?? [];
+
   function renderCard(entry: PlanPick, index: number): string {
     const p = getProduct(entry.code);
     if (!p) return "";
@@ -1261,9 +1325,17 @@ function mountSwipeDeck(
     const priceBlock = p.discount_pct > 0
       ? `<span class="deck-card__price--was">CHF ${p.price_chf.toFixed(0)}</span> CHF ${(p.price_chf * (1 - p.discount_pct / 100)).toFixed(0)}`
       : `CHF ${p.price_chf.toFixed(0)}`;
+    // When shopping for a party, tag the card with who it fits.
+    const forWho = matchPartyMember(p, partyMembers);
     return `
       <article class="deck-card" data-card-index="${index}" tabindex="0">
         <div class="deck-card__tint"></div>
+        ${forWho ? `
+          <div class="deck-card__for" aria-label="For ${escapeHTML(forWho.name)}">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>For ${escapeHTML(forWho.name)}</span>
+          </div>
+        ` : ""}
         <div class="deck-card__art">${illustrationForCategory(p.category)}</div>
         <div class="deck-card__head">
           <span class="deck-card__brand">${escapeHTML(p.brand)} · ${escapeHTML(p.color)} · size ${escapeHTML(p.size)}</span>

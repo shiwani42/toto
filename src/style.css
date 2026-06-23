@@ -6184,6 +6184,31 @@ body.on-swipe .wizard__loading { display: none; }
   opacity: 0;
 }
 
+/* "For [name]" pill on a swipe card — only present when the shopper
+   added party members and the product matches one of them. Sits in
+   the top-right of the card with a soft accent-bg fill so it reads
+   as quiet metadata, not a CTA. */
+.deck-card__for {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px 5px 8px;
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  z-index: 2;
+  max-width: calc(100% - 28px);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .deck-card__art {
   display: flex;
   align-items: center;
