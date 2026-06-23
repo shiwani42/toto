@@ -17,6 +17,8 @@ import { renderScan } from "./screens/scan";
 import { renderSettings } from "./screens/settings";
 import { renderSmoke } from "./screens/smoke";
 import { renderAdmin } from "./screens/admin";
+import { renderShopOnboarding } from "./screens/shop-onboarding";
+import { fetchShopBySlug, setActiveShop, getActiveShop } from "./lib/shops";
 import { loadSession, initGlobalSession } from "./lib/session";
 import { initProfileSync } from "./lib/profile";
 import { initAnalytics } from "./lib/analytics";
@@ -38,6 +40,7 @@ const VALID_SCREENS: Screen[] = [
   "settings",
   "fit",
   "admin",
+  "shop-onboarding",
 ];
 
 function currentScreen(): Screen {
@@ -56,6 +59,11 @@ function mountTabBar() {
 
   const screen = currentScreen();
   document.body.classList.remove("no-tab-bar");
+  // Shop signup is a focused single-task flow — no bottom nav.
+  if (screen === "shop-onboarding") {
+    document.body.classList.add("no-tab-bar");
+    return;
+  }
 
   const session = loadSession();
   const connectHref = session ? "?screen=connected" : "?screen=connect";
@@ -174,6 +182,19 @@ function mountLangPicker() {
 
 // ─── Screen router ───────────────────────────────────────────────────────────
 
+// Resolve the shop context from ?shop=<slug> in the URL, if present.
+// Cached in sessionStorage so subsequent navigations don't re-fetch.
+// Falls back silently when offline / Supabase not configured.
+async function resolveShopContext() {
+  const slug = new URLSearchParams(location.search).get("shop");
+  if (!slug) return;
+  const current = getActiveShop();
+  if (current && current.slug === slug) return;
+  const shop = await fetchShopBySlug(slug);
+  if (shop) setActiveShop(shop);
+}
+void resolveShopContext();
+
 function mount() {
   const root = document.getElementById("app");
   if (!root) throw new Error("#app not found");
@@ -233,6 +254,9 @@ function mount() {
       break;
     case "admin":
       renderAdmin(root);
+      break;
+    case "shop-onboarding":
+      renderShopOnboarding(root);
       break;
   }
 

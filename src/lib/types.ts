@@ -36,4 +36,5 @@ export type Screen =
   | "connected"
   | "settings"
   | "fit"
-  | "admin";
+  | "admin"
+  | "shop-onboarding";
