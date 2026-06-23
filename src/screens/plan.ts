@@ -766,14 +766,12 @@ export function renderPlan(root: HTMLElement) {
         else progressEl.textContent = msg;
         if (w) weatherEl.innerHTML = weatherCard(w);
       });
-      if (result.weather && weatherEl.innerHTML === "") {
-        weatherEl.innerHTML = weatherCard(result.weather);
-      }
-      progressEl.remove();
-      // Clear the anticipation skeleton too — the actual category cards
-      // are about to mount in #result and the skeleton would otherwise
-      // keep shimmering above them forever.
-      root.querySelector(".plan-skeleton")?.remove();
+      // Loading state served its purpose — drop the whole wizard__loading
+      // wrapper so the trip headline + date sub don't sit above the
+      // category checklist and (more importantly) the swipe deck screen.
+      const loadingWrap = root.querySelector(".wizard__loading") as HTMLDivElement | null;
+      if (loadingWrap) loadingWrap.remove();
+      void weatherEl; // weather lived inside loadingWrap; dropped with it
       const empty = result.categories.filter((c) => c.products.length === 0).map((c) => c.key);
       track("plan_returned", {
         categories: result.categories.map((c) => c.key),

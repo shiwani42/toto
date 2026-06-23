@@ -4,7 +4,7 @@ import { startScanner, type ScannerHandle } from "../lib/scanner";
 import { cameraErrorMessage } from "../lib/camera-errors";
 import type { Product } from "../lib/types";
 import { t } from "../lib/i18n";
-import { pushSuggestion } from "../lib/companion";
+import { pushSuggestion, setTotoText } from "../lib/companion";
 import { remarkFor } from "../lib/history";
 
 function escapeHTML(s: string): string {
@@ -94,9 +94,16 @@ export function renderBrowse(root: HTMLElement) {
   const fallbackSubEl = root.querySelector("#cam-fallback-sub") as HTMLParagraphElement;
   const retryBtn = root.querySelector("#cam-retry") as HTMLButtonElement;
 
+  // Errors / hard failures stay in the visible status banner so they
+  // can't be missed. Friendly progress messages ("Warming up…", "Point
+  // at something") route through Toto's bubble so they feel like the
+  // companion talking instead of system status text.
   function setStatus(msg: string) {
     statusEl.textContent = msg;
     statusEl.hidden = !msg;
+  }
+  function totoSay(msg: string) {
+    setTotoText(msg);
   }
 
   function showFallback(sub?: string) {
@@ -116,7 +123,7 @@ export function renderBrowse(root: HTMLElement) {
   }
 
   async function boot() {
-    setStatus("Warming up the camera…");
+    totoSay("Warming up the camera…");
     hideFallback();
     // If the camera takes more than ~5s to come up, surface the
     // fallback. On real devices this is a long wait — most likely the
@@ -137,7 +144,7 @@ export function renderBrowse(root: HTMLElement) {
           if (paused) return;
           const product = getProduct(code.text);
           if (!product) {
-            setStatus(t("browse.unknown"));
+            totoSay(t("browse.unknown"));
             return;
           }
           if ("vibrate" in navigator) navigator.vibrate(60);
@@ -145,7 +152,7 @@ export function renderBrowse(root: HTMLElement) {
           captureViewEl.classList.remove("browse-cam--active");
           const onList = getList().includes(product.product_code);
           showResult(productCard(product, onList));
-          setStatus("");
+          totoSay(`Got it. ${product.brand} ${product.name}.`);
           // Personalized remark (only fires if there's actual history).
           // Otherwise fall back to the repair suggestion below.
           const remark = remarkFor(product.product_code);
@@ -165,7 +172,7 @@ export function renderBrowse(root: HTMLElement) {
       });
       window.clearTimeout(slowTimer);
       captureViewEl.classList.add("browse-cam--active");
-      setStatus(t("browse.hint"));
+      totoSay(t("browse.hint"));
     } catch (err) {
       window.clearTimeout(slowTimer);
       console.error("Browse boot failed:", err);

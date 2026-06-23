@@ -3076,22 +3076,8 @@ body.has-cart .toto-companion {
   background: var(--accent-bg);
   color: var(--accent-strong);
 }
-/* Make multi-select unmistakable: a small green check pill in the
-   chip's top-right corner appears only when the chip is selected. */
-.wizard-multi__chip--on::after {
-  content: "";
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--accent);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><path d='M20 6L9 17l-5-5'/></svg>");
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 11px 11px;
-}
+/* Selected state is communicated by the chip going green — the user
+   asked us not to add a check overlay on top. */
 .wizard-multi__emoji { font-size: 18px; flex-shrink: 0; }
 
 /* Sizes step: three blocks of chip rows. */

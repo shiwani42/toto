@@ -88,6 +88,18 @@ let pendingSuggestion: Suggestion | null = null;
  *  screen when the moment is right. The companion will show it the next
  *  time it (re-)renders, unless this suggestion id was already dismissed
  *  in this session. */
+/** Update Toto's bubble text from outside. Use to route screen-state
+ *  messages ("Warming up the camera…", "Found it") through the
+ *  companion so they feel like Toto talking instead of system status
+ *  text. Auto-opens the bubble if it's closed. */
+export function setTotoText(text: string) {
+  const txtEl = document.querySelector("#toto-bubble .toto-companion__text") as HTMLSpanElement | null;
+  if (!txtEl) return;
+  txtEl.textContent = text;
+  const companion = document.getElementById("toto-companion");
+  companion?.classList.add("toto-companion--open");
+}
+
 export function pushSuggestion(s: Suggestion) {
   if (dismissedIds().has(s.id)) return;
   pendingSuggestion = s;
@@ -168,18 +180,19 @@ export function mountCompanion(screen: Screen) {
   if (existing) existing.remove();
   clearTimers();
 
-  // Skip the companion on screens where it adds noise instead of value:
+  // Skip the companion on screens where it adds noise:
   // - Home already has the giant Toto mascot.
   // - Admin is staff-only.
-  // - Scan / browse / compare / repair / fit are camera or photo flows
-  //   where the user's attention is on the lens or the result. A
-  //   floating bubble in the corner just crowds the viewfinder.
-  // - Connect and connected are session-management screens, not places
-  //   for a contextual nudge.
+  // - Scan has a busy carousel + viewport; the bubble doesn't fit.
+  // - Compare / repair / fit are dense single-task flows.
+  // - Connected is a chat-focused session screen.
+  // On Browse and Connect, Toto's voice carries the screen state
+  // ("Warming up the camera…" / "Shopping is more fun together") and
+  // adds character, so the companion is welcome there.
   const noCompanion = new Set<Screen>([
     "home", "admin",
-    "scan", "browse", "compare", "repair", "fit",
-    "connect", "connected",
+    "scan", "compare", "repair", "fit",
+    "connected",
   ]);
   if (noCompanion.has(screen)) return;
 
