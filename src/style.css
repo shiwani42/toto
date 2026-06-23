@@ -656,11 +656,12 @@ button, .primary { font: inherit; cursor: pointer; }
 }
 .zone-row__chev {
   margin-left: auto;
-  font-size: 22px;
-  line-height: 1;
   color: var(--muted-fg);
-  font-weight: 400;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
 }
 .zone-row__letter {
   width: 40px;
@@ -1173,10 +1174,12 @@ button, .primary { font: inherit; cursor: pointer; }
 }
 .cat-pick--done .cat-pick__status { color: var(--accent-strong); }
 .cat-pick__chev {
-  font-size: 22px;
   color: var(--muted-fg);
-  line-height: 1;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
 }
 
 .prod-section {
@@ -5462,11 +5465,19 @@ body.has-cart .toto-companion {
 }
 .home-more > summary::-webkit-details-marker { display: none; }
 .home-more > summary::after {
-  content: " ›";
+  /* Proper chevron via a rotated square border — renders crisp at any
+     size; the previous "›" glyph rendered staggered in some fonts. */
+  content: "";
   display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
   transition: transform 0.2s ease;
 }
-.home-more[open] > summary::after { transform: rotate(90deg); }
+.home-more[open] > summary::after { transform: rotate(45deg); }
 
 .home-more__grid {
   display: flex;
