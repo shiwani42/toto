@@ -271,7 +271,20 @@ export function renderMap(root: HTMLElement) {
     ? `${pendingCount} stop${pendingCount === 1 ? "" : "s"} left · ${pathDistance} m walk`
     : `${list.length} ${list.length === 1 ? "item" : "items"} · ${pathDistance} m walk · ${t("map.from")} ${escapeHTML(startLabel)}`;
 
+  // Arrival affirmation: if we just finished a zone in scan, the
+  // sessionStorage flag tells us to show a brief toast on the map.
+  const justFinished = sessionStorage.getItem("toto.justFinished");
+  if (justFinished) sessionStorage.removeItem("toto.justFinished");
+
   root.innerHTML = `
+    ${justFinished ? `
+      <div class="arrival-toast" role="status">
+        <span class="arrival-toast__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        </span>
+        <span class="arrival-toast__text">Zone ${escapeHTML(justFinished)} done</span>
+      </div>
+    ` : ""}
     <header>
       <h1>${escapeHTML(headline)}</h1>
       <p class="tag">${subline}</p>

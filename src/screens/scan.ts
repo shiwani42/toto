@@ -456,6 +456,11 @@ export function renderScan(root: HTMLElement) {
               // Remember where the shopper is — the map redraws its
               // route from this point instead of always from the entry.
               if (zoneParam) sessionStorage.setItem("toto.currentLoc", zoneParam);
+              // Flag the arrival so the map can show a brief
+              // "Zone X done" affirmation toast on mount.
+              if (zoneParam && !allDone) {
+                sessionStorage.setItem("toto.justFinished", zoneParam);
+              }
               handle?.stop();
               window.setTimeout(() => {
                 const url = new URL(window.location.href);
