@@ -156,15 +156,32 @@ button, .primary { font: inherit; cursor: pointer; }
 .primary:active { transform: scale(0.98); }
 .primary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
 
+/* Quiet text-style action links ("Back", "Tweak the list", "Reset
+   both", etc.). Was a plain green text label, which read as a naive
+   hyperlink. Now sits in a soft pill that lights up on hover, in a
+   muted color that doesn't compete with the primary green CTA. */
 .link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: transparent;
-  color: var(--accent);
+  color: var(--muted-fg);
   border: none;
+  font: inherit;
   font-size: 13px;
-  padding: 4px 6px;
   font-weight: 500;
+  letter-spacing: -0.005em;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s ease, background 0.15s ease;
 }
-.link-btn:hover { color: var(--accent-strong); }
+.link-btn:hover {
+  color: var(--fg);
+  background: var(--panel-strong);
+}
+.link-btn:active { transform: scale(0.98); }
 
 /* ─── Status / info boxes ────────────────────────────────────────────────── */
 .status {
