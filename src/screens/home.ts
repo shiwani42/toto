@@ -11,6 +11,7 @@ import {
 } from "../lib/shops";
 import { primeCatalog, resetCatalog } from "../lib/catalog";
 import { supabaseConfigured } from "../lib/supabase";
+import { mountInstallHint } from "../lib/pwa-install";
 
 // "In a rush" was a dashed quick chip below the three choice cards. It
 // pointed at /browse — the same destination as "I'm just looking" — so
@@ -131,8 +132,13 @@ export function renderHome(root: HTMLElement) {
         </li>
         ` : ""}
       </ul>
+
+      <div id="pwa-install-slot"></div>
     </main>
   `;
+
+  const installSlot = root.querySelector("#pwa-install-slot") as HTMLElement | null;
+  if (installSlot) mountInstallHint(installSlot);
 
   // Tap Toto → re-trigger the greeting wiggle + a faster tail wag burst.
   const hero = root.querySelector("#toto-hero");

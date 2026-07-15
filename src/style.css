@@ -6144,6 +6144,53 @@ body.has-cart .toto-companion {
 }
 .home-shop-browse:hover { text-decoration: underline; }
 
+/* ── PWA install hint (Home only; dismissible) ───────────────────────── */
+.pwa-install-hint {
+  margin: 8px 0 24px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  border: 1px solid #b7d9c7;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.pwa-install-hint__text {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--fg);
+}
+.pwa-install-hint__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.pwa-install-hint__install {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.pwa-install-hint__install:active { transform: scale(0.97); }
+.pwa-install-hint__dismiss {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-fg);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* ── Shop directory ───────────────────────────────────────────────────── */
 .shops-dir__header h1 { margin-bottom: 4px; }
 .shops-dir__back { margin-bottom: 8px; }

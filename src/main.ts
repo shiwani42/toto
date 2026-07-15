@@ -1,4 +1,5 @@
 import "./style.css";
+import { registerSW } from "virtual:pwa-register";
 import type { Screen } from "./lib/types";
 import { applyPrefs } from "./lib/prefs";
 import { icon } from "./lib/icons";
@@ -27,6 +28,7 @@ import { initProfileSync } from "./lib/profile";
 import { initAnalytics } from "./lib/analytics";
 import { LANGUAGES, getLang, setLang, type Language } from "./lib/i18n";
 import { setPrefs } from "./lib/prefs";
+import { initPwaInstallCapture } from "./lib/pwa-install";
 const VALID_SCREENS: Screen[] = [
   "home",
   "list",
@@ -291,6 +293,10 @@ function mount() {
   mountLangPicker();
   mountCompanion(currentScreen());
 }
+
+// PWA: auto-update when a new service worker is waiting (prod builds only).
+registerSW({ immediate: true });
+initPwaInstallCapture();
 
 applyPrefs();
 initGlobalSession();

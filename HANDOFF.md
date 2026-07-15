@@ -19,6 +19,7 @@
 | Backend | Supabase (Auth magic link, Postgres + RLS, Storage, Realtime) |
 | AI | Anthropic Claude (optional; planner + Fit Check); weather via Open-Meteo |
 | Host | Render Static Site (`render.yaml`) |
+| PWA | `vite-plugin-pwa` (Workbox) — installable, app-shell offline, `autoUpdate` |
 | Catalog fallback | Bundled `data/products.json` (~249 SKUs) when no `?shop=` |
 
 Env (see `.env.example`): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_ANTHROPIC_API_KEY`. All optional for local shopper demos with the bundled catalog.
@@ -58,6 +59,7 @@ Shopper context: `/?shop=<slug>` loads that shop's products into the in-memory c
 - Storage bucket `shop-assets` for zone maps + product images (`0005`).
 - Detail UI: `.detail-sheet*` is canonical; `.party-sheet*` kept as CSS aliases.
 - Demo shelf: `npm run demo-shelf` → `data/demo-shelf.html` (printable A4 EAN-13 grid).
+- **PWA** — web manifest + service worker (`vite-plugin-pwa`, `registerType: autoUpdate`); icons in `public/icons/`; subtle Home install hint (dismissible). Camera/scan still needs HTTPS (Render) + user permission; SW does not intercept `getUserMedia`.
 
 ---
 
@@ -180,6 +182,7 @@ No required agent backlog. Optional remaining:
 - [x] Shop directory / browse-all-shops (`?screen=shops`) — **shipped 2026-07-16**
 - [x] Demo shelf script (`npm run demo-shelf` → `data/demo-shelf.html`) — **shipped 2026-07-16**
 - [x] AGENTS.md Scandit-era wording scrubbed — **shipped 2026-07-16** (HANDOFF stays ops SoT)
+- [x] PWA (installable + offline app shell) — **shipped 2026-07-16**
 - [ ] Demo video (`video.mp4` at repo root) — human / recording
 
 ### Shipped 2026-07-16 (polish + leftovers)
@@ -191,6 +194,7 @@ No required agent backlog. Optional remaining:
 - **Twin Shopper votes** — scan finds broadcast `scan:found`; Connected shows Yes / Maybe / No cards for the partner.
 - **Admin CSV guide** — expandable column docs + sample CSV download; stronger unconfigured checklist on admin + shop-onboarding.
 - **Docs** — AGENTS current stack; supabase / data README dead Scandit env lines removed.
+- **PWA** — `vite-plugin-pwa` + Workbox; paw icons 192/512 (+ maskable, apple-touch); Home install hint; Render `no-cache` on `sw.js` / manifest.
 
 Prefer small UX polish or a parked idea in §5 over re-touching the multi-tenant path.
 

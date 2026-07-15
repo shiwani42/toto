@@ -211,3 +211,5 @@ Demo shelf script (old Phase 5): **done** — `npm run demo-shelf`.
     - **Demo shelf** — `scripts/make-demo-shelf.mjs` + `npm run demo-shelf` → `data/demo-shelf.html` (A4 printable EAN-13 grid via bwip-js).
     - **Docs** — AGENTS.md scrubbed to zxing-wasm + multi-tenant reality; HANDOFF remains ops source of truth; supabase README + data README dead Scandit env refs cleaned.
     - Human checklist (migrations / Auth / Render env / shop bootstrap) still open — no `.env` or Supabase CLI in agent environment.
+
+- **2026-07-16 (PWA)** — Installable Progressive Web App via `vite-plugin-pwa` (Workbox, `autoUpdate`): web manifest (Toto / standalone / brand greens), 192+512 (+ maskable) + apple-touch icons from the paw favicon, SW precache of app shell + assets + WASM, Google Fonts runtime cache, mobile meta tags, dismissible Home install hint, Render `no-cache` headers for `sw.js` / manifest.
