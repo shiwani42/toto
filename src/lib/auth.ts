@@ -23,6 +23,48 @@ export async function getCurrentUser(): Promise<User | null> {
   return session?.user ?? null;
 }
 
+/** True when the URL looks like a magic-link / OAuth callback
+ *  (hash tokens). While this is set we should keep a loading
+ *  skeleton up instead of flashing the sign-in form. */
+export function hasAuthCallback(): boolean {
+  try {
+    return /(?:^|[&#])(?:access_token|refresh_token|error)=/.test(window.location.hash);
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve the current user without flashing a signed-out UI during
+ *  magic-link return. If the URL has auth callback tokens, wait for
+ *  `onAuthStateChange` (or a short timeout) before returning null. */
+export async function waitForAuthUser(timeoutMs = 4000): Promise<User | null> {
+  if (!authConfigured) return null;
+  const immediate = await getCurrentUser();
+  if (immediate) return immediate;
+  if (!hasAuthCallback()) return null;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (user: User | null) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      unsub();
+      resolve(user);
+    };
+    const unsub = onAuthChange((user) => {
+      if (user) finish(user);
+    });
+    const timer = window.setTimeout(() => {
+      void getCurrentUser().then(finish);
+    }, timeoutMs);
+    // Race: getSession may already have processed the hash by now.
+    void getCurrentUser().then((u) => {
+      if (u) finish(u);
+    });
+  });
+}
+
 /** Sends a magic-link email. User clicks the link, lands back on the app
  *  authenticated. We don't sit on this promise — UI shows a 'check your
  *  email' state immediately.

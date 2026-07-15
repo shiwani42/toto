@@ -1,12 +1,28 @@
 // Retailer admin dashboard. Reads from the SQL views in
-// supabase/migrations/0002_events_admin.sql. Single shop for now —
-// every query implicitly covers shop_id='default'.
+// supabase/migrations/0002_events_admin.sql (+ 0006 shop scoping).
+// Multi-shop admins pick a shop via the switcher; analytics + catalog
+// then filter to that shop_id.
 
 import { getSupabase, supabaseConfigured } from "../lib/supabase";
-import { authConfigured, getCurrentUser, signInWithEmail } from "../lib/auth";
+import { authConfigured, waitForAuthUser, signInWithEmail } from "../lib/auth";
 import { isAdmin } from "../lib/admin";
 import { getProduct } from "../lib/catalog";
+import {
+  fetchMyShops,
+  resolveAdminShop,
+  setAdminShopId,
+  getActiveShop,
+  setActiveShop,
+  type Shop,
+  type ZonePositions,
+} from "../lib/shops";
+import {
+  ZONE_LETTERS,
+  resolveZonePositions,
+} from "../lib/zone-positions";
 import productsRaw from "../../data/products.json";
+
+const UPSERT_CHUNK = 500;
 
 function escapeHTML(s: string): string {
   return s
@@ -19,6 +35,7 @@ function escapeHTML(s: string): string {
 // ─── State ──────────────────────────────────────────────────────────────────
 
 type Headline = {
+  shop_id?: string;
   sessions_24h: number;
   sessions_7d: number;
   sessions_30d: number;
@@ -26,6 +43,7 @@ type Headline = {
   scans_7d: number;
 };
 type FunnelRow = {
+  shop_id?: string;
   day: string;
   wizard_started: number;
   wizard_completed: number;
@@ -36,6 +54,7 @@ type FunnelRow = {
 };
 type Bucket = { label: string; value: number };
 type ProductPerfRow = {
+  shop_id?: string;
   code: string;
   views: number;
   picks: number;
@@ -66,7 +85,7 @@ export function renderAdmin(root: HTMLElement) {
       main.innerHTML = unconfiguredHTML();
       return;
     }
-    const user = await getCurrentUser();
+    const user = await waitForAuthUser();
     if (!user) {
       mountSignIn(main);
       return;
@@ -162,47 +181,64 @@ type CatalogRow = {
   stock_front: number;
   zone: string;
   zone_name: string;
+  image_url?: string | null;
 };
 
 async function mountDashboard(host: HTMLElement): Promise<void> {
+  const myShops = await fetchMyShops();
+  const activeShop = resolveAdminShop(myShops);
+  const shopId = activeShop?.id ?? null;
+
   const [
-    headline,
-    funnel,
-    topCategories,
-    purposeMix,
-    activityMix,
-    profileMix,
-    productPerf,
-    demandGaps,
-    hourly,
-    catalog,
+    headlines,
+    funnelAll,
+    topCategoriesAll,
+    purposeMixAll,
+    activityMixAll,
+    profileMixAll,
+    productPerfAll,
+    demandGapsAll,
+    hourlyAll,
+    catalogAll,
   ] = await Promise.all([
-    fetchOne<Headline>("v_headline_counters"),
-    fetchMany<FunnelRow>("v_funnel_daily", { limit: 14, order: "day", asc: false }),
-    fetchMany<{ category: string; appeared_in_plans: number }>("v_top_categories", { limit: 10 }),
-    fetchMany<{ purpose: string | null; sessions: number }>("v_purpose_mix"),
-    fetchMany<{ activity: string | null; sessions: number }>("v_activity_mix", { limit: 8 }),
-    fetchMany<{ gender: string | null; age: string | null; experience: string | null; sessions: number }>("v_profile_mix", { limit: 100 }),
-    fetchMany<ProductPerfRow>("v_product_performance", { limit: 200 }),
-    fetchMany<{ category: string; sessions: number }>("v_demand_gaps", { limit: 10 }),
-    fetchMany<{ hour_utc: number; sessions: number }>("v_hourly_usage"),
-    fetchMany<CatalogRow>("v_my_products", { limit: 500 }),
+    fetchMany<Headline>("v_headline_counters", { limit: 50 }),
+    fetchMany<FunnelRow>("v_funnel_daily", { limit: 60, order: "day", asc: false }),
+    fetchMany<{ shop_id?: string; category: string; appeared_in_plans: number }>("v_top_categories", { limit: 40 }),
+    fetchMany<{ shop_id?: string; purpose: string | null; sessions: number }>("v_purpose_mix", { limit: 40 }),
+    fetchMany<{ shop_id?: string; activity: string | null; sessions: number }>("v_activity_mix", { limit: 40 }),
+    fetchMany<{ shop_id?: string; gender: string | null; age: string | null; experience: string | null; sessions: number }>("v_profile_mix", { limit: 200 }),
+    fetchMany<ProductPerfRow>("v_product_performance", { limit: 400 }),
+    fetchMany<{ shop_id?: string; category: string; sessions: number }>("v_demand_gaps", { limit: 40 }),
+    fetchMany<{ shop_id?: string; hour_utc: number; sessions: number }>("v_hourly_usage", { limit: 100 }),
+    fetchMany<CatalogRow>("v_my_products", { limit: 2000 }),
   ]);
 
-  // Headline: one big hero number (7-day sessions) with a small set of
-  // companion metrics underneath. Reads like Apple Health's hero stat
-  // rather than five identical-weight tiles competing for attention.
+  // Prefer per-shop rows (migration 0006). Fall back to unscoped rows
+  // when the migration hasn't been applied yet so the dashboard still
+  // renders for single-shop / legacy installs.
+  const headline = pickForShop(headlines, shopId) ?? headlines[0] ?? null;
+  const funnel = filterForShop(funnelAll, shopId).slice(0, 14);
+  const topCategories = filterForShop(topCategoriesAll, shopId).slice(0, 10);
+  const purposeMix = filterForShop(purposeMixAll, shopId);
+  const activityMix = filterForShop(activityMixAll, shopId).slice(0, 8);
+  const profileMix = filterForShop(profileMixAll, shopId);
+  const productPerf = filterForShop(productPerfAll, shopId);
+  const demandGaps = filterForShop(demandGapsAll, shopId).slice(0, 10);
+  const hourly = filterForShop(hourlyAll, shopId);
+  const catalog = shopId
+    ? catalogAll.filter((r) => r.shop_id === shopId)
+    : catalogAll;
+
   const hero = headline?.sessions_7d ?? 0;
-  // Sum the last 14 days of funnel to compute conversion through the
-  // wizard — gives the dashboard a "how's the funnel doing?" answer
-  // up front instead of forcing the viewer to read a table.
   const totalStarted = funnel.reduce((n, r) => n + r.wizard_started, 0);
   const totalAdded = funnel.reduce((n, r) => n + r.added_to_list, 0);
   const overallConvPct = totalStarted > 0 ? Math.round((totalAdded / totalStarted) * 100) : null;
 
   host.innerHTML = `
+    ${shopSwitcherHTML(myShops, activeShop)}
+
     <header class="admin-hero">
-      <div class="admin-hero__eyebrow">Shop dashboard</div>
+      <div class="admin-hero__eyebrow">${activeShop ? escapeHTML(activeShop.name) : "Shop dashboard"}</div>
       <div class="admin-hero__metric">
         <div class="admin-hero__value">${hero.toLocaleString()}</div>
         <div class="admin-hero__label">sessions, last 7 days</div>
@@ -283,6 +319,7 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
         <div class="admin-card__foot">
           <button type="button" id="catalog-import" class="link-btn">Import from CSV</button>
           <button type="button" id="catalog-seed" class="link-btn">Seed with demo catalog</button>
+          <p id="catalog-progress" class="admin-card__progress" aria-live="polite"></p>
         </div>
       </section>
     </div>
@@ -290,29 +327,76 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
     <a class="link-btn admin-back" href="?screen=home">Back to the app</a>
   `;
 
-  wireCatalogActions(host, catalog);
-  void mountShopSettings(host, catalog[0]?.shop_id ?? null);
+  wireShopSwitcher(host, myShops);
+  wireCatalogActions(host, catalog, shopId);
+  void mountShopSettings(host, activeShop);
 }
 
-/** Render the per-shop settings card (name + zone map upload). The
- *  shop row is fetched via fetchMyShops so we don't have to thread it
- *  through the dashboard fetch fan-out. */
-async function mountShopSettings(host: HTMLElement, shopId: string | null) {
+/** Filter rows that carry an optional shop_id. Rows without shop_id
+ *  (pre-0006 views) pass through so the dashboard still works before
+ *  the migration is applied. */
+function filterForShop<T extends { shop_id?: string }>(rows: T[], shopId: string | null): T[] {
+  if (!shopId) return rows;
+  const scoped = rows.filter((r) => r.shop_id === shopId);
+  if (scoped.length > 0) return scoped;
+  // No shop_id column yet — treat the whole set as this shop's data.
+  if (rows.length > 0 && rows.every((r) => r.shop_id == null)) return rows;
+  return scoped;
+}
+
+function pickForShop<T extends { shop_id?: string }>(rows: T[], shopId: string | null): T | null {
+  const filtered = filterForShop(rows, shopId);
+  return filtered[0] ?? null;
+}
+
+function shopSwitcherHTML(shops: Shop[], active: Shop | null): string {
+  if (shops.length <= 1) return "";
+  return `
+    <div class="admin-shop-switcher" role="tablist" aria-label="Your shops">
+      ${shops.map((s) => `
+        <button type="button"
+                class="admin-shop-switcher__pill${active?.id === s.id ? " is-active" : ""}"
+                data-shop-id="${escapeHTML(s.id)}"
+                role="tab"
+                aria-selected="${active?.id === s.id ? "true" : "false"}">
+          ${escapeHTML(s.name)}
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function wireShopSwitcher(host: HTMLElement, shops: Shop[]) {
+  host.querySelectorAll<HTMLButtonElement>("[data-shop-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.shopId;
+      if (!id || shops.every((s) => s.id !== id)) return;
+      setAdminShopId(id);
+      window.location.reload();
+    });
+  });
+}
+
+/** Render the per-shop settings card (name + zone map + pin editor + entry QR). */
+async function mountShopSettings(host: HTMLElement, shop: Shop | null) {
   const body = host.querySelector("#shop-settings-body") as HTMLDivElement | null;
   if (!body) return;
-  if (!shopId) {
-    body.innerHTML = `<p class="admin-empty">Sign in with a shop owner account, or seed a catalog first.</p>`;
+  if (!shop) {
+    body.innerHTML = `<p class="admin-empty">Sign in with a shop owner account, or create a shop first.</p>`;
     return;
   }
   const { data, error } = await getSupabase()
     .from("shops")
     .select("*")
-    .eq("id", shopId)
-    .maybeSingle<{ id: string; name: string; slug: string; zone_map_url: string | null }>();
+    .eq("id", shop.id)
+    .maybeSingle<Shop>();
   if (error || !data) {
     body.innerHTML = `<p class="admin-empty">Couldn't load shop details.</p>`;
     return;
   }
+  const entryUrl = `${window.location.origin}/?shop=${encodeURIComponent(data.slug)}`;
+  const positions = resolveZonePositions(data.zone_positions ?? null);
+
   body.innerHTML = `
     <div class="shop-settings">
       <div class="shop-settings__row">
@@ -327,7 +411,7 @@ async function mountShopSettings(host: HTMLElement, shopId: string | null) {
         <span class="shop-settings__label">Zone map</span>
         <div class="shop-settings__map">
           ${data.zone_map_url
-            ? `<img src="${escapeHTML(data.zone_map_url)}" alt="Current zone map" class="shop-settings__map-preview" />`
+            ? `<img src="${escapeHTML(data.zone_map_url)}" alt="Current zone map" class="shop-settings__map-preview" id="zone-map-preview" />`
             : `<div class="shop-settings__map-empty">No map uploaded yet.</div>`}
           <div class="shop-settings__map-actions">
             <label class="link-btn">
@@ -338,8 +422,55 @@ async function mountShopSettings(host: HTMLElement, shopId: string | null) {
           </div>
         </div>
       </div>
+      ${data.zone_map_url ? zoneHotspotEditorHTML() : `
+      <div class="shop-settings__row">
+        <span class="shop-settings__label">Zone pins</span>
+        <p class="shop-settings__hint">Upload a zone map first, then place pins for each zone.</p>
+      </div>`}
+      <div class="shop-settings__row shop-settings__row--qr">
+        <span class="shop-settings__label">Entry QR</span>
+        <div class="shop-qr">
+          <canvas id="shop-qr-canvas" class="shop-qr__canvas" width="200" height="200" aria-label="Entry QR code"></canvas>
+          <div class="shop-qr__meta">
+            <p class="shop-qr__url"><code>${escapeHTML(entryUrl)}</code></p>
+            <p class="shop-qr__hint">Print this for the shop entrance. Shoppers scan it to open Toto at your store.</p>
+            <div class="shop-qr__actions">
+              <button type="button" id="shop-qr-download" class="link-btn">Download PNG</button>
+              <button type="button" id="shop-qr-print" class="link-btn">Print A4 sheet</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   `;
+
+  if (data.zone_map_url) {
+    wireZoneHotspotEditor(body, data.id, positions, data.zone_map_url);
+  }
+
+  const canvas = body.querySelector("#shop-qr-canvas") as HTMLCanvasElement;
+  try {
+    const { default: QRCode } = await import("qrcode");
+    await QRCode.toCanvas(canvas, entryUrl, {
+      width: 200,
+      margin: 2,
+      color: { dark: "#1a1a1a", light: "#ffffff" },
+      errorCorrectionLevel: "M",
+    });
+  } catch (err) {
+    console.warn("QR render failed:", err);
+  }
+
+  (body.querySelector("#shop-qr-download") as HTMLButtonElement)?.addEventListener("click", () => {
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = `toto-${data.slug}-entry-qr.png`;
+    a.click();
+  });
+
+  (body.querySelector("#shop-qr-print") as HTMLButtonElement)?.addEventListener("click", () => {
+    printEntryQrSheet(data.name, entryUrl, canvas.toDataURL("image/png"));
+  });
 
   const input = body.querySelector("#zone-map-input") as HTMLInputElement;
   const status = body.querySelector("#zone-map-status") as HTMLParagraphElement;
@@ -368,12 +499,166 @@ async function mountShopSettings(host: HTMLElement, shopId: string | null) {
   });
 }
 
-function wireCatalogActions(host: HTMLElement, catalog: CatalogRow[]) {
+type HotspotTarget = string; // "A"…"G" | "entry" | "checkout"
+
+function zoneHotspotEditorHTML(): string {
+  const chips = [
+    ...ZONE_LETTERS.map((z) => ({ id: z, label: `Zone ${z}` })),
+    { id: "entry", label: "Entry" },
+    { id: "checkout", label: "Checkout" },
+  ];
+  return `
+    <div class="shop-settings__row shop-settings__row--hotspots">
+      <span class="shop-settings__label">Zone pins</span>
+      <div class="zone-hotspot">
+        <p class="zone-hotspot__hint">Select a zone, then tap the map to place its pin. Shoppers see these on the navigate screen.</p>
+        <div class="zone-hotspot__chips" role="tablist" aria-label="Pin target">
+          ${chips.map((c, i) => `
+            <button type="button" class="zone-hotspot__chip${i === 0 ? " is-active" : ""}"
+                    data-hotspot-target="${c.id}" role="tab"
+                    aria-selected="${i === 0 ? "true" : "false"}">${c.label}</button>
+          `).join("")}
+        </div>
+        <div class="zone-hotspot__map" id="zone-hotspot-map">
+          <img src="" alt="" class="zone-hotspot__img" id="zone-hotspot-img" draggable="false" />
+          <div class="zone-hotspot__pins" id="zone-hotspot-pins"></div>
+        </div>
+        <div class="zone-hotspot__actions">
+          <button type="button" id="zone-hotspot-clear" class="link-btn">Clear selected</button>
+          <button type="button" id="zone-hotspot-save" class="primary">Save pin layout</button>
+        </div>
+        <p class="zone-hotspot__status" id="zone-hotspot-status" aria-live="polite"></p>
+      </div>
+    </div>
+  `;
+}
+
+function wireZoneHotspotEditor(
+  body: HTMLElement,
+  shopId: string,
+  initial: ZonePositions,
+  mapUrl: string,
+) {
+  const state: ZonePositions = {
+    zones: { ...initial.zones },
+    entry: initial.entry ? { ...initial.entry } : undefined,
+    checkout: initial.checkout ? { ...initial.checkout } : undefined,
+  };
+  let selected: HotspotTarget = "A";
+
+  const img = body.querySelector("#zone-hotspot-img") as HTMLImageElement;
+  const mapEl = body.querySelector("#zone-hotspot-map") as HTMLElement;
+  const pinsEl = body.querySelector("#zone-hotspot-pins") as HTMLElement;
+  const status = body.querySelector("#zone-hotspot-status") as HTMLElement;
+  img.src = mapUrl;
+
+  function renderPins() {
+    const parts: string[] = [];
+    for (const [letter, pt] of Object.entries(state.zones)) {
+      parts.push(`<span class="zone-hotspot__pin" style="left:${pt.x}%;top:${pt.y}%" data-pin="${escapeHTML(letter)}">${escapeHTML(letter)}</span>`);
+    }
+    if (state.entry) {
+      parts.push(`<span class="zone-hotspot__pin zone-hotspot__pin--meta" style="left:${state.entry.x}%;top:${state.entry.y}%" data-pin="entry">In</span>`);
+    }
+    if (state.checkout) {
+      parts.push(`<span class="zone-hotspot__pin zone-hotspot__pin--meta" style="left:${state.checkout.x}%;top:${state.checkout.y}%" data-pin="checkout">Out</span>`);
+    }
+    pinsEl.innerHTML = parts.join("");
+  }
+  renderPins();
+
+  body.querySelectorAll<HTMLButtonElement>("[data-hotspot-target]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      selected = btn.dataset.hotspotTarget as HotspotTarget;
+      body.querySelectorAll("[data-hotspot-target]").forEach((b) => {
+        b.classList.toggle("is-active", b === btn);
+        b.setAttribute("aria-selected", b === btn ? "true" : "false");
+      });
+      status.textContent = `Placing ${selected === "entry" || selected === "checkout" ? selected : `zone ${selected}`}. Tap the map.`;
+    });
+  });
+
+  mapEl.addEventListener("click", (e) => {
+    const rect = mapEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const x = Math.round(((e.clientX - rect.left) / rect.width) * 1000) / 10;
+    const y = Math.round(((e.clientY - rect.top) / rect.height) * 1000) / 10;
+    const clamped = {
+      x: Math.min(98, Math.max(2, x)),
+      y: Math.min(98, Math.max(2, y)),
+    };
+    if (selected === "entry") state.entry = clamped;
+    else if (selected === "checkout") state.checkout = clamped;
+    else state.zones[selected] = clamped;
+    renderPins();
+    status.textContent = `Moved ${selected} to ${clamped.x}%, ${clamped.y}%. Save when ready.`;
+  });
+
+  (body.querySelector("#zone-hotspot-clear") as HTMLButtonElement).addEventListener("click", () => {
+    if (selected === "entry") delete state.entry;
+    else if (selected === "checkout") delete state.checkout;
+    else delete state.zones[selected];
+    renderPins();
+    status.textContent = `Cleared ${selected}.`;
+  });
+
+  (body.querySelector("#zone-hotspot-save") as HTMLButtonElement).addEventListener("click", async () => {
+    status.textContent = "Saving…";
+    const payload: ZonePositions = {
+      zones: { ...state.zones },
+      entry: state.entry,
+      checkout: state.checkout,
+    };
+    const { error } = await getSupabase()
+      .from("shops")
+      .update({ zone_positions: payload, updated_at: new Date().toISOString() })
+      .eq("id", shopId);
+    if (error) {
+      status.textContent = `Couldn't save: ${error.message}`;
+      return;
+    }
+    status.textContent = "Pin layout saved.";
+    const active = getActiveShop();
+    if (active?.id === shopId) {
+      setActiveShop({ ...active, zone_positions: payload });
+    }
+  });
+}
+
+/** Open a print-friendly A4 window with the shop name, QR, URL, and
+ *  a Powered by Toto footer. */
+function printEntryQrSheet(shopName: string, entryUrl: string, dataUrl: string) {
+  const win = window.open("", "_blank", "noopener,noreferrer,width=800,height=1000");
+  if (!win) {
+    alert("Allow pop-ups to print the QR sheet.");
+    return;
+  }
+  win.document.write(`<!doctype html>
+<html><head><title>${escapeHTML(shopName)} — Toto entry QR</title>
+<style>
+  @page { size: A4; margin: 24mm; }
+  body { font-family: system-ui, sans-serif; color: #1a1a1a; text-align: center; margin: 0; padding: 40px 24px; }
+  h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.02em; }
+  .sub { color: #666; font-size: 14px; margin: 0 0 36px; }
+  img { width: 280px; height: 280px; }
+  .url { margin-top: 28px; font-size: 13px; word-break: break-all; color: #333; }
+  .footer { margin-top: 48px; font-size: 12px; color: #888; letter-spacing: 0.04em; }
+</style></head><body>
+  <h1>${escapeHTML(shopName)}</h1>
+  <p class="sub">Scan to open Toto in this store</p>
+  <img src="${dataUrl}" alt="Entry QR" />
+  <p class="url">${escapeHTML(entryUrl)}</p>
+  <p class="footer">Powered by Toto</p>
+  <script>window.onload = function () { window.print(); };</script>
+</body></html>`);
+  win.document.close();
+}
+
+function wireCatalogActions(host: HTMLElement, catalog: CatalogRow[], shopId: string | null) {
   const seedBtn = host.querySelector("#catalog-seed") as HTMLButtonElement | null;
   const importBtn = host.querySelector("#catalog-import") as HTMLButtonElement | null;
-  const shopId = catalog[0]?.shop_id ?? null;
+  const progress = host.querySelector("#catalog-progress") as HTMLParagraphElement | null;
 
-  // Open the editor when an admin taps any product row in the table.
   host.querySelectorAll<HTMLTableRowElement>("tr[data-edit-code]").forEach((tr) => {
     tr.addEventListener("click", () => {
       const code = tr.dataset.editCode!;
@@ -394,12 +679,17 @@ function wireCatalogActions(host: HTMLElement, catalog: CatalogRow[]) {
     seedBtn.disabled = true;
     seedBtn.textContent = "Seeding…";
     try {
-      const { inserted } = await seedCatalog(shopId);
+      const { inserted } = await seedCatalog(shopId, (done, total) => {
+        seedBtn.textContent = `Seeding… ${done}/${total}`;
+        if (progress) progress.textContent = `Upserted ${done} of ${total} rows`;
+      });
       seedBtn.textContent = `Seeded ${inserted} rows. Reloading…`;
+      if (progress) progress.textContent = "";
       window.setTimeout(() => window.location.reload(), 600);
     } catch (err) {
       seedBtn.textContent = err instanceof Error ? `Failed: ${err.message}` : "Failed.";
       seedBtn.disabled = false;
+      if (progress) progress.textContent = "";
     }
   });
 
@@ -420,16 +710,17 @@ function wireCatalogActions(host: HTMLElement, catalog: CatalogRow[]) {
         const text = await file.text();
         const rows = parseCatalogCsv(text, shopId);
         if (rows.length === 0) throw new Error("No data rows found in the CSV.");
-        importBtn.textContent = `Uploading ${rows.length} rows…`;
-        const { error } = await getSupabase()
-          .from("products")
-          .upsert(rows, { onConflict: "shop_id,product_code" });
-        if (error) throw new Error(error.message);
+        await upsertInChunks(rows, (done, total) => {
+          importBtn.textContent = `Uploading… ${done}/${total}`;
+          if (progress) progress.textContent = `Upserted ${done} of ${total} rows`;
+        });
         importBtn.textContent = `Uploaded ${rows.length}. Reloading…`;
+        if (progress) progress.textContent = "";
         window.setTimeout(() => window.location.reload(), 600);
       } catch (err) {
         importBtn.textContent = err instanceof Error ? `Failed: ${err.message}` : "Failed.";
         importBtn.disabled = false;
+        if (progress) progress.textContent = "";
       }
     });
     input.click();
@@ -450,6 +741,7 @@ function catalogHTML(rows: CatalogRow[]): string {
       <table class="admin-table admin-table--clickable">
         <thead>
           <tr>
+            <th></th>
             <th>Code</th>
             <th>Product</th>
             <th>Category</th>
@@ -462,6 +754,11 @@ function catalogHTML(rows: CatalogRow[]): string {
         <tbody>
           ${shown.map((r) => `
             <tr data-edit-code="${escapeHTML(r.product_code)}">
+              <td class="admin-table__thumb-cell">
+                ${r.image_url
+                  ? `<img src="${escapeHTML(r.image_url)}" alt="" class="admin-table__thumb" />`
+                  : `<span class="admin-table__thumb admin-table__thumb--empty" aria-hidden="true"></span>`}
+              </td>
               <td><code class="admin-table__code">${escapeHTML(r.product_code)}</code></td>
               <td>${escapeHTML(r.brand)} ${escapeHTML(r.name)}</td>
               <td>${escapeHTML(r.category)}</td>
@@ -480,68 +777,129 @@ function catalogHTML(rows: CatalogRow[]): string {
 
 /** Slide-up sheet to edit one catalog row. Lets the admin tweak the
  *  fields they're most likely to change day-to-day — price, stock,
- *  zone, aisle. Heavier edits (name, category) are deferred to the
- *  CSV-import flow for now. */
+ *  zone, aisle, product photo. Heavier edits (name, category) are
+ *  deferred to the CSV-import flow for now. */
 function mountCatalogEditor(row: CatalogRow, onSaved: () => void) {
   const host = document.createElement("div");
-  host.className = "party-sheet-host";
+  host.className = "detail-sheet-host party-sheet-host";
+  const currentImage = (row.image_url ?? "").trim();
   host.innerHTML = `
-    <div class="party-sheet-backdrop"></div>
-    <form class="party-sheet" id="cat-sheet" novalidate>
-      <h2 class="party-sheet__title">${escapeHTML(row.brand)} ${escapeHTML(row.name)}</h2>
+    <div class="detail-sheet-backdrop party-sheet-backdrop"></div>
+    <form class="detail-sheet party-sheet" id="cat-sheet" novalidate>
+      <h2 class="detail-sheet__title party-sheet__title">${escapeHTML(row.brand)} ${escapeHTML(row.name)}</h2>
       <p class="shop-onb__hint" style="margin-top:-12px;margin-bottom:16px">
         <code>${escapeHTML(row.product_code)}</code> · ${escapeHTML(row.category)} · size ${escapeHTML(row.size)}
       </p>
 
-      <div class="party-sheet__field">
-        <span class="party-sheet__label">Price (CHF)</span>
+      <div class="detail-sheet__field party-sheet__field">
+        <span class="detail-sheet__label party-sheet__label">Photo</span>
+        <div class="cat-image">
+          ${currentImage
+            ? `<img src="${escapeHTML(currentImage)}" alt="" class="cat-image__preview" id="cat-image-preview" />`
+            : `<div class="cat-image__empty" id="cat-image-preview">No photo yet</div>`}
+          <div class="cat-image__actions">
+            <label class="link-btn">
+              <input type="file" id="cat-image-file" accept="image/png,image/jpeg,image/webp" hidden />
+              ${currentImage ? "Replace photo" : "Upload photo"}
+            </label>
+            ${currentImage ? `<button type="button" id="cat-image-clear" class="link-btn">Remove</button>` : ""}
+          </div>
+          <input type="hidden" id="cat-image-url" value="${escapeHTML(currentImage)}" />
+        </div>
+      </div>
+
+      <div class="detail-sheet__field party-sheet__field">
+        <span class="detail-sheet__label party-sheet__label">Price (CHF)</span>
         <input id="cat-price" type="number" min="0" step="0.5" value="${Number(row.price_chf).toFixed(2)}" />
       </div>
 
       <div class="shop-onb__row">
-        <div class="party-sheet__field">
-          <span class="party-sheet__label">Stock on shelf</span>
+        <div class="detail-sheet__field party-sheet__field">
+          <span class="detail-sheet__label party-sheet__label">Stock on shelf</span>
           <input id="cat-stock-front" type="number" min="0" step="1" value="${row.stock_front}" />
         </div>
-        <div class="party-sheet__field">
-          <span class="party-sheet__label">Stock total</span>
+        <div class="detail-sheet__field party-sheet__field">
+          <span class="detail-sheet__label party-sheet__label">Stock total</span>
           <input id="cat-stock-total" type="number" min="0" step="1" value="${row.stock_total}" />
         </div>
       </div>
 
       <div class="shop-onb__row">
-        <div class="party-sheet__field">
-          <span class="party-sheet__label">Zone</span>
+        <div class="detail-sheet__field party-sheet__field">
+          <span class="detail-sheet__label party-sheet__label">Zone</span>
           <input id="cat-zone" type="text" value="${escapeHTML(row.zone)}" placeholder="A" />
         </div>
-        <div class="party-sheet__field">
-          <span class="party-sheet__label">Aisle</span>
+        <div class="detail-sheet__field party-sheet__field">
+          <span class="detail-sheet__label party-sheet__label">Aisle</span>
           <input id="cat-aisle" type="text" value="" placeholder="A1" />
         </div>
       </div>
 
-      <div class="party-sheet__field">
-        <span class="party-sheet__label">Zone name</span>
+      <div class="detail-sheet__field party-sheet__field">
+        <span class="detail-sheet__label party-sheet__label">Zone name</span>
         <input id="cat-zone-name" type="text" value="${escapeHTML(row.zone_name)}" placeholder="Jackets & Shells" />
       </div>
 
       <p id="cat-sheet-status" class="shop-onb__status" role="status" aria-live="polite"></p>
 
-      <div class="party-sheet__actions">
+      <div class="detail-sheet__actions party-sheet__actions">
         <button type="button" id="cat-cancel" class="link-btn">Cancel</button>
-        <button type="submit" class="primary party-sheet__save">Save</button>
+        <button type="submit" class="primary detail-sheet__save party-sheet__save">Save</button>
       </div>
     </form>
   `;
   document.body.appendChild(host);
-  requestAnimationFrame(() => host.classList.add("party-sheet-host--open"));
+  requestAnimationFrame(() => host.classList.add("detail-sheet-host--open", "party-sheet-host--open"));
 
   function close() {
-    host.classList.remove("party-sheet-host--open");
+    host.classList.remove("detail-sheet-host--open", "party-sheet-host--open");
     window.setTimeout(() => host.remove(), 250);
   }
-  (host.querySelector(".party-sheet-backdrop") as HTMLDivElement).addEventListener("click", close);
+  (host.querySelector(".detail-sheet-backdrop") as HTMLDivElement).addEventListener("click", close);
   (host.querySelector("#cat-cancel") as HTMLButtonElement).addEventListener("click", close);
+
+  const urlInput = host.querySelector("#cat-image-url") as HTMLInputElement;
+  const preview = host.querySelector("#cat-image-preview") as HTMLElement;
+  (host.querySelector("#cat-image-file") as HTMLInputElement).addEventListener("change", async (ev) => {
+    const file = (ev.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const status = host.querySelector("#cat-sheet-status") as HTMLParagraphElement;
+    status.textContent = "Uploading photo…";
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `${row.shop_id}/products/${row.product_code}.${ext}`;
+      const { error: upErr } = await getSupabase()
+        .storage.from("shop-assets")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) throw new Error(upErr.message);
+      const { data: pub } = getSupabase().storage.from("shop-assets").getPublicUrl(path);
+      // Cache-bust so the preview refreshes after replace.
+      const url = `${pub.publicUrl}?t=${Date.now()}`;
+      urlInput.value = pub.publicUrl;
+      if (preview.tagName === "IMG") {
+        (preview as HTMLImageElement).src = url;
+      } else {
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "";
+        img.className = "cat-image__preview";
+        img.id = "cat-image-preview";
+        preview.replaceWith(img);
+      }
+      status.textContent = "Photo ready. Hit Save to keep it.";
+    } catch (err) {
+      status.textContent = err instanceof Error ? `Upload failed: ${err.message}` : "Upload failed.";
+    }
+  });
+  host.querySelector("#cat-image-clear")?.addEventListener("click", () => {
+    urlInput.value = "";
+    const empty = document.createElement("div");
+    empty.className = "cat-image__empty";
+    empty.id = "cat-image-preview";
+    empty.textContent = "No photo yet";
+    const cur = host.querySelector("#cat-image-preview");
+    cur?.replaceWith(empty);
+  });
 
   (host.querySelector("#cat-sheet") as HTMLFormElement).addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -552,6 +910,7 @@ function mountCatalogEditor(row: CatalogRow, onSaved: () => void) {
     const zone = (host.querySelector("#cat-zone") as HTMLInputElement).value.trim();
     const aisle = (host.querySelector("#cat-aisle") as HTMLInputElement).value.trim();
     const zoneName = (host.querySelector("#cat-zone-name") as HTMLInputElement).value.trim();
+    const imageUrl = urlInput.value.trim() || null;
 
     if (!Number.isFinite(price) || price < 0)            { status.textContent = "Price must be a number."; return; }
     if (!Number.isFinite(stockFront) || stockFront < 0)  { status.textContent = "Stock on shelf must be 0 or more."; return; }
@@ -568,6 +927,7 @@ function mountCatalogEditor(row: CatalogRow, onSaved: () => void) {
         zone,
         aisle,
         zone_name: zoneName,
+        image_url: imageUrl,
         updated_at: new Date().toISOString(),
       })
       .eq("shop_id", row.shop_id)
@@ -584,8 +944,12 @@ function mountCatalogEditor(row: CatalogRow, onSaved: () => void) {
 // ─── Catalog actions ────────────────────────────────────────────────────────
 
 /** Pull the bundled demo catalog and insert it into the active shop.
- *  Idempotent on (shop_id, product_code) — re-running is a noop. */
-async function seedCatalog(shopId: string): Promise<{ inserted: number; skipped: number }> {
+ *  Idempotent on (shop_id, product_code) — re-running is a noop.
+ *  Chunked so catalogs >1k don't time out on a single upsert. */
+async function seedCatalog(
+  shopId: string,
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ inserted: number; skipped: number }> {
   const rows = (productsRaw as Array<Record<string, unknown>>).map((p) => ({
     shop_id: shopId,
     product_code: p.product_code,
@@ -609,11 +973,26 @@ async function seedCatalog(shopId: string): Promise<{ inserted: number; skipped:
     stock_front: p.stock_front,
     description: p.description,
   }));
-  const { error, count } = await getSupabase()
-    .from("products")
-    .upsert(rows, { onConflict: "shop_id,product_code", count: "exact" });
-  if (error) throw new Error(error.message);
-  return { inserted: count ?? rows.length, skipped: 0 };
+  await upsertInChunks(rows, onProgress);
+  return { inserted: rows.length, skipped: 0 };
+}
+
+/** Upsert product rows in chunks of UPSERT_CHUNK with optional progress. */
+async function upsertInChunks(
+  rows: Record<string, unknown>[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<void> {
+  const total = rows.length;
+  let done = 0;
+  for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
+    const chunk = rows.slice(i, i + UPSERT_CHUNK);
+    const { error } = await getSupabase()
+      .from("products")
+      .upsert(chunk, { onConflict: "shop_id,product_code" });
+    if (error) throw new Error(error.message);
+    done = Math.min(total, i + chunk.length);
+    onProgress?.(done, total);
+  }
 }
 
 /** Parse a CSV blob into product rows. Header row required.
@@ -724,24 +1103,6 @@ function funnelVisual(rows: FunnelRow[]): string {
 }
 
 // ─── Supabase helpers ───────────────────────────────────────────────────────
-
-async function fetchOne<T>(view: string): Promise<T | null> {
-  try {
-    const { data, error } = await getSupabase()
-      .from(view)
-      .select("*")
-      .limit(1)
-      .maybeSingle<T>();
-    if (error) {
-      console.warn(`fetch ${view} failed:`, error.message);
-      return null;
-    }
-    return data;
-  } catch (err) {
-    console.warn(`fetch ${view} threw:`, err);
-    return null;
-  }
-}
 
 async function fetchMany<T>(
   view: string,

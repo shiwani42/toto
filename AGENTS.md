@@ -352,3 +352,22 @@ We work in vertical slices — each phase is demoable. **v1 phases come first.**
     - **Auth**: `signInWithEmail(email, landingScreen)` bounces the magic link back to any screen; `isAdmin()` accepts legacy `admins` OR any `shop_admins` membership.
     - **Action items left for the user:** run the three new migrations in Supabase, set Site URL + Redirect URLs to the Render origin, confirm `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` / `VITE_ANTHROPIC_API_KEY` on Render, then `/?screen=shop-onboarding` → seed the demo catalog → upload a zone map. Full walkthrough in [`HANDOFF.md`](./HANDOFF.md).
     - **Not shipped (deferred to next agent):** admin shop-switcher when the same person owns multiple shops, QR generator for the entry URL, cross-shop entry point on Home, per-shop SQL views (`v_headline_counters` etc.) that filter to a specific shop id instead of relying on RLS aggregation, `zone_positions` map-hotspot editor, per-product `image_url`.
+
+- **2026-07-16 (multi-tenant follow-ups)** — Picked up deferred items from `HANDOFF.md` §3:
+    - **Admin shop switcher** — pill row when an owner has multiple shops; `toto.adminShopId` in sessionStorage via `resolveAdminShop` / `setAdminShopId` in `shops.ts`. Catalog + analytics scoped to the selection.
+    - **Shop-scoped analytics** — migration `0006_shop_scoped_analytics.sql` adds `shop_id` to aggregation views; admin filters client-side (graceful fallback if migration not applied). Same migration hardens anon `events` insert to real shops or `'default'`.
+    - **Entry QR** — Shop settings renders QR via `qrcode` for `/?shop=<slug>`; Download PNG + Print A4 sheet with shop name + Powered by Toto footer.
+    - **Home nearby card** — fourth choice when list nonempty and no active shop.
+    - **CSV / seed chunking** — upserts in batches of 500 with progress feedback.
+    - **Still deferred:** zone-map hotspot editor (`zone_positions`), per-product `image_url`, party-sheet rename, auth flicker fix.
+    - **Action items for the user:** run migration `0006` in Supabase (plus any earlier migrations still pending). See `HANDOFF.md` §2.
+
+- **2026-07-16 (finalize — remaining backlog cleared)** — Code-complete for HANDOFF deferred items:
+    - **Zone-map hotspot editor** — admin pin placer for A–G / entry / checkout; `shops.zone_positions` JSONB (migration `0007`). `map.ts` consumes shop map URL + pins via `resolveZonePositions`.
+    - **Product photos** — `products.image_url`; admin upload to `shop-assets`; swipe deck uses `illustrationForProduct`.
+    - **Detail-sheet rename** — `.detail-sheet*` canonical, `.party-sheet*` aliases.
+    - **Auth flicker** — `waitForAuthUser()` on admin + shop-onboarding.
+    - **Polish** — lazy `qrcode` import; `color-mix` solid fallbacks.
+    - **User action:** run migrations `0006` + `0007` (and any earlier ones still pending). Full checklist in [`HANDOFF.md`](./HANDOFF.md). No further required agent backlog for the platform track.
+
+- **2026-07-16 (HANDOFF rewrite)** — Rewrote [`HANDOFF.md`](./HANDOFF.md) as the canonical ops handoff for future agents: one-liner + stack, shipped surface, architecture (shops / catalog / auth / pins), human checklist (migrations `0001`–`0007` + Auth + env + bootstrap), deferred/parked, verify steps, and “Start here”. Keep HANDOFF at repo root; do not delete it.

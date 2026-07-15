@@ -1,27 +1,10 @@
 import storeMapUrl from "../../data/store-map.png";
 import { getList } from "../lib/list";
 import { getProduct, zonesForCodes } from "../lib/catalog";
+import { getActiveShop } from "../lib/shops";
+import { resolveZonePositions } from "../lib/zone-positions";
 import type { Product } from "../lib/types";
 import { t } from "../lib/i18n";
-
-// Pin positions on the store-map.png, as percentages of width/height.
-// Map layout (3 columns):
-//   left:   C (top) - B (mid) - A (bot)
-//   center: F (upper-mid) - G (lower-mid)
-//   right:  D (top) - E (mid) - Checkout (bot)
-const ZONE_POS: Record<string, { x: number; y: number }> = {
-  C: { x: 21, y: 38 },
-  B: { x: 21, y: 60 },
-  A: { x: 21, y: 82 },
-  F: { x: 52, y: 42 },
-  G: { x: 52, y: 75 },
-  D: { x: 82, y: 38 },
-  E: { x: 82, y: 60 },
-};
-// Endpoints used by the routing — entry is bottom-center (the store door),
-// checkout is bottom-right where the till sits.
-const ENTRY    = { x: 50, y: 95 };
-const CHECKOUT = { x: 82, y: 92 };
 
 const CURRENT_LOC_KEY = "toto.currentLoc";
 
@@ -130,6 +113,13 @@ export function renderMap(root: HTMLElement) {
 
   // Current location: a zone code the user last tapped or just finished
   // scanning, or null = entry.
+  const shop = getActiveShop();
+  const layout = resolveZonePositions(shop?.zone_positions ?? null);
+  const ZONE_POS = layout.zones;
+  const ENTRY = layout.entry ?? { x: 50, y: 95 };
+  const CHECKOUT = layout.checkout ?? { x: 82, y: 92 };
+  const mapImageUrl = shop?.zone_map_url?.trim() || storeMapUrl;
+
   const currentLoc = sessionStorage.getItem(CURRENT_LOC_KEY);
   const startPt = currentLoc && ZONE_POS[currentLoc] ? ZONE_POS[currentLoc] : ENTRY;
   const startLabel = currentLoc && ZONE_POS[currentLoc] ? `Zone ${currentLoc}` : t("map.entry");
@@ -291,7 +281,7 @@ export function renderMap(root: HTMLElement) {
     </header>
     <main class="screen-map">
       <div class="map-wrap">
-        <img src="${storeMapUrl}" class="map-img" alt="Store map" />
+        <img src="${mapImageUrl}" class="map-img" alt="Store map" />
         <svg class="route-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           <polyline points="${pathStr}" class="route-line"/>
           ${startMarker}

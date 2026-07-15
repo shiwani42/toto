@@ -4,6 +4,7 @@ import { icon } from "../lib/icons";
 import { totoMascot } from "../lib/toto";
 import { t } from "../lib/i18n";
 import { getInsights } from "../lib/history";
+import { getActiveShop } from "../lib/shops";
 
 // "In a rush" was a dashed quick chip below the three choice cards. It
 // pointed at /browse — the same destination as "I'm just looking" — so
@@ -26,10 +27,7 @@ export function renderHome(root: HTMLElement) {
   const insights = getInsights();
   const isReturning = insights.tripCount > 0;
   const lastCategory = insights.topCategories[0]?.category;
-
-  // First-run is just the home screen itself — the giant Toto mascot,
-  // three choice cards, and the in-a-rush chip are the welcome. A
-  // separate intro page added nothing the home page didn't already say.
+  const showFindShop = hasList && !getActiveShop();
 
   root.innerHTML = `
     <main class="screen-home">
@@ -81,6 +79,18 @@ export function renderHome(root: HTMLElement) {
             <p class="home-choice__sub">${t("home.choice.browse.sub")}</p>
           </a>
         </li>
+
+        ${showFindShop ? `
+        <li>
+          <a class="home-choice home-choice--find-shop" href="?screen=nearby">
+            <div class="home-choice__head">
+              <span class="home-choice__icon">${icon("store", 24)}</span>
+            </div>
+            <h2 class="home-choice__title">${t("home.choice.nearby")}</h2>
+            <p class="home-choice__sub">${t("home.choice.nearby.sub").replace("{n}", String(existingList.length))}</p>
+          </a>
+        </li>
+        ` : ""}
       </ul>
     </main>
   `;

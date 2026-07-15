@@ -4,7 +4,7 @@
 //     create the shops + shop_admins rows on submit. After save we
 //     redirect to /?screen=admin which will now scope to this shop.
 
-import { authConfigured, getCurrentUser, signInWithEmail, onAuthChange } from "../lib/auth";
+import { authConfigured, waitForAuthUser, signInWithEmail, onAuthChange } from "../lib/auth";
 import { createShop, slugify } from "../lib/shops";
 import { icon } from "../lib/icons";
 
@@ -32,7 +32,9 @@ export function renderShopOnboarding(root: HTMLElement) {
       host.innerHTML = unconfiguredHTML();
       return;
     }
-    const user = await getCurrentUser();
+    // Keep the skeleton up through magic-link hash processing so we
+    // don't flash the sign-in card before the session lands.
+    const user = await waitForAuthUser();
     if (!user) {
       mountSignIn(host);
       return;

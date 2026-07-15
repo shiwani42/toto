@@ -11,6 +11,15 @@
 
 import { getSupabase, supabaseConfigured } from "./supabase";
 
+export type ZonePoint = { x: number; y: number };
+
+/** Pin layout for a shop's zone map, percentages of image width/height. */
+export type ZonePositions = {
+  zones: Record<string, ZonePoint>;
+  entry?: ZonePoint;
+  checkout?: ZonePoint;
+};
+
 export type Shop = {
   id: string;
   slug: string;
@@ -23,9 +32,11 @@ export type Shop = {
   lng: number | null;
   brand_color: string | null;
   zone_map_url: string | null;
+  zone_positions?: ZonePositions | null;
 };
 
 const ACTIVE_SHOP_KEY = "toto.activeShop";
+const ADMIN_SHOP_KEY = "toto.adminShopId";
 
 /** Read the currently-active shop, if any. Returns null when the
  *  shopper hasn't picked a shop yet (the shopper-side app falls back
@@ -43,6 +54,44 @@ export function getActiveShop(): Shop | null {
 export function setActiveShop(shop: Shop | null) {
   if (shop) sessionStorage.setItem(ACTIVE_SHOP_KEY, JSON.stringify(shop));
   else      sessionStorage.removeItem(ACTIVE_SHOP_KEY);
+}
+
+/** Admin dashboard shop selection (when an owner administers
+ *  multiple shops). Separate from the shopper's `activeShop` so an
+ *  owner browsing their own storefront doesn't clobber the dashboard. */
+export function getAdminShopId(): string | null {
+  try {
+    return sessionStorage.getItem(ADMIN_SHOP_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setAdminShopId(id: string | null) {
+  if (id) sessionStorage.setItem(ADMIN_SHOP_KEY, id);
+  else sessionStorage.removeItem(ADMIN_SHOP_KEY);
+}
+
+/** Pick which of `shops` the admin dashboard should show. Prefers
+ *  the sessionStorage choice, then `?shop=<slug>` in the URL, then
+ *  the most recently created shop. Persists the choice. */
+export function resolveAdminShop(shops: Shop[]): Shop | null {
+  if (shops.length === 0) return null;
+  const saved = getAdminShopId();
+  const fromSaved = saved ? shops.find((s) => s.id === saved) : undefined;
+  if (fromSaved) return fromSaved;
+  try {
+    const slug = new URLSearchParams(window.location.search).get("shop");
+    if (slug) {
+      const fromSlug = shops.find((s) => s.slug === slug);
+      if (fromSlug) {
+        setAdminShopId(fromSlug.id);
+        return fromSlug;
+      }
+    }
+  } catch { /* ignore */ }
+  setAdminShopId(shops[0].id);
+  return shops[0];
 }
 
 /** Look up a shop by its URL slug. Used when a shopper arrives via

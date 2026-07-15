@@ -213,6 +213,7 @@ button, .primary { font: inherit; cursor: pointer; }
 }
 @keyframes status-breathe {
   0%, 100% { background-color: var(--accent-bg); }
+  50%      { background-color: var(--accent-bg); }
   50%      { background-color: color-mix(in srgb, var(--accent-bg) 70%, #fff); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -3132,6 +3133,7 @@ body.has-cart .toto-companion {
   cursor: pointer;
   align-self: flex-start;
 }
+.party-add:hover { background: var(--accent-bg); }
 .party-add:hover { background: color-mix(in srgb, var(--accent-bg) 70%, #fff); }
 .party-add__icon {
   display: inline-flex;
@@ -3244,6 +3246,113 @@ body.has-cart .toto-companion {
   margin-top: 8px;
 }
 .party-sheet__save { flex: 1; }
+
+/* Canonical name for the shared slide-up sheet (party + catalog editors).
+   party-sheet-* kept as aliases for backward compatibility. */
+.detail-sheet-host { /* alias */ }
+.detail-sheet-host,
+.party-sheet-host { position: fixed; inset: 0; z-index: 300; pointer-events: none; }
+.detail-sheet-backdrop,
+.party-sheet-backdrop {
+  position: absolute; inset: 0; background: rgba(20, 22, 26, 0.4);
+  opacity: 0; transition: opacity 0.22s ease; pointer-events: auto;
+}
+.detail-sheet,
+.party-sheet {
+  position: absolute; left: 0; right: 0; bottom: 0; max-height: 92svh;
+  overflow-y: auto; background: var(--card); border-radius: 22px 22px 0 0;
+  padding: 22px 22px calc(env(safe-area-inset-bottom) + 24px);
+  transform: translateY(110%);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: auto; box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18);
+}
+.detail-sheet-host--open .detail-sheet-backdrop,
+.detail-sheet-host--open .party-sheet-backdrop,
+.party-sheet-host--open .detail-sheet-backdrop,
+.party-sheet-host--open .party-sheet-backdrop { opacity: 1; }
+.detail-sheet-host--open .detail-sheet,
+.detail-sheet-host--open .party-sheet,
+.party-sheet-host--open .detail-sheet,
+.party-sheet-host--open .party-sheet { transform: translateY(0); }
+.detail-sheet__title { margin: 0 0 18px; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.detail-sheet__field {
+  display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px;
+}
+.detail-sheet__label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--muted-fg);
+}
+.detail-sheet__field input[type="text"],
+.detail-sheet__field input[type="number"] {
+  padding: 14px 16px; font: inherit; font-size: 15px;
+  background: var(--panel-strong); border: 1px solid var(--border);
+  border-radius: 12px; outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.detail-sheet__field input[type="text"]:focus,
+.detail-sheet__field input[type="number"]:focus {
+  background: var(--card); border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-bg);
+}
+.detail-sheet__row { display: flex; flex-wrap: wrap; gap: 6px; }
+.detail-sheet__row--scroll {
+  flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.detail-sheet__actions {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; margin-top: 8px;
+}
+.detail-sheet__save { flex: 1; }
+
+.cat-image { display: flex; flex-direction: column; gap: 10px; }
+.cat-image__preview {
+  width: 96px; height: 96px; object-fit: cover; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--panel-strong);
+}
+.cat-image__empty {
+  width: 96px; height: 96px; display: grid; place-items: center;
+  border-radius: 12px; border: 1px dashed var(--border);
+  background: var(--panel-strong); font-size: 11px; color: var(--muted-fg);
+  text-align: center; padding: 8px;
+}
+.cat-image__actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+.shop-settings__hint {
+  margin: 0; font-size: 13px; color: var(--muted-fg); line-height: 1.4;
+}
+.zone-hotspot { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.zone-hotspot__hint { margin: 0; font-size: 13px; color: var(--muted-fg); line-height: 1.4; }
+.zone-hotspot__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.zone-hotspot__chip {
+  appearance: none; border: 1px solid var(--border); background: var(--card);
+  color: var(--muted-fg); font: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 7px 12px; border-radius: 999px; cursor: pointer;
+}
+.zone-hotspot__chip.is-active {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.zone-hotspot__map {
+  position: relative; width: 100%; max-width: 420px;
+  border-radius: 12px; overflow: hidden; border: 1px solid var(--border);
+  cursor: crosshair; user-select: none; background: var(--panel-strong);
+}
+.zone-hotspot__img { display: block; width: 100%; height: auto; pointer-events: none; }
+.zone-hotspot__pins { position: absolute; inset: 0; pointer-events: none; }
+.zone-hotspot__pin {
+  position: absolute; transform: translate(-50%, -50%);
+  min-width: 28px; height: 28px; padding: 0 6px;
+  display: grid; place-items: center;
+  background: var(--accent); color: #fff; border-radius: 999px;
+  font-size: 11px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+.zone-hotspot__pin--meta { background: #1a1a1a; }
+.zone-hotspot__actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.zone-hotspot__status { margin: 0; font-size: 12.5px; color: var(--muted-fg); }
+
+.deck-card__art .product-art--photo {
+  object-fit: cover; border-radius: 16px;
+}
 
 /* Multi-select chip grid. Two columns, equal widths so the rows
    align cleanly. Was previously a flex-wrap with variable widths
@@ -4445,6 +4554,34 @@ body.has-cart .toto-companion {
   flex-direction: column;
   gap: 14px;
 }
+.admin-shop-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.admin-shop-switcher__pill {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-fg);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.admin-shop-switcher__pill:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+.admin-shop-switcher__pill.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 .admin-hero__eyebrow {
   font-size: 11px;
   font-weight: 700;
@@ -4664,6 +4801,14 @@ body.has-cart .toto-companion {
   padding: 2px 6px;
   border-radius: 4px;
 }
+.admin-table__thumb-cell { width: 40px; }
+.admin-table__thumb {
+  width: 32px; height: 32px; object-fit: cover; border-radius: 8px;
+  display: block; background: var(--panel-strong);
+}
+.admin-table__thumb--empty {
+  border: 1px dashed var(--border);
+}
 .admin-table__more {
   margin: 10px 0 0;
   font-size: 12px;
@@ -4746,6 +4891,54 @@ body.has-cart .toto-companion {
   font-size: 12px;
   color: var(--muted-fg);
 }
+.shop-settings__row--qr { align-items: flex-start; }
+.shop-qr {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+.shop-qr__canvas {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+.shop-qr__meta {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.shop-qr__url {
+  margin: 0;
+  font-size: 12px;
+  word-break: break-all;
+}
+.shop-qr__url code {
+  font-size: 11.5px;
+  background: var(--panel-strong);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.shop-qr__hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted-fg);
+  line-height: 1.4;
+}
+.shop-qr__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.admin-card__progress {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--muted-fg);
+  width: 100%;
+}
 
 .admin-mix {
   display: grid;
@@ -4790,6 +4983,7 @@ body.has-cart .toto-companion {
 .admin-funnel__fill {
   position: absolute;
   inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--accent-bg) 0%, var(--accent-bg) 100%);
   background: linear-gradient(90deg, var(--accent-bg) 0%, color-mix(in srgb, var(--accent) 20%, var(--accent-bg)) 100%);
   transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -4904,6 +5098,7 @@ body.has-cart .toto-companion {
   color: var(--fg);
   transition: background 0.15s;
 }
+.settings-tool:hover { background: var(--panel-strong); }
 .settings-tool:hover { background: color-mix(in srgb, var(--panel-strong) 75%, var(--accent-bg)); }
 .settings-tool__body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .settings-tool__name { font-size: 14px; font-weight: 600; color: var(--fg); }

@@ -8,7 +8,7 @@ import {
   type Geocode,
 } from "../integrations/weather";
 import { getPrefs, setPrefs } from "../lib/prefs";
-import { illustrationForCategory } from "../lib/product-art";
+import { illustrationForCategory, illustrationForProduct } from "../lib/product-art";
 import { track } from "../lib/analytics";
 import { t } from "../lib/i18n";
 import { icon } from "../lib/icons";
@@ -115,20 +115,20 @@ function mountPartyEditor(
         shoeSizeEU: null,
       };
   const host = document.createElement("div");
-  host.className = "party-sheet-host";
+  host.className = "detail-sheet-host party-sheet-host";
   host.innerHTML = `
-    <div class="party-sheet-backdrop"></div>
-    <form class="party-sheet" id="party-sheet" novalidate>
-      <h2 class="party-sheet__title">${initial ? "Edit person" : "Add a person"}</h2>
+    <div class="detail-sheet-backdrop party-sheet-backdrop"></div>
+    <form class="detail-sheet party-sheet" id="party-sheet" novalidate>
+      <h2 class="detail-sheet__title party-sheet__title">${initial ? "Edit person" : "Add a person"}</h2>
 
-      <label class="party-sheet__field">
-        <span class="party-sheet__label">Name</span>
+      <label class="detail-sheet__field party-sheet__field">
+        <span class="detail-sheet__label party-sheet__label">Name</span>
         <input id="pm-name" type="text" placeholder="e.g. Sam" value="${(m.name ?? "").replace(/"/g, "&quot;")}" />
       </label>
 
-      <div class="party-sheet__field">
-        <span class="party-sheet__label">Cut</span>
-        <div class="party-sheet__row" data-row="gender">
+      <div class="detail-sheet__field party-sheet__field">
+        <span class="detail-sheet__label party-sheet__label">Cut</span>
+        <div class="detail-sheet__row party-sheet__row" data-row="gender">
           ${(["man", "woman", "other"] as const).map((g) => `
             <button type="button" class="party-pill ${m.gender === g ? "party-pill--on" : ""}" data-gender="${g}">
               ${g === "man" ? "Men's" : g === "woman" ? "Women's" : "Unisex"}
@@ -137,46 +137,46 @@ function mountPartyEditor(
         </div>
       </div>
 
-      <div class="party-sheet__field">
-        <span class="party-sheet__label">Top</span>
-        <div class="party-sheet__row" data-row="top">
+      <div class="detail-sheet__field party-sheet__field">
+        <span class="detail-sheet__label party-sheet__label">Top</span>
+        <div class="detail-sheet__row party-sheet__row" data-row="top">
           ${(["XS", "S", "M", "L", "XL"] as const).map((s) => `
             <button type="button" class="party-pill ${m.topSize === s ? "party-pill--on" : ""}" data-top="${s}">${s}</button>
           `).join("")}
         </div>
       </div>
 
-      <div class="party-sheet__field">
-        <span class="party-sheet__label">Bottom</span>
-        <div class="party-sheet__row" data-row="bottom">
+      <div class="detail-sheet__field party-sheet__field">
+        <span class="detail-sheet__label party-sheet__label">Bottom</span>
+        <div class="detail-sheet__row party-sheet__row" data-row="bottom">
           ${(["XS", "S", "M", "L", "XL"] as const).map((s) => `
             <button type="button" class="party-pill ${m.bottomSize === s ? "party-pill--on" : ""}" data-bottom="${s}">${s}</button>
           `).join("")}
         </div>
       </div>
 
-      <div class="party-sheet__field">
-        <span class="party-sheet__label">Shoe (EU)</span>
-        <div class="party-sheet__row party-sheet__row--scroll" data-row="shoe">
+      <div class="detail-sheet__field party-sheet__field">
+        <span class="detail-sheet__label party-sheet__label">Shoe (EU)</span>
+        <div class="detail-sheet__row detail-sheet__row--scroll party-sheet__row party-sheet__row--scroll" data-row="shoe">
           ${[36, 37, 38, 39, 40, 41, 42, 43, 44, 45].map((s) => `
             <button type="button" class="party-pill ${m.shoeSizeEU === s ? "party-pill--on" : ""}" data-shoe="${s}">${s}</button>
           `).join("")}
         </div>
       </div>
 
-      <div class="party-sheet__actions">
+      <div class="detail-sheet__actions party-sheet__actions">
         <button type="button" id="pm-cancel" class="link-btn">Cancel</button>
-        <button type="submit" class="primary party-sheet__save">Save</button>
+        <button type="submit" class="primary detail-sheet__save party-sheet__save">Save</button>
       </div>
     </form>
   `;
   document.body.appendChild(host);
 
   // Trigger the slide-up animation on next frame.
-  requestAnimationFrame(() => host.classList.add("party-sheet-host--open"));
+  requestAnimationFrame(() => host.classList.add("detail-sheet-host--open", "party-sheet-host--open"));
 
   function close() {
-    host.classList.remove("party-sheet-host--open");
+    host.classList.remove("detail-sheet-host--open", "party-sheet-host--open");
     window.setTimeout(() => host.remove(), 250);
   }
 
@@ -1383,7 +1383,7 @@ function mountSwipeDeck(
             <span>For ${escapeHTML(forWho.name)}</span>
           </div>
         ` : ""}
-        <div class="deck-card__art">${illustrationForCategory(p.category)}</div>
+        <div class="deck-card__art">${illustrationForProduct(p)}</div>
         <div class="deck-card__head">
           <span class="deck-card__brand">${escapeHTML(p.brand)} · ${escapeHTML(p.color)} · size ${escapeHTML(p.size)}</span>
         </div>

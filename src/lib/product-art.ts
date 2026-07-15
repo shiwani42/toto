@@ -64,3 +64,22 @@ export function illustrationForCategory(category: string): string {
                onerror="this.onerror=null; this.src='${FALLBACK}'"
                alt="" loading="lazy" draggable="false" />`;
 }
+
+/** Prefer a product's own photo when present; otherwise category art. */
+export function illustrationForProduct(product: {
+  category: string;
+  image_url?: string | null;
+  name?: string;
+}): string {
+  const custom = (product.image_url ?? "").trim();
+  if (!custom) return illustrationForCategory(product.category);
+  const safe = custom
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+  const alt = (product.name ?? "").replaceAll('"', "&quot;");
+  return `<img class="product-art product-art--photo" src="${safe}"
+               onerror="this.onerror=null; this.src='${FALLBACK}'"
+               alt="${alt}" loading="lazy" draggable="false" />`;
+}

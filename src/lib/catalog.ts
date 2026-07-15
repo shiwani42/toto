@@ -127,7 +127,7 @@ export function zonesForCodes(codes: string[]): {
 // Cache of per-shop catalogs in sessionStorage so repeat visits don't
 // re-fetch. Versioned by shop_id; bumping the constant invalidates all.
 const SHOP_CACHE_KEY = "toto.shopCatalog";
-const SHOP_CACHE_VERSION = 1;
+const SHOP_CACHE_VERSION = 2;
 
 type ShopCacheEntry = { v: number; shop_id: string; products: Product[]; at: number };
 

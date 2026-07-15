@@ -19,6 +19,8 @@ export type Product = {
   stock_total: number;
   stock_front: number;
   description: string;
+  /** Optional product photo URL (Supabase Storage or absolute http). */
+  image_url?: string | null;
 };
 
 export type Screen =
