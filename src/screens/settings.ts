@@ -201,10 +201,19 @@ export function renderSettings(root: HTMLElement) {
 
       <section class="card-section" aria-labelledby="tools-h">
         <h2 id="tools-h">Tools</h2>
+        <a class="settings-tool" href="?screen=shops">
+          <span class="settings-tool__body">
+            <span class="settings-tool__name">${escapeHTML(t("shops.title"))}</span>
+            <span class="settings-tool__sub">${escapeHTML(t("shops.tool.sub"))}</span>
+          </span>
+          <span class="settings-tool__chev" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </span>
+        </a>
         <a class="settings-tool" href="?screen=nearby">
           <span class="settings-tool__body">
-            <span class="settings-tool__name">Find a shop near you</span>
-            <span class="settings-tool__sub">See which shops nearby carry items from your list.</span>
+            <span class="settings-tool__name">${escapeHTML(t("settings.tool.nearby"))}</span>
+            <span class="settings-tool__sub">${escapeHTML(t("settings.tool.nearby.sub"))}</span>
           </span>
           <span class="settings-tool__chev" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>

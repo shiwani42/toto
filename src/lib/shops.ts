@@ -139,6 +139,28 @@ export async function fetchMyShops(): Promise<Shop[]> {
   }
 }
 
+/** All shops (anon-readable), alphabetized by name. Used by the shop
+ *  directory so shoppers can browse without knowing a slug. */
+export async function fetchAllShops(limit = 100): Promise<Shop[]> {
+  if (!supabaseConfigured) return [];
+  try {
+    const { data, error } = await getSupabase()
+      .from("shops")
+      .select("*")
+      .order("name", { ascending: true })
+      .limit(limit)
+      .returns<Shop[]>();
+    if (error) {
+      console.warn("fetchAllShops failed:", error.message);
+      return [];
+    }
+    return data ?? [];
+  } catch (err) {
+    console.warn("fetchAllShops threw:", err);
+    return [];
+  }
+}
+
 /** Find shops near a point. Used by the shopper's "which shop near me
  *  has my list items?" view. Returns shops sorted by haversine distance
  *  ascending, with a coarse `distance_km` field tacked on. The actual

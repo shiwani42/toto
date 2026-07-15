@@ -6134,6 +6134,97 @@ body.has-cart .toto-companion {
   color: var(--muted-fg);
   min-height: 1.2em;
 }
+.home-shop-browse {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+.home-shop-browse:hover { text-decoration: underline; }
+
+/* ── Shop directory ───────────────────────────────────────────────────── */
+.shops-dir__header h1 { margin-bottom: 4px; }
+.shops-dir__back { margin-bottom: 8px; }
+.shops-dir__search-wrap { display: block; margin-bottom: 14px; }
+.shops-dir__search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1.5px solid var(--border);
+  background: var(--panel);
+  color: var(--fg);
+  font: inherit;
+  font-size: 15px;
+}
+.shops-dir__search:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+.shops-dir__search:disabled { opacity: 0.55; }
+.shops-dir__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.shops-dir__item {
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.shops-dir__item--active {
+  border-color: var(--accent);
+  background: var(--accent-bg, var(--panel));
+}
+.shops-dir__btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 14px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.shops-dir__btn:disabled { opacity: 0.6; cursor: wait; }
+.shops-dir__icon {
+  flex-shrink: 0;
+  color: var(--accent);
+  display: inline-flex;
+}
+.shops-dir__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.shops-dir__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg);
+}
+.shops-dir__meta {
+  font-size: 12.5px;
+  color: var(--muted-fg);
+  line-height: 1.35;
+}
+.shops-dir__slug { font-family: ui-monospace, monospace; font-size: 12px; }
+.shops-dir__chev {
+  flex-shrink: 0;
+  color: var(--muted-fg);
+  display: inline-flex;
+}
 
 .home-greeting {
   padding: 24px 16px 18px;

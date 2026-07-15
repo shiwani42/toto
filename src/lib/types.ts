@@ -40,4 +40,5 @@ export type Screen =
   | "fit"
   | "admin"
   | "shop-onboarding"
-  | "nearby";
+  | "nearby"
+  | "shops";

@@ -2,7 +2,7 @@
 
 > **Canonical ops doc for the next agent.** Read this before coding. Product vision / history lives in [`AGENTS.md`](./AGENTS.md); user-facing overview in [`README.md`](./README.md).
 >
-> **Status (2026-07-16):** Multi-tenant platform track is **code-complete**, plus a polish pass (shop context banner / slug entry, Twin votes, admin CSV help). Remaining work is **human platform config** (Supabase migrations + Auth URLs + Render env + first shop bootstrap).
+> **Status (2026-07-16):** Multi-tenant platform track is **code-complete**, plus polish (shop directory, demo shelf script, shop banner / slug entry, Twin votes, admin CSV help). Remaining work is **human platform config** (Supabase migrations + Auth URLs + Render env + first shop bootstrap).
 
 **Live:** https://toto-4xfl.onrender.com/ · **Repo:** https://github.com/shiwani42/toto
 
@@ -31,7 +31,8 @@ Env (see `.env.example`): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_A
 
 | Screen | Capability |
 |---|---|
-| `home` | Entry chooser; **nearby card** when list nonempty and no active shop; **shop banner** when in a shop; **enter-by-slug** when Supabase is configured |
+| `home` | Entry chooser; **nearby card** when list nonempty and no active shop; **shop banner** when in a shop; **enter-by-slug** + **Browse all shops** when Supabase is configured |
+| `shops` | **Shop directory** — search / browse every shop (anon read); tap to enter |
 | `list` | Search / add / demo list; sessionStorage cart |
 | `plan` | 8-step trip wizard → weather + Claude (or heuristic) → swipe deck with product photos |
 | `browse` | Catalog browse with Toto companion |
@@ -39,7 +40,7 @@ Env (see `.env.example`): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_A
 | `scan` / `done` | Multi-barcode camera overlay; found vs missing; **broadcasts `scan:found`** into live sessions |
 | `compare` / `repair` / `fit` | Price Decoder, Repair vs Replace, Fit Check (Claude Vision) |
 | `connect` / `connected` | Family / partner Realtime sessions (presence, list sync, chat, **Yes/Maybe/No votes**) |
-| `settings` / `nearby` | Prefs + accessibility; cross-shop product search by distance |
+| `settings` / `nearby` | Prefs + accessibility; cross-shop product search by distance; Tools → shops directory |
 
 Shopper context: `/?shop=<slug>` loads that shop's products into the in-memory catalog cache. Without a shop, bundled JSON is used.
 
@@ -56,6 +57,7 @@ Shopper context: `/?shop=<slug>` loads that shop's products into the in-memory c
 - Analytics events stamped with active shop UUID; views expose `shop_id` after `0006`.
 - Storage bucket `shop-assets` for zone maps + product images (`0005`).
 - Detail UI: `.detail-sheet*` is canonical; `.party-sheet*` kept as CSS aliases.
+- Demo shelf: `npm run demo-shelf` → `data/demo-shelf.html` (printable A4 EAN-13 grid).
 
 ---
 
@@ -70,14 +72,15 @@ src/screens/             one module per ?screen=…
 src/lib/                 domain: catalog, shops, auth, scanner, analytics, …
 src/integrations/        ai-planner, weather
 src/fixtures/            repair-programs
-data/                    products.json, store-map.png, sample-barcodes.pdf
+data/                    products.json, store-map.png, sample-barcodes.pdf, demo-shelf.html
+scripts/make-demo-shelf.mjs
 supabase/migrations/     0001 … 0007 (apply in order)
 ```
 
 ### Shops
 
-- `src/lib/shops.ts` — `Shop` type (`zone_map_url`, `zone_positions`, lat/lng, …), `getActiveShop` / `setActiveShop`, `fetchShopBySlug`, `fetchMyShops`, `createShop`, `resolveAdminShop` / `setAdminShopId` (`toto.adminShopId` in sessionStorage).
-- Anon can read shops (discovery / nearby). Writes require `shop_admins` membership (RLS).
+- `src/lib/shops.ts` — `Shop` type (`zone_map_url`, `zone_positions`, lat/lng, …), `getActiveShop` / `setActiveShop`, `fetchShopBySlug`, `fetchAllShops`, `fetchMyShops`, `createShop`, `resolveAdminShop` / `setAdminShopId` (`toto.adminShopId` in sessionStorage).
+- Anon can read shops (discovery / nearby / directory). Writes require `shop_admins` membership (RLS).
 
 ### Catalog
 
@@ -125,6 +128,8 @@ Without `0006`/`0007`: admin still loads (analytics falls back client-side); pin
 
 Code cannot apply these to the remote Supabase / Render project from a typical agent environment.
 
+**Blocked this session (2026-07-16):** no repo `.env` (only `.env.example`), no `supabase` CLI on PATH, no logged-in Supabase session. Do not invent secrets.
+
 ### Checklist
 
 1. **SQL migrations** (Supabase → SQL Editor), in order if not already applied:
@@ -148,7 +153,7 @@ Code cannot apply these to the remote Supabase / Render project from a typical a
 
 5. **Bootstrap a shop** — [ ] `/?screen=shop-onboarding` → magic link → create shop → land in admin.
 
-6. **Smoke walkthrough** — [ ] Seed catalog [ ] Upload zone map [ ] Place zone pins + Save [ ] Entry QR download/print [ ] Edit a product photo [ ] Open `/?shop=<slug>` and walk list → map → scan (use `data/sample-barcodes.pdf`).
+6. **Smoke walkthrough** — [ ] Seed catalog [ ] Upload zone map [ ] Place zone pins + Save [ ] Entry QR download/print [ ] Edit a product photo [ ] Open `/?shop=<slug>` and walk list → map → scan (use `data/sample-barcodes.pdf` or `data/demo-shelf.html`).
 
 ---
 
@@ -161,7 +166,7 @@ Do **not** reopen these unless the human asks:
 | **Shelf Lens** | Filter-based MatrixScan-style browse; parked since v1 pivot to list → find |
 | **Twin Shopper vote UI** | Shipped thin version: Yes / Maybe / No on Connected when partner sees `scan:found` / `list:added` |
 | **`body-measurements/` submodule** | Parked; Fit Check uses Claude Vision in-browser |
-| **Scandit** | Fully replaced by zxing-wasm; ignore Scandit-era notes in older AGENTS sections unless updating docs |
+| **Scandit** | Fully replaced by zxing-wasm; ignore Scandit-era notes in older changelog history |
 | **Bundled `products.json`** | Still ships as fallback (~600 KB) — intentional |
 
 Historical v1–v3 staging and demo-video constraints: see [`AGENTS.md`](./AGENTS.md).
@@ -170,18 +175,22 @@ Historical v1–v3 staging and demo-video constraints: see [`AGENTS.md`](./AGENT
 
 ## 6. Known gaps / nice-to-haves
 
-No required backlog. Optional polish only:
+No required agent backlog. Optional remaining:
 
-- Shop directory / browse-all-shops list (beyond slug entry + nearby).
-- Demo video (`video.mp4` at repo root) still to be recorded per AGENTS storyboard.
-- AGENTS.md still has some Scandit-era wording in early sections; HANDOFF + 2026-06-23+ changelog are authoritative for scanning/stack.
+- [x] Shop directory / browse-all-shops (`?screen=shops`) — **shipped 2026-07-16**
+- [x] Demo shelf script (`npm run demo-shelf` → `data/demo-shelf.html`) — **shipped 2026-07-16**
+- [x] AGENTS.md Scandit-era wording scrubbed — **shipped 2026-07-16** (HANDOFF stays ops SoT)
+- [ ] Demo video (`video.mp4` at repo root) — human / recording
 
-### Shipped 2026-07-16 (polish pass)
+### Shipped 2026-07-16 (polish + leftovers)
 
 - **Active shop banner** on Home (name + Leave shop → reset catalog / clear `?shop=`).
 - **Enter shop by slug** on Home when Supabase is configured (complements nearby card + entry QR).
+- **Shop directory** — Home link + Settings → Tools; `fetchAllShops` + client search.
+- **Demo shelf** — printable A4 HTML of ~12 EAN-13 barcodes from `products.json`.
 - **Twin Shopper votes** — scan finds broadcast `scan:found`; Connected shows Yes / Maybe / No cards for the partner.
 - **Admin CSV guide** — expandable column docs + sample CSV download; stronger unconfigured checklist on admin + shop-onboarding.
+- **Docs** — AGENTS current stack; supabase / data README dead Scandit env lines removed.
 
 Prefer small UX polish or a parked idea in §5 over re-touching the multi-tenant path.
 
@@ -192,10 +201,11 @@ Prefer small UX polish or a parked idea in §5 over re-touching the multi-tenant
 ```bash
 npm install
 npm run build          # tsc + vite → dist/  (must be green)
+npm run demo-shelf     # optional: regenerate data/demo-shelf.html
 npm run dev            # http://localhost:5173
 ```
 
-**Key screens (local, no shop):** `/?screen=home` → list (Load demo list) → map → scan with `data/sample-barcodes.pdf`.
+**Key screens (local, no shop):** `/?screen=home` → list (Load demo list) → map → scan with `data/sample-barcodes.pdf` or printed `data/demo-shelf.html`.
 
 **With Supabase configured:**
 
@@ -204,6 +214,7 @@ npm run dev            # http://localhost:5173
 | Onboarding | `/?screen=shop-onboarding` |
 | Admin | `/?screen=admin` (after magic link) |
 | Shopper shop context | `/?shop=<slug>` then list → map → scan |
+| Shop directory | `/?screen=shops` or Home → Browse all shops |
 | Nearby | Settings → Tools → Nearby, or Home nearby card |
 | Plan / AI | `/?screen=plan` (needs Anthropic for full path; heuristic works without) |
 
@@ -214,10 +225,10 @@ npm run dev            # http://localhost:5173
 1. Skim this file + the latest changelog entries in [`AGENTS.md`](./AGENTS.md).
 2. Confirm with the human whether migrations `0001`–`0007` and Render env are applied (§4). If not, **do not** invent workarounds that assume columns exist — point them at the checklist.
 3. Run `npm run build` before any PR-sized change.
-4. If opening new work: ask what they want next. Default bias = small polish or a parked item from §5, not platform refactors.
+4. If opening new work: ask what they want next. Default bias = small polish or a parked item from §5, not platform refactors. Demo video is the main human leftover.
 5. Working agreements: no em dashes in prose we own; no Claude/Anthropic in commit messages; Never add AI as Co-authored-by / committer; don't commit secrets; name actors (shopper vs shop owner); only commit when asked.
 
-### Key files if you touch recent finalize work
+### Key files if you touch recent work
 
 ```
 src/lib/zone-positions.ts
@@ -229,11 +240,13 @@ src/screens/admin.ts
 src/screens/map.ts
 src/screens/plan.ts
 src/screens/home.ts
+src/screens/shops.ts
 src/screens/shop-onboarding.ts
+scripts/make-demo-shelf.mjs
 supabase/migrations/0006_shop_scoped_analytics.sql
 supabase/migrations/0007_zone_positions_image_url.sql
 ```
 
 ---
 
-*Originally written 2026-06-23 · updated 2026-07-16 (finalize + rewrite for future agents). Add your name/date if you edit.*
+*Originally written 2026-06-23 · updated 2026-07-16 (finalize + rewrite + agent leftovers). Add your name/date if you edit.*

@@ -10,6 +10,7 @@ Everything here is fictional (brands, prices, barcodes). Use it freely.
 
 - `products.json`: the catalog as typed JSON, one object per variant (`tags` stays a real array). Load it with any JSON reader or paste it into an LLM.
 - `sample-barcodes.pdf`: 3 pages from the physical Scandit Demo Book (shoes, socks, tops) whose barcodes match the `demo-book` rows in the catalog. Print it or scan it off a screen to try the app against real catalog data.
+- `demo-shelf.html`: printable A4 grid of ~12 EAN-13 barcodes generated from `products.json` (`npm run demo-shelf`). Useful when you need jacket / tent codes that are not in the demo-book PDF.
 - `store-map.png`: the store floor plan (shown below).
 
 ## Fields
@@ -18,7 +19,7 @@ Each row is one product in one color and one size. Variants of the same product 
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `product_code` | string | Scannable barcode, unique per variant. EAN-13 for the main catalog; the `demo-book` SKUs use the real QR (shoes) and Code128 (socks) values from the physical Scandit Demo Book. All scan with Scandit. |
+| `product_code` | string | Scannable barcode, unique per variant. EAN-13 for the main catalog; the `demo-book` SKUs use the real QR (shoes) and Code128 (socks) values from the physical Scandit Demo Book. All scan with the app's `zxing-wasm` camera stack. |
 | `product_id` | string | Groups all color/size variants of one product. |
 | `name` | string | Product name. |
 | `brand` | string | One of 5 fictional brands. |

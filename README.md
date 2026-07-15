@@ -120,23 +120,19 @@ High contrast, larger text (+25%), reduce motion, speak-scan-results (TTS on fin
 ```
 Browser (Vite + TypeScript, vanilla DOM)
 ├── src/
-│   ├── lib/catalog.ts        → products.json → Map<barcode, Product>  (O(1) lookup)
+│   ├── lib/catalog.ts        → Map<barcode, Product> (bundled JSON or shop catalog)
+│   ├── lib/shops.ts          → multi-tenant shop context + directory APIs
 │   ├── lib/list.ts           → sessionStorage list + realtime broadcast
 │   ├── lib/session.ts        → Supabase Realtime wrapper
+│   ├── lib/scanner.ts        → zxing-wasm camera + decode
 │   ├── integrations/         → ai-planner.ts (Claude) + weather.ts (Open-Meteo)
 │   ├── fixtures/             → repair-programs.ts (per-brand lookup)
-│   ├── screens/
-│   │   ├── list-builder.ts   → search + build checklist → sessionStorage
-│   │   ├── map.ts            → zone resolver + store-map.png overlay
-│   │   ├── scan.ts           → list-based scanner with AR + carousel (THE CORE FEATURE)
-│   │   ├── done.ts           → found / still-missing summary
-│   │   └── plan.ts           → v2 trip plan input → Claude API
-│   └── style.css             → Inter font, forest-green design tokens, mobile-first
+│   ├── screens/              → home, list, map, scan, shops, admin, …
+│   └── style.css             → design tokens, mobile-first
 
-No backend for v1 — products.json (~600 KB) ships with the bundle.
-v2 LLM calls go directly from the browser; the Anthropic key is supplied
-client-side via VITE_ANTHROPIC_API_KEY. Move to a server-side proxy before
-shipping to real users.
+Bundled products.json is the offline fallback. With Supabase configured,
+`?shop=<slug>` primes the catalog from that shop's products table.
+Optional Anthropic key powers plan + Fit Check (heuristic / skip without it).
 ```
 
 **Stack choices:**
@@ -145,7 +141,8 @@ shipping to real users.
 |---|---|
 | Vite + TypeScript | Minimal setup, ESM-native, trivial Render Static Site deploy |
 | No framework (vanilla DOM) | React adds zero value for screens that are mostly imperative camera UI |
-| No backend (v1) | 249 products fit comfortably in the browser; client-side filter is instant |
+| zxing-wasm scanner | Apache 2.0; no license key or domain allow-list |
+| Supabase (optional) | Auth, Realtime, shops, catalog, analytics |
 | Render Static Site | Free HTTPS; correct WASM MIME type; easy redeploy on push |
 
 ---
@@ -185,7 +182,7 @@ Open **http://localhost:5173** (or the network URL shown in the terminal, for ph
 > If you cloned without `--recurse-submodules`: `git submodule update --init --recursive`
 
 **Test scanning without a physical store:**
-Print `data/sample-barcodes.pdf` or open it on a second screen. Scan from the phone camera — every barcode returns real product data from the catalog.
+Print `data/sample-barcodes.pdf` or open it on a second screen. For jacket / shell EAN-13 codes, run `npm run demo-shelf` and print `data/demo-shelf.html`. Scan from the phone camera — every barcode returns real product data from the catalog.
 
 ---
 
@@ -206,7 +203,7 @@ Toto/
 │   ├── screens/                 ← one file per ?screen=… route
 │   │   ├── list-builder.ts      ← Phase 1: search + checklist
 │   │   ├── map.ts               ← Phase 2: zone resolver + floor plan
-│   │   ├── scan.ts              ← Phase 3: BarcodeFind (core feature)
+│   │   ├── scan.ts              ← camera AR scanner (core feature)
 │   │   ├── done.ts              ← Phase 4: results
 │   │   ├── plan.ts              ← v2: trip plan → AI checklist
 │   │   ├── compare.ts           ← v3: Price Decoder
@@ -215,11 +212,17 @@ Toto/
 │   │   ├── connected.ts         ← v3: Twin Shopper — active session
 │   │   ├── fit.ts               ← Fit Check (Claude Vision)
 │   │   ├── settings.ts          ← accessibility + size prefs
+│   │   ├── nearby.ts            ← cross-shop search by distance
+│   │   ├── shops.ts             ← browse-all shops directory
+│   │   ├── admin.ts             ← shop owner dashboard
+│   │   ├── shop-onboarding.ts   ← create a shop
 │   │   └── smoke.ts             ← bare scanner smoke test
 │   ├── lib/                     ← domain primitives
 │   │   ├── catalog.ts           ← products.json → Map<barcode, Product>
+│   │   ├── shops.ts             ← multi-tenant shop helpers
 │   │   ├── list.ts              ← sessionStorage list + broadcast hooks
 │   │   ├── session.ts           ← Supabase Realtime wrapper
+│   │   ├── scanner.ts           ← zxing-wasm camera wrapper
 │   │   ├── prefs.ts             ← localStorage prefs + TTS announcer
 │   │   └── types.ts             ← Product, Screen, etc.
 │   ├── integrations/            ← external API wrappers
@@ -227,10 +230,13 @@ Toto/
 │   │   └── weather.ts           ← Open-Meteo geocode + forecast
 │   └── fixtures/                ← static data tables baked into the app
 │       └── repair-programs.ts   ← per-brand repair-program lookup
+├── scripts/
+│   └── make-demo-shelf.mjs      ← npm run demo-shelf → data/demo-shelf.html
 ├── data/                        ← catalog + demo assets
 │   ├── README.md                ← dataset schema + zone map
 │   ├── products.json            ← 249 product variants
 │   ├── sample-barcodes.pdf      ← 3 scannable demo-book pages
+│   ├── demo-shelf.html          ← printable A4 EAN-13 shelf (generated)
 │   └── store-map.png            ← store floor plan, zones A–G
 ├── docs/
 │   ├── barcode-sdk-alternatives.md ← research notes on the open-source switch

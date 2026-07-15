@@ -126,6 +126,7 @@ export function renderHome(root: HTMLElement) {
               <button type="submit" class="home-shop-enter__btn">${escapeHTML(t("home.shop.enter.btn"))}</button>
             </form>
             <p id="enter-shop-status" class="home-shop-enter__status" role="status" aria-live="polite"></p>
+            <a class="home-shop-browse" href="?screen=shops">${escapeHTML(t("home.shop.browse"))}</a>
           </div>
         </li>
         ` : ""}
