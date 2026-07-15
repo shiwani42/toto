@@ -5,10 +5,12 @@ import {
   loadSession,
   globalSession,
   destroyGlobalSession,
+  broadcastSessionEvent,
   type Member,
   type SessionEvent,
 } from "../lib/session";
 import { t } from "../lib/i18n";
+import { illustrationForProduct } from "../lib/product-art";
 
 function escapeHTML(s: string): string {
   return s
@@ -155,12 +157,66 @@ export function renderConnected(root: HTMLElement) {
         return `<strong>${escapeHTML(who)}</strong> found <strong>${escapeHTML(p?.name ?? e.code)}</strong>`;
       }
       case "vote": {
-        return `<strong>${escapeHTML(who)}</strong> ${e.vote === "yes" ? "likes" : "isn't sold on"} this one`;
+        const p = getProduct(e.code);
+        const label =
+          e.vote === "yes"
+            ? t("connected.vote.said_yes")
+            : e.vote === "maybe"
+              ? t("connected.vote.said_maybe")
+              : t("connected.vote.said_no");
+        return `<strong>${escapeHTML(who)}</strong> ${escapeHTML(label)} <strong>${escapeHTML(p?.name ?? e.code)}</strong>`;
       }
       case "chat":
         return "";
     }
   }
+
+  /** Inline yes / maybe / no card so a partner at home can react to
+   *  something the in-store shopper just found or added. */
+  function pushVoteCard(fromId: string, code: string) {
+    const who = nameFor(fromId);
+    const p = getProduct(code);
+    const name = p?.name ?? code;
+    const brand = p ? `${p.brand} · ${p.size}` : "";
+    const art = p ? illustrationForProduct(p) : "";
+    const id = `vote-${code.replace(/[^a-zA-Z0-9]/g, "")}-${Date.now()}`;
+    pushEvent(`
+      <div class="conn-vote" data-vote-card="${escapeHTML(id)}" data-code="${escapeHTML(code)}">
+        <div class="conn-vote__head">
+          ${art ? `<span class="conn-vote__art" aria-hidden="true">${art}</span>` : ""}
+          <div class="conn-vote__copy">
+            <strong>${escapeHTML(who)}</strong> ${escapeHTML(t("connected.vote.prompt"))}
+            <div class="conn-vote__name">${escapeHTML(name)}</div>
+            ${brand ? `<div class="conn-vote__meta">${escapeHTML(brand)}</div>` : ""}
+          </div>
+        </div>
+        <div class="conn-vote__actions">
+          <button type="button" class="conn-vote__btn conn-vote__btn--yes" data-vote="yes">${escapeHTML(t("connected.vote.yes"))}</button>
+          <button type="button" class="conn-vote__btn" data-vote="maybe">${escapeHTML(t("connected.vote.maybe"))}</button>
+          <button type="button" class="conn-vote__btn conn-vote__btn--no" data-vote="no">${escapeHTML(t("connected.vote.no"))}</button>
+        </div>
+      </div>
+    `);
+  }
+
+  streamEl.addEventListener("click", (ev) => {
+    const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>("[data-vote]");
+    if (!btn) return;
+    const card = btn.closest<HTMLElement>("[data-vote-card]");
+    if (!card) return;
+    const code = card.dataset.code;
+    const vote = btn.dataset.vote as "yes" | "maybe" | "no" | undefined;
+    if (!code || !vote) return;
+    broadcastSessionEvent({ kind: "vote", code, vote });
+    const label =
+      vote === "yes"
+        ? t("connected.vote.said_yes")
+        : vote === "maybe"
+          ? t("connected.vote.said_maybe")
+          : t("connected.vote.said_no");
+    const p = getProduct(code);
+    card.innerHTML = `<span class="conn-vote__done">${escapeHTML(t("connected.vote.you"))} ${escapeHTML(label)} <strong>${escapeHTML(p?.name ?? code)}</strong></span>`;
+  });
 
   const session = globalSession;
   if (!session) {
@@ -189,6 +245,17 @@ export function renderConnected(root: HTMLElement) {
             .catch(console.error);
         }
         return; // no feed noise
+      }
+
+      // Partner reacts to someone else's find / pick — show vote buttons.
+      if (
+        (e.kind === "scan:found" || e.kind === "list:added") &&
+        e.from !== state!.me.id
+      ) {
+        const desc = describeEvent(e);
+        if (desc) pushEvent(desc);
+        pushVoteCard(e.from, e.code);
+        return;
       }
 
       const desc = describeEvent(e);

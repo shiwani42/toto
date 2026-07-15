@@ -63,7 +63,13 @@ function unconfiguredHTML(): string {
     <div class="admin-gate">
       <div class="admin-gate__art" aria-hidden="true">${icon("settings", 32)}</div>
       <h2 class="admin-gate__title">Setup needed</h2>
-      <p class="admin-gate__sub">Shop signup needs Supabase to be configured first. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>, then run the migrations in <code>supabase/migrations/</code>.</p>
+      <p class="admin-gate__sub">Shop signup needs Supabase first. Shopper screens still work with the bundled demo catalog.</p>
+      <ol class="admin-gate__steps">
+        <li>Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.</li>
+        <li>Run migrations <code>0001</code>–<code>0007</code> in the SQL Editor.</li>
+        <li>Allow your origin under Authentication → Redirect URLs.</li>
+      </ol>
+      <p class="admin-gate__hint">See <code>HANDOFF.md</code> §4 for the full checklist.</p>
       <a class="link-btn" href="?screen=home">Back to the app</a>
     </div>
   `;

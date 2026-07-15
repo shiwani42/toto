@@ -22,7 +22,7 @@ export type SessionEvent =
   | { kind: "list:snapshot"; from: string; codes: string[] }
   | { kind: "list:request-snapshot"; from: string }
   | { kind: "scan:found"; from: string; code: string }
-  | { kind: "vote"; from: string; code: string; vote: "yes" | "no" }
+  | { kind: "vote"; from: string; code: string; vote: "yes" | "maybe" | "no" }
   | { kind: "chat"; from: string; text: string };
 
 export type SessionListener = {
@@ -176,5 +176,29 @@ export function destroyGlobalSession() {
   if (globalSession) {
     globalSession.disconnect();
     globalSession = null;
+  }
+}
+
+/** Best-effort broadcast on the live shopping channel. Prefers the
+ *  long-lived `globalSession` so we don't open a throwaway connection
+ *  for every scan / vote. No-ops when nobody is in a session. */
+export function broadcastSessionEvent(
+  event: { kind: SessionEvent["kind"]; from?: string } & Record<string, unknown>,
+): void {
+  const state = loadSession();
+  if (!state) return;
+  const payload = { ...event, from: event.from ?? state.me.id } as SessionEvent;
+  if (globalSession) {
+    globalSession.send(payload).catch(() => { /* best-effort */ });
+    return;
+  }
+  try {
+    const s = new Session(state.code, state.me, {});
+    s.connect()
+      .then(() => s.send(payload))
+      .then(() => s.disconnect())
+      .catch(() => { /* swallow */ });
+  } catch {
+    /* ignore */
   }
 }

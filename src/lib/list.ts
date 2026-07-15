@@ -1,4 +1,4 @@
-import { loadSession, Session } from "./session";
+import { broadcastSessionEvent } from "./session";
 import { track } from "./analytics";
 import { totoReact } from "./companion";
 import { playAdded } from "./sounds";
@@ -62,27 +62,5 @@ function broadcast(
   kind: "list:added" | "list:removed",
   code: string,
 ): void {
-  const state = loadSession();
-  if (!state) return;
-  // Create a short-lived session just to send; connection is reused via a
-  // singleton inside the channel layer if Supabase already opened it.
-  try {
-    const s = new Session(
-      state.code,
-      {
-        id: state.me.id,
-        name: state.me.name,
-        emoji: state.me.emoji,
-      },
-      {},
-    );
-    s.connect()
-      .then(() => s.send({ kind, from: state.me.id, code }))
-      .then(() => s.disconnect())
-      .catch(() => {
-        /* swallow — broadcast is best-effort */
-      });
-  } catch {
-    /* ignore */
-  }
+  broadcastSessionEvent({ kind, code });
 }

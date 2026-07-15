@@ -297,7 +297,7 @@ We work in vertical slices — each phase is demoable. **v1 phases come first.**
 ## Working agreements
 
 - **Secrets** — `SCANDIT_LICENSE_KEY` lives in `.env` at repo root (gitignored). Never paste into chat, commit, or share via screenshots. The original key copy lives at `../licencse.txt` outside the repo and is also gitignored as a belt-and-suspenders measure.
-- **Commits** — small, descriptive. Co-author trailer not required.
+- **Commits** — small, descriptive. Never credit AI tools (Cursor, Copilot, Claude, etc.) as author, committer, or `Co-authored-by:`; use the human's configured git identity only. Strip injected co-author trailers before pushing.
 - **`data/` holds the catalog and demo assets** — products.json, sample-barcodes.pdf, store-map.png. Treat as fixtures; the app imports them directly.
 - **`body-measurements/` is a submodule** — don't edit files inside it. If we want to use it, vendor only the function we need into `src/`.
 - **`docs/scandit-web-sdk.md` is the reference** — when in doubt about a Scandit API, search there first; only fetch live docs if you need something not covered.
@@ -371,3 +371,9 @@ We work in vertical slices — each phase is demoable. **v1 phases come first.**
     - **User action:** run migrations `0006` + `0007` (and any earlier ones still pending). Full checklist in [`HANDOFF.md`](./HANDOFF.md). No further required agent backlog for the platform track.
 
 - **2026-07-16 (HANDOFF rewrite)** — Rewrote [`HANDOFF.md`](./HANDOFF.md) as the canonical ops handoff for future agents: one-liner + stack, shipped surface, architecture (shops / catalog / auth / pins), human checklist (migrations `0001`–`0007` + Auth + env + bootstrap), deferred/parked, verify steps, and “Start here”. Keep HANDOFF at repo root; do not delete it.
+
+- **2026-07-16 (polish pass)** — High-impact UX without platform rewrites:
+    - Home: active-shop banner + Leave; enter-by-slug when Supabase is configured.
+    - Connect: wire `scan:found` broadcasts; Twin Shopper Yes / Maybe / No vote cards on Connected.
+    - Admin / onboarding: CSV column guide + sample download; clearer unconfigured checklist.
+    - See [`HANDOFF.md`](./HANDOFF.md) §6 for remaining nice-to-haves.

@@ -4,7 +4,13 @@ import { icon } from "../lib/icons";
 import { totoMascot } from "../lib/toto";
 import { t } from "../lib/i18n";
 import { getInsights } from "../lib/history";
-import { getActiveShop } from "../lib/shops";
+import {
+  getActiveShop,
+  setActiveShop,
+  fetchShopBySlug,
+} from "../lib/shops";
+import { primeCatalog, resetCatalog } from "../lib/catalog";
+import { supabaseConfigured } from "../lib/supabase";
 
 // "In a rush" was a dashed quick chip below the three choice cards. It
 // pointed at /browse — the same destination as "I'm just looking" — so
@@ -27,7 +33,9 @@ export function renderHome(root: HTMLElement) {
   const insights = getInsights();
   const isReturning = insights.tripCount > 0;
   const lastCategory = insights.topCategories[0]?.category;
-  const showFindShop = hasList && !getActiveShop();
+  const activeShop = getActiveShop();
+  const showFindShop = hasList && !activeShop;
+  const showEnterShop = !activeShop && supabaseConfigured;
 
   root.innerHTML = `
     <main class="screen-home">
@@ -36,6 +44,16 @@ export function renderHome(root: HTMLElement) {
           <span>${escapeHTML(activeSession.me.emoji)} ${t("home.banner.with")} ${escapeHTML(activeSession.me.name)}</span>
           <span class="home-banner__open">${t("home.banner.open")}</span>
         </a>
+      ` : ""}
+
+      ${activeShop ? `
+        <div class="home-shop-banner" role="status">
+          <div class="home-shop-banner__text">
+            <span class="home-shop-banner__label">${escapeHTML(t("home.shop.at"))}</span>
+            <strong class="home-shop-banner__name">${escapeHTML(activeShop.name)}</strong>
+          </div>
+          <button type="button" class="home-shop-banner__leave" id="leave-shop">${escapeHTML(t("home.shop.leave"))}</button>
+        </div>
       ` : ""}
 
       <section class="home-greeting">
@@ -50,7 +68,7 @@ export function renderHome(root: HTMLElement) {
 
       <ul class="home-choices">
         <li>
-          <a class="home-choice" href="?screen=${hasList ? "list" : "list"}">
+          <a class="home-choice" href="?screen=list">
             <div class="home-choice__head">
               <span class="home-choice__icon">${icon("list", 24)}</span>
               ${hasList ? `<span class="home-choice__badge">${t("home.badge.in_progress")}</span>` : ""}
@@ -91,6 +109,26 @@ export function renderHome(root: HTMLElement) {
           </a>
         </li>
         ` : ""}
+
+        ${showEnterShop ? `
+        <li>
+          <div class="home-choice home-choice--enter-shop">
+            <div class="home-choice__head">
+              <span class="home-choice__icon">${icon("store", 24)}</span>
+            </div>
+            <h2 class="home-choice__title">${escapeHTML(t("home.shop.enter"))}</h2>
+            <p class="home-choice__sub">${escapeHTML(t("home.shop.enter.sub"))}</p>
+            <form class="home-shop-enter" id="enter-shop-form" novalidate>
+              <input id="enter-shop-slug" type="text" required autocomplete="off"
+                     spellcheck="false" inputmode="text"
+                     placeholder="${escapeHTML(t("home.shop.slug.placeholder"))}"
+                     class="home-shop-enter__input" aria-label="${escapeHTML(t("home.shop.slug.placeholder"))}" />
+              <button type="submit" class="home-shop-enter__btn">${escapeHTML(t("home.shop.enter.btn"))}</button>
+            </form>
+            <p id="enter-shop-status" class="home-shop-enter__status" role="status" aria-live="polite"></p>
+          </div>
+        </li>
+        ` : ""}
       </ul>
     </main>
   `;
@@ -102,5 +140,43 @@ export function renderHome(root: HTMLElement) {
     void (hero as HTMLElement).offsetWidth; // restart the animation
     hero.classList.add("toto-hero--wave");
     if ("vibrate" in navigator) navigator.vibrate(12);
+  });
+
+  const leaveBtn = root.querySelector("#leave-shop");
+  leaveBtn?.addEventListener("click", () => {
+    setActiveShop(null);
+    resetCatalog();
+    const url = new URL(window.location.href);
+    url.searchParams.delete("shop");
+    url.searchParams.set("screen", "home");
+    window.location.href = url.toString();
+  });
+
+  const enterForm = root.querySelector("#enter-shop-form") as HTMLFormElement | null;
+  const slugInput = root.querySelector("#enter-shop-slug") as HTMLInputElement | null;
+  const statusEl = root.querySelector("#enter-shop-status") as HTMLElement | null;
+  enterForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const raw = (slugInput?.value ?? "").trim().toLowerCase();
+    if (!raw) {
+      if (statusEl) statusEl.textContent = t("home.shop.slug.placeholder");
+      return;
+    }
+    if (statusEl) statusEl.textContent = t("home.shop.loading");
+    try {
+      const shop = await fetchShopBySlug(raw);
+      if (!shop) {
+        if (statusEl) statusEl.textContent = t("home.shop.notfound");
+        return;
+      }
+      setActiveShop(shop);
+      await primeCatalog(shop.id);
+      const url = new URL(window.location.href);
+      url.searchParams.set("shop", shop.slug);
+      url.searchParams.set("screen", "home");
+      window.location.href = url.toString();
+    } catch {
+      if (statusEl) statusEl.textContent = t("home.shop.notfound");
+    }
   });
 }

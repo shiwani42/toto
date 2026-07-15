@@ -2,7 +2,7 @@
 
 > **Canonical ops doc for the next agent.** Read this before coding. Product vision / history lives in [`AGENTS.md`](./AGENTS.md); user-facing overview in [`README.md`](./README.md).
 >
-> **Status (2026-07-16):** Multi-tenant platform track is **code-complete**. Remaining work is **human platform config** (Supabase migrations + Auth URLs + Render env + first shop bootstrap). No required product backlog for agents.
+> **Status (2026-07-16):** Multi-tenant platform track is **code-complete**, plus a polish pass (shop context banner / slug entry, Twin votes, admin CSV help). Remaining work is **human platform config** (Supabase migrations + Auth URLs + Render env + first shop bootstrap).
 
 **Live:** https://toto-4xfl.onrender.com/ · **Repo:** https://github.com/shiwani42/toto
 
@@ -31,14 +31,14 @@ Env (see `.env.example`): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_A
 
 | Screen | Capability |
 |---|---|
-| `home` | Entry chooser; **nearby card** when list nonempty and no active shop |
+| `home` | Entry chooser; **nearby card** when list nonempty and no active shop; **shop banner** when in a shop; **enter-by-slug** when Supabase is configured |
 | `list` | Search / add / demo list; sessionStorage cart |
 | `plan` | 8-step trip wizard → weather + Claude (or heuristic) → swipe deck with product photos |
 | `browse` | Catalog browse with Toto companion |
 | `map` | Zone pins from shop `zone_positions` (or defaults) on shop `zone_map_url` (or bundled map); zone-by-zone → scan loop |
-| `scan` / `done` | Multi-barcode camera overlay; found vs missing |
+| `scan` / `done` | Multi-barcode camera overlay; found vs missing; **broadcasts `scan:found`** into live sessions |
 | `compare` / `repair` / `fit` | Price Decoder, Repair vs Replace, Fit Check (Claude Vision) |
-| `connect` / `connected` | Family / partner Realtime sessions (presence, list sync, chat) |
+| `connect` / `connected` | Family / partner Realtime sessions (presence, list sync, chat, **Yes/Maybe/No votes**) |
 | `settings` / `nearby` | Prefs + accessibility; cross-shop product search by distance |
 
 Shopper context: `/?shop=<slug>` loads that shop's products into the in-memory catalog cache. Without a shop, bundled JSON is used.
@@ -48,7 +48,7 @@ Shopper context: `/?shop=<slug>` loads that shop's products into the in-memory c
 | Screen | Capability |
 |---|---|
 | `shop-onboarding` | Magic-link signup → create shop (no sign-in flicker via `waitForAuthUser`) |
-| `admin` | **Shop switcher** (multi-shop owners); KPIs / funnel; catalog seed + CSV (chunked 500) + row edit; **zone map upload + pin editor** (A–G / entry / checkout); **entry QR** (download PNG / print A4); **product photo** upload (`image_url`) |
+| `admin` | **Shop switcher** (multi-shop owners); KPIs / funnel; catalog seed + CSV (chunked 500, **column guide + sample download**) + row edit; **zone map upload + pin editor** (A–G / entry / checkout); **entry QR** (download PNG / print A4); **product photo** upload (`image_url`); clearer setup checklist when Supabase is missing |
 
 ### Platform / data
 
@@ -159,7 +159,7 @@ Do **not** reopen these unless the human asks:
 | Item | Notes |
 |---|---|
 | **Shelf Lens** | Filter-based MatrixScan-style browse; parked since v1 pivot to list → find |
-| **Twin Shopper vote UI** | Connect has presence + chat + list sync; no yes/maybe/no vote cards |
+| **Twin Shopper vote UI** | Shipped thin version: Yes / Maybe / No on Connected when partner sees `scan:found` / `list:added` |
 | **`body-measurements/` submodule** | Parked; Fit Check uses Claude Vision in-browser |
 | **Scandit** | Fully replaced by zxing-wasm; ignore Scandit-era notes in older AGENTS sections unless updating docs |
 | **Bundled `products.json`** | Still ships as fallback (~600 KB) — intentional |
@@ -172,13 +172,18 @@ Historical v1–v3 staging and demo-video constraints: see [`AGENTS.md`](./AGENT
 
 No required backlog. Optional polish only:
 
-- Cross-shop entry on Home beyond the current nearby card (e.g. shop picker / QR camera).
-- Stronger offline / empty-state copy when Supabase env is missing on admin routes.
-- Admin CSV column docs for shop operators.
+- Shop directory / browse-all-shops list (beyond slug entry + nearby).
 - Demo video (`video.mp4` at repo root) still to be recorded per AGENTS storyboard.
 - AGENTS.md still has some Scandit-era wording in early sections; HANDOFF + 2026-06-23+ changelog are authoritative for scanning/stack.
 
-Prefer small UX polish or a parked idea above over re-touching the multi-tenant path.
+### Shipped 2026-07-16 (polish pass)
+
+- **Active shop banner** on Home (name + Leave shop → reset catalog / clear `?shop=`).
+- **Enter shop by slug** on Home when Supabase is configured (complements nearby card + entry QR).
+- **Twin Shopper votes** — scan finds broadcast `scan:found`; Connected shows Yes / Maybe / No cards for the partner.
+- **Admin CSV guide** — expandable column docs + sample CSV download; stronger unconfigured checklist on admin + shop-onboarding.
+
+Prefer small UX polish or a parked idea in §5 over re-touching the multi-tenant path.
 
 ---
 

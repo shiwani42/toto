@@ -112,7 +112,14 @@ function unconfiguredHTML(): string {
         <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
       </div>
       <h2 class="admin-gate__title">Setup needed</h2>
-      <p class="admin-gate__sub">The dashboard reads anonymous usage from Supabase. Configure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>, then run the migrations in <code>supabase/migrations/</code>.</p>
+      <p class="admin-gate__sub">The dashboard needs Supabase before it can load. Shopper screens still work with the bundled demo catalog.</p>
+      <ol class="admin-gate__steps">
+        <li>Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in <code>.env</code> (or Render env).</li>
+        <li>Run migrations <code>0001</code>–<code>0007</code> in the Supabase SQL Editor.</li>
+        <li>Add your deploy URL under Authentication → Redirect URLs.</li>
+        <li>Redeploy, then open <a href="?screen=shop-onboarding">shop onboarding</a>.</li>
+      </ol>
+      <p class="admin-gate__hint">Details live in <code>HANDOFF.md</code> §4.</p>
       <a class="link-btn" href="?screen=home">Back to the app</a>
     </div>
   `;
@@ -318,9 +325,20 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
         ${catalogHTML(catalog)}
         <div class="admin-card__foot">
           <button type="button" id="catalog-import" class="link-btn">Import from CSV</button>
+          <button type="button" id="catalog-sample-csv" class="link-btn">Download sample CSV</button>
           <button type="button" id="catalog-seed" class="link-btn">Seed with demo catalog</button>
           <p id="catalog-progress" class="admin-card__progress" aria-live="polite"></p>
         </div>
+        <details class="admin-csv-help">
+          <summary>CSV column guide</summary>
+          <p>Header row required. One row per size/color variant. <code>tags</code> accepts <code>|</code>, <code>;</code>, or comma-separated values.</p>
+          <ul class="admin-csv-help__cols">
+            <li><strong>Required:</strong> <code>product_code</code>, <code>product_id</code>, <code>name</code>, <code>brand</code>, <code>category</code>, <code>zone</code></li>
+            <li><strong>Recommended:</strong> <code>size</code>, <code>color</code>, <code>price_chf</code>, <code>zone_name</code>, <code>aisle</code>, <code>description</code></li>
+            <li><strong>Optional:</strong> <code>discount_pct</code>, <code>weight_g</code>, <code>waterproof_rating_mm</code>, <code>temp_rating_c</code>, <code>material</code>, <code>tags</code>, <code>stock_total</code>, <code>stock_front</code>, <code>image_url</code></li>
+          </ul>
+          <p class="admin-csv-help__note">Rows upsert on <code>shop_id + product_code</code>. Missing optional numbers default to 0 / empty.</p>
+        </details>
       </section>
     </div>
 
@@ -725,6 +743,45 @@ function wireCatalogActions(host: HTMLElement, catalog: CatalogRow[], shopId: st
     });
     input.click();
   });
+
+  const sampleBtn = host.querySelector("#catalog-sample-csv") as HTMLButtonElement | null;
+  sampleBtn?.addEventListener("click", () => {
+    downloadSampleCsv();
+  });
+}
+
+/** Tiny sample CSV (a few demo rows) so operators can see the header
+ *  shape without opening products.json. */
+function downloadSampleCsv() {
+  const cols = [
+    "product_code", "product_id", "name", "brand", "category", "color", "size",
+    "price_chf", "discount_pct", "weight_g", "waterproof_rating_mm", "temp_rating_c",
+    "material", "tags", "zone", "zone_name", "aisle", "stock_total", "stock_front",
+    "description", "image_url",
+  ];
+  const raw = productsRaw as Array<Record<string, unknown>>;
+  const sample = raw.slice(0, 5);
+  const lines = [cols.join(",")];
+  for (const row of sample) {
+    lines.push(cols.map((c) => {
+      const v = row[c];
+      if (Array.isArray(v)) return csvEscape(v.join("|"));
+      if (v == null) return "";
+      return csvEscape(String(v));
+    }).join(","));
+  }
+  const blob = new Blob([lines.join("\n") + "\n"], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "toto-catalog-sample.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function csvEscape(s: string): string {
+  if (/[",\n]/.test(s)) return `"${s.replaceAll('"', '""')}"`;
+  return s;
 }
 
 // ─── Catalog rendering ──────────────────────────────────────────────────────

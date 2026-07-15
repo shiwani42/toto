@@ -8,6 +8,7 @@ import { t } from "../lib/i18n";
 import { totoReact } from "../lib/companion";
 import { playFound, playOff } from "../lib/sounds";
 import { colorSwatch } from "../lib/colors";
+import { broadcastSessionEvent } from "../lib/session";
 
 const FOUND_KEY = "toto.found";
 
@@ -445,6 +446,7 @@ export function renderScan(root: HTMLElement) {
             const label = p ? `Found: ${p.brand} ${p.name}` : `Found: ${code.text}`;
             announce(label);
             track("scan_found", { code: code.text, in_list: true });
+            broadcastSessionEvent({ kind: "scan:found", code: code.text });
             renderCarousel();
             celebrateFind(code.text);
             totoReact("jump"); // he's excited you got it
