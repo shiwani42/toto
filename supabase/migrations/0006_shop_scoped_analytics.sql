@@ -16,6 +16,18 @@ create policy "events_insert_any"
   );
 
 -- ─── Aggregation views, now per-shop ──────────────────────────────────
+-- Drop first: CREATE OR REPLACE cannot rename/reorder columns (e.g. when
+-- adding leading shop_id to views that already exist from 0002).
+
+drop view if exists public.v_funnel_daily;
+drop view if exists public.v_top_categories;
+drop view if exists public.v_activity_mix;
+drop view if exists public.v_purpose_mix;
+drop view if exists public.v_profile_mix;
+drop view if exists public.v_product_performance;
+drop view if exists public.v_demand_gaps;
+drop view if exists public.v_hourly_usage;
+drop view if exists public.v_headline_counters;
 
 create or replace view public.v_funnel_daily as
 with d as (
