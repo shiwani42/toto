@@ -1,0 +1,65 @@
+# Keep Supabase Free from pausing after ~7 idle days, and nudge the
+# Render static site so cold paths stay warm.
+#
+# Runs twice a week (safer than exactly every 7 days). Also runnable
+# by hand: Actions → Keepalive → Run workflow.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL       — same value as VITE_SUPABASE_URL
+#   SUPABASE_ANON_KEY  — same value as VITE_SUPABASE_ANON_KEY
+# Optional:
+#   APP_URL            — defaults to https://toto-4xfl.onrender.com
+
+name: Keepalive
+
+on:
+  schedule:
+    # 09:00 UTC Monday and Thursday → gap stays under 7 days
+    - cron: "0 9 * * 1,4"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Render app
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          set -euo pipefail
+          url="${APP_URL:-https://toto-4xfl.onrender.com}"
+          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 30 "$url/")
+          echo "Render HTTP $code ($url)"
+          case "$code" in
+            2*|3*) ;;
+            *) echo "Unexpected status from app URL"; exit 1 ;;
+          esac
+
+      - name: Ping Supabase REST
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "Missing SUPABASE_URL / SUPABASE_ANON_KEY secrets."
+            echo "Add them under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          base="${SUPABASE_URL%/}"
+          # Light authenticated REST hit — enough to count as project activity.
+          code=$(curl -sS -o /tmp/sb-keepalive.out -w "%{http_code}" --max-time 30 \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Accept: application/json" \
+            "${base}/rest/v1/")
+          echo "Supabase REST HTTP $code"
+          # 200 OK, or 401/404 still prove the project answered (not paused).
+          case "$code" in
+            200|401|404) ;;
+            *)
+              echo "Supabase did not respond as expected (HTTP $code)."
+              exit 1
+              ;;
+          esac
