@@ -1,6 +1,12 @@
 # Render Blueprint for Toto.
 # Pick "New" → "Blueprint" in the Render dashboard and choose this repo;
 # the dashboard reads this file and pre-fills the service config.
+#
+# Idle keep-alive (Supabase Free ~7-day pause): this static site cannot run
+# cron. Use an external uptime monitor (e.g. UptimeRobot) against:
+#   1) https://toto-4xfl.onrender.com/
+#   2) https://<PROJECT_REF>.supabase.co/auth/v1/health
+# Interval ≤ 5 days (daily is fine). See HANDOFF.md §4 item 7.
 
 services:
   - type: web

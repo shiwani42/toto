@@ -157,6 +157,12 @@ Code cannot apply these to the remote Supabase / Render project from a typical a
 
 6. **Smoke walkthrough** — [ ] Seed catalog [ ] Upload zone map [ ] Place zone pins + Save [ ] Entry QR download/print [ ] Edit a product photo [ ] Open `/?shop=<slug>` and walk list → map → scan (use `data/sample-barcodes.pdf` or `data/demo-shelf.html`).
 
+7. **Keepalive (Supabase Free pause)** — free projects can pause after ~7 idle days. Render static cannot self-ping. Use a free uptime bot (e.g. [UptimeRobot](https://uptimerobot.com/)):
+   - [ ] Monitor A: `https://toto-4xfl.onrender.com/` — expect HTTP 2xx
+   - [ ] Monitor B: `https://<PROJECT_REF>.supabase.co/auth/v1/health` — expect HTTP 200 (`PROJECT_REF` is the subdomain in `VITE_SUPABASE_URL`)
+   - [ ] Interval: daily (or any cadence under 5 days). No API keys in the monitor URL.
+   - [ ] Confirm both monitors are green once after setup
+
 ---
 
 ## 5. Intentionally deferred / parked
