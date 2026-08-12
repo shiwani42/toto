@@ -1,6 +1,6 @@
 /**
  * Record a narrated-paced E2E video: shopper on Toto → Default Shop →
- * list/plan/map → admin analytics.
+ * list/plan/map → owner dashboard.
  *
  * Output: video/toto-e2e-shopper-admin.mp4
  *
@@ -74,11 +74,11 @@ try {
   await title(
     page,
     "Shopper meets Toto",
-    "Companionship and convenience in-store — then the same visit shows up for the shop owner as visibility and analytics.",
+    "Help in the aisle. Clear demand for the shop.",
   );
 
   // ── Shopper: home + discovery ────────────────────────────────────────
-  await title(page, "1 · Discover shops on Toto", "Owners become visible through the shop directory and entry QR.");
+  await title(page, "1. Find a shop", "Browse shops, then walk in.");
   await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
   await pause(page, 1600);
 
@@ -91,7 +91,7 @@ try {
   await pause(page, 2000);
 
   // ── List ─────────────────────────────────────────────────────────────
-  await title(page, "2 · Build a list", "Search the catalog — Toto helps collapse the wall of choice.");
+  await title(page, "2. Build a list", "Search and add what you need.");
   await page.goto(`${BASE}/?shop=default&screen=list`, { waitUntil: "networkidle" });
   await pause(page, 1500);
 
@@ -111,7 +111,7 @@ try {
   await pause(page, 1500);
 
   // ── Plan ─────────────────────────────────────────────────────────────
-  await title(page, "3 · Plan with a bit of intelligence", "Trip prefs → Toto suggests gear for the conditions.");
+  await title(page, "3. Plan the trip", "Tell Toto the outing. Get a short list.");
   await page.goto(`${BASE}/?shop=default&screen=plan`, { waitUntil: "networkidle" });
   await pause(page, 1200);
 
@@ -143,7 +143,7 @@ try {
   for (let i = 0; i < 10; i++) {
     const bodyNow = await page.locator("body").innerText();
     if (/category|swipe|weather|deck|Find them|suggested|Anything special/i.test(bodyNow) && /Continue|Skip|Next/i.test(bodyNow)) {
-      // on specifics or later — click continue once more if needed after sizes
+      // on specifics or later: click continue once more if needed after sizes
     }
     if (/category|swipe|For you|deck|Find them|pack/i.test(bodyNow) && !/Anything special|Your sizes/i.test(bodyNow)) break;
 
@@ -171,12 +171,12 @@ try {
   await pause(page, 2000);
 
   // ── Map ──────────────────────────────────────────────────────────────
-  await title(page, "4 · Navigate the floor", "Zones on the map — walk with a plan, not a wall of jackets.");
+  await title(page, "4. Find your way", "Zones on the map, ready to walk.");
   await page.goto(`${BASE}/?shop=default&screen=map`, { waitUntil: "networkidle" });
   await pause(page, 2800);
 
   // ── Scan UI ──────────────────────────────────────────────────────────
-  await title(page, "5 · Scan at the shelf", "Camera AR finds list matches. (Demo records the scan screen; live camera needs a phone.)");
+  await title(page, "5. Scan at the shelf", "Point at a barcode. Matches light up.");
   await page.goto(`${BASE}/?shop=default&screen=scan`, { waitUntil: "networkidle" });
   await pause(page, 2500);
 
@@ -214,12 +214,12 @@ try {
   // ── Bridge card ──────────────────────────────────────────────────────
   await title(
     page,
-    "Meanwhile, at the shop…",
-    "The same visit is anonymous events on the shop’s id — visibility and intent for the owner.",
+    "Meanwhile, at the shop",
+    "The same visit shows up as demand for the owner.",
   );
 
-  // ── Admin ────────────────────────────────────────────────────────────
-  await title(page, "6 · Owner admin", "Sessions, funnel, interest widgets, catalog, entry QR.");
+  // ── Owner dashboard ─────────────────────────────────────────────────
+  await title(page, "6. Owner dashboard", "What people wanted, plus catalog and entry QR.");
 
   const { data: adminAuth, error: authErr } = await anon.auth.signInWithPassword({
     email: ADMIN_EMAIL,
@@ -249,15 +249,30 @@ try {
   await page.goto(`${BASE}/?screen=dashboard`, { waitUntil: "networkidle" });
   await pause(page, 3500);
 
-  // Scroll through analytics story
+  // Owner demand story first (default dual-role view)
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   await pause(page, 1500);
-  await page.getByRole("heading", { name: /Funnel/i }).first().scrollIntoViewIfNeeded().catch(() => {});
-  await pause(page, 1800);
-  await page.getByRole("heading", { name: /Categories in demand|Demand gaps|Trip purpose|Activity mix/i }).first().scrollIntoViewIfNeeded().catch(() => {});
+  await page.getByRole("heading", { name: /Planning for|Why they're here|Categories|Gaps/i }).first().scrollIntoViewIfNeeded().catch(() => {});
   await pause(page, 2000);
-  await page.getByRole("heading", { name: /Product performance|Usage by hour/i }).first().scrollIntoViewIfNeeded().catch(() => {});
+  await page.getByRole("heading", { name: /Products they want|Who's shopping/i }).first().scrollIntoViewIfNeeded().catch(() => {});
   await pause(page, 2000);
+
+  // Platform product usage (funnel / sessions)
+  const platformTab = page.getByRole("tab", { name: /^Platform$/i });
+  if (await platformTab.count()) {
+    await platformTab.click();
+    await pause(page, 2800);
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+    await pause(page, 1200);
+    await page.getByRole("heading", { name: /Funnel|Product funnel/i }).first().scrollIntoViewIfNeeded().catch(() => {});
+    await pause(page, 2000);
+    const ownerTab = page.getByRole("tab", { name: /Shop insights/i });
+    if (await ownerTab.count()) {
+      await ownerTab.click();
+      await pause(page, 2200);
+    }
+  }
+
   await page.getByRole("heading", { name: /Shop settings/i }).first().scrollIntoViewIfNeeded().catch(() => {});
   await pause(page, 2200);
   await page.locator("#shop-qr-canvas").scrollIntoViewIfNeeded().catch(() => {});
@@ -269,8 +284,8 @@ try {
 
   await title(
     page,
-    "Two sides, one loop",
-    "Shoppers get a companion. Owners get visibility into what people actually wanted — on Toto.",
+    "Same visit, two views",
+    "Shoppers get help. Owners see what people wanted.",
   );
 } catch (err) {
   console.error("Recording failed:", err);

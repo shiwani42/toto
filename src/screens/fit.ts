@@ -40,7 +40,7 @@ Return ONLY a JSON object, no commentary, no markdown fences:
   "silhouetteNotes": "<= 150 chars about apparent build (e.g. 'slim shoulders, athletic build')"
 }
 
-Be conservative — return null for fields that can't be inferred from the photo (e.g. shoe size when feet aren't visible). Don't ask follow-up questions.`;
+Be conservative: return null for fields that can't be inferred from the photo (e.g. shoe size when feet aren't visible). Don't ask follow-up questions.`;
 
   const body = {
     model: MODEL,

@@ -112,14 +112,14 @@ function unconfiguredHTML(): string {
         <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
       </div>
       <h2 class="admin-gate__title">Setup needed</h2>
-      <p class="admin-gate__sub">The dashboard needs Supabase before it can load. Shopper screens still work with the bundled demo catalog.</p>
+      <p class="admin-gate__sub">Connect Supabase to open the dashboard. Shoppers can still use the demo catalog.</p>
       <ol class="admin-gate__steps">
         <li>Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in <code>.env</code> (or Render env).</li>
-        <li>Run migrations <code>0001</code>–<code>0008</code> in the Supabase SQL Editor.</li>
+        <li>Run migrations <code>0001</code> to <code>0008</code> in the Supabase SQL Editor.</li>
         <li>Add your deploy URL under Authentication → Redirect URLs.</li>
         <li>Redeploy, then open <a href="?screen=shop-onboarding">shop onboarding</a>.</li>
       </ol>
-      <p class="admin-gate__hint">Details live in <code>HANDOFF.md</code> §4.</p>
+      <p class="admin-gate__hint">See <code>HANDOFF.md</code> §4.</p>
       <a class="link-btn" href="?screen=home">Back to the app</a>
     </div>
   `;
@@ -131,8 +131,8 @@ function notAdminHTML(email: string): string {
       <div class="admin-gate__art" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       </div>
-      <h2 class="admin-gate__title">You're in, just not here</h2>
-      <p class="admin-gate__sub">Signed in as <strong>${escapeHTML(email)}</strong>. List a shop via <a href="?screen=shop-onboarding">onboarding</a>, or ask an existing owner to add you on their team.</p>
+      <h2 class="admin-gate__title">You're signed in</h2>
+      <p class="admin-gate__sub"><strong>${escapeHTML(email)}</strong> isn't on a shop yet. <a href="?screen=shop-onboarding">Add your shop</a>, or ask an owner to invite you.</p>
       <a class="link-btn" href="?screen=home">Back to the app</a>
     </div>
   `;
@@ -145,7 +145,7 @@ function mountSignIn(host: HTMLElement) {
         <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18v10H3z"/><path d="m3 7 9 6 9-6"/></svg>
       </div>
       <h2 class="admin-gate__title">Shop insights</h2>
-      <p class="admin-gate__sub">A one-time link by email. For shop owners and platform operators.</p>
+      <p class="admin-gate__sub">We'll email you a sign-in link.</p>
       <form id="admin-sign-in" class="admin-gate__form" novalidate>
         <input id="admin-email" type="email" required autocomplete="email"
                inputmode="email" placeholder="you@example.com" class="admin-gate__input" />
@@ -334,10 +334,8 @@ function ownerInsightsHTML(d: OwnerInsightData): string {
     ? prettyActivity(topActivity)
     : topPurpose
       ? prettyPurpose(topPurpose)
-      : "What shoppers want";
-  const heroSub = topActivity || topPurpose
-    ? "Top interest this period"
-    : "Demand insights from Toto visits";
+      : "What people want";
+  const heroSub = topActivity || topPurpose ? "Top interest" : "From recent visits";
   const gapCount = d.demandGaps.length;
   const wanted = d.headline?.adds_7d ?? 0;
   const shelfFinds = d.headline?.scans_7d ?? 0;
@@ -352,10 +350,10 @@ function ownerInsightsHTML(d: OwnerInsightData): string {
     </header>
 
     <section class="admin-kpis">
-      ${kpiCard("Wanted", wanted, "on lists · 7d")}
-      ${kpiCard("Shelf finds", shelfFinds, "matched · 7d")}
-      ${kpiCard("Demand gaps", gapCount, "categories")}
-      ${kpiTextCard("Top activity", topActivity ? prettyActivity(topActivity) : "None yet")}
+      ${kpiCard("On lists", wanted, "7 days")}
+      ${kpiCard("Scanned", shelfFinds, "7 days")}
+      ${kpiCard("Gaps", gapCount, "categories")}
+      ${kpiTextCard("Top trip", topActivity ? prettyActivity(topActivity) : "None yet")}
     </section>
 
     <div class="admin-grid">
@@ -370,14 +368,13 @@ function ownerInsightsHTML(d: OwnerInsightData): string {
       </section>
 
       <section class="admin-card">
-        <h2>Categories they need</h2>
+        <h2>Categories</h2>
         ${barList(d.topCategories.map((r) => ({ label: r.category, value: r.appeared_in_plans })))}
       </section>
 
       <section class="admin-card admin-card--alert">
         <div class="admin-card__head">
-          <h2>Gaps in your offer</h2>
-          <span class="admin-card__pill admin-card__pill--alert">Stock signal</span>
+          <h2>Gaps</h2>
         </div>
         ${d.demandGaps.length === 0
           ? `<p class="admin-empty">Nothing missed yet.</p>`
@@ -395,7 +392,7 @@ function ownerInsightsHTML(d: OwnerInsightData): string {
       </section>
 
       <details class="admin-card admin-card--wide admin-card--muted">
-        <summary class="admin-card__summary">Busy hours <span class="admin-card__meta">staffing hint · UTC, last 14 days</span></summary>
+        <summary class="admin-card__summary">Busy hours <span class="admin-card__meta">UTC, 14 days</span></summary>
         ${hourlyHTML(d.hourly)}
       </details>
     </div>
@@ -417,7 +414,7 @@ function platformUsageHTML(d: PlatformData): string {
 
   return `
     <header class="admin-hero">
-      <div class="admin-hero__eyebrow">Platform · ${d.activeShop ? escapeHTML(d.activeShop.name) : "Toto usage"}</div>
+      <div class="admin-hero__eyebrow">Platform${d.activeShop ? ` · ${escapeHTML(d.activeShop.name)}` : ""}</div>
       <div class="admin-hero__metric">
         <div class="admin-hero__value">${hero.toLocaleString()}</div>
         <div class="admin-hero__label">sessions, last 7 days</div>
@@ -427,24 +424,23 @@ function platformUsageHTML(d: PlatformData): string {
     <section class="admin-kpis">
       ${kpiCard("Today", d.headline?.sessions_24h ?? 0, "sessions")}
       ${kpiCard("30 days", d.headline?.sessions_30d ?? 0, "sessions")}
-      ${kpiCard("List adds", d.headline?.adds_7d ?? 0, "in 7d")}
-      ${kpiCard("Scans", d.headline?.scans_7d ?? 0, "in 7d")}
+      ${kpiCard("List adds", d.headline?.adds_7d ?? 0, "7 days")}
+      ${kpiCard("Scans", d.headline?.scans_7d ?? 0, "7 days")}
     </section>
 
     <section class="admin-card">
       <div class="admin-card__head">
-        <h2>Product funnel, last 14 days</h2>
+        <h2>Funnel <span class="admin-card__meta">14 days</span></h2>
         ${overallConvPct == null
           ? ""
-          : `<span class="admin-card__pill">${overallConvPct}% reached list</span>`}
+          : `<span class="admin-card__pill">${overallConvPct}% to list</span>`}
       </div>
-      <p class="admin-card__note">App usage stages — for Toto operators, not shop-floor demand.</p>
       ${funnelVisual(d.funnel)}
     </section>
 
     <div class="admin-grid">
       <section class="admin-card admin-card--wide">
-        <h2>Usage by hour <span class="admin-card__meta">UTC, last 14 days</span></h2>
+        <h2>By hour <span class="admin-card__meta">UTC, 14 days</span></h2>
         ${hourlyHTML(d.hourly)}
       </section>
     </div>
@@ -790,7 +786,7 @@ function printEntryQrSheet(shopName: string, entryUrl: string, dataUrl: string) 
     return;
   }
   win.document.write(`<!doctype html>
-<html><head><title>${escapeHTML(shopName)} — Toto entry QR</title>
+<html><head><title>${escapeHTML(shopName)} entry QR</title>
 <style>
   @page { size: A4; margin: 24mm; }
   body { font-family: system-ui, sans-serif; color: #1a1a1a; text-align: center; margin: 0; padding: 40px 24px; }
@@ -1276,12 +1272,12 @@ function funnelVisual(rows: FunnelRow[]): string {
     { wizard_started: 0, wizard_completed: 0, plan_returned: 0, added_to_list: 0, scanned_item: 0, completed_scan: 0 },
   );
   const steps: { label: string; value: number }[] = [
-    { label: "Started a plan",     value: totals.wizard_started },
-    { label: "Finished the wizard", value: totals.wizard_completed },
-    { label: "Got a list back",    value: totals.plan_returned },
+    { label: "Started plan",     value: totals.wizard_started },
+    { label: "Finished wizard", value: totals.wizard_completed },
+    { label: "Got a list",    value: totals.plan_returned },
     { label: "Added items",        value: totals.added_to_list },
-    { label: "Scanned in store",   value: totals.scanned_item },
-    { label: "Wrapped a trip",     value: totals.completed_scan },
+    { label: "Scanned",   value: totals.scanned_item },
+    { label: "Done",     value: totals.completed_scan },
   ];
   const top = Math.max(steps[0].value, 1);
   return `
@@ -1403,18 +1399,18 @@ function productInterestTable(rows: ProductPerfRow[]): string {
           <tr>
             <th>Product</th>
             <th>Category</th>
-            <th>Wanted</th>
-            <th>Swipe yes</th>
-            <th>Shelf finds</th>
-            <th>Interest</th>
+            <th>Lists</th>
+            <th>Yes</th>
+            <th>Scans</th>
+            <th>Rate</th>
           </tr>
         </thead>
         <tbody>
           ${rows.map((r) => {
             const p = getProduct(r.code);
             const name = p ? `${p.brand} ${p.name}` : r.code;
-            const cat = p?.category ?? "—";
-            const rate = r.pick_rate_pct == null ? "—" : `${r.pick_rate_pct}%`;
+            const cat = p?.category ?? "-";
+            const rate = r.pick_rate_pct == null ? "-" : `${r.pick_rate_pct}%`;
             return `
               <tr>
                 <td>${escapeHTML(name)}</td>

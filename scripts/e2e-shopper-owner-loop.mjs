@@ -386,30 +386,56 @@ try {
 
   const adminText = await page.locator("body").innerText();
   note(
-    "Admin dashboard for Default Shop",
-    /DEFAULT SHOP|sessions|Funnel|Catalog/i.test(adminText) && !/Send the link|not here/i.test(adminText),
+    "Owner dashboard for Default Shop",
+    /DEFAULT SHOP|Shop insights|On lists|Catalog|What people want/i.test(adminText) &&
+      !/Send the link|not here/i.test(adminText),
   );
 
-  // Sessions / funnel should be non-zero if views aggregate today's events
-  const sessionsMatch = adminText.match(/(\d+)\s*sessions,\s*last 7 days/i);
-  const sessions7d = sessionsMatch ? Number(sessionsMatch[1]) : null;
-  note(
-    "Admin sees session volume (visibility)",
-    sessions7d !== null && sessions7d > 0,
-    `sessions_7d=${sessions7d}`,
-  );
+  // Default view is owner demand insights (not app funnel).
+  const ownerChrome =
+    /On lists|Scanned|Gaps|Planning for|Products they want|Who's shopping|Categories|Why they're here/i.test(
+      adminText,
+    );
+  note("Owner demand insights chrome present", ownerChrome);
 
-  const funnelOk = /Started a plan|Funnel|reached list|wizard|Added to list|Scanned/i.test(adminText);
-  note("Admin funnel / interest chrome present", funnelOk);
+  // Dual-role: switch to Platform for session/funnel product metrics.
+  const platformTab = page.getByRole("tab", { name: /^Platform$/i });
+  if (await platformTab.count()) {
+    await platformTab.click();
+    await page.waitForTimeout(3500);
+    await shot("09b-platform-analytics");
+    const platformText = await page.locator("body").innerText();
+    const sessionsMatch = platformText.match(/(\d+)\s*sessions,\s*last 7 days/i);
+    const sessions7d = sessionsMatch ? Number(sessionsMatch[1]) : null;
+    note(
+      "Platform sees session volume",
+      sessions7d !== null && sessions7d > 0,
+      `sessions_7d=${sessions7d}`,
+    );
+    note(
+      "Platform funnel chrome present",
+      /Started plan|Funnel|Got a list|Added items|Scanned/i.test(platformText),
+    );
+    // Back to owner for remaining checks
+    const ownerTab = page.getByRole("tab", { name: /Shop insights/i });
+    if (await ownerTab.count()) {
+      await ownerTab.click();
+      await page.waitForTimeout(2500);
+    }
+  } else {
+    note("Platform tab (dual-role)", false, "missing — expected dual-role test admin");
+  }
+
+  const ownerText = await page.locator("body").innerText();
 
   // Scroll to product performance / demand
-  await page.getByRole("heading", { name: /Product performance|Categories in demand|Demand gaps|Trip purpose|Activity mix/i }).first().scrollIntoViewIfNeeded().catch(() => {});
+  await page.getByRole("heading", { name: /Products they want|Planning for|Categories|Gaps|Who's shopping/i }).first().scrollIntoViewIfNeeded().catch(() => {});
   await page.waitForTimeout(400);
   await shot("10-admin-interest-widgets");
 
   const interestWidgets =
-    /Categories in demand|Demand gaps|Trip purpose|Activity mix|Product performance|Who's walking in/i.test(
-      adminText,
+    /Planning for|Gaps|Categories|Products they want|Who's shopping|Why they're here/i.test(
+      ownerText,
     );
   note("Interest/intent analytics widgets", interestWidgets);
 
@@ -422,7 +448,7 @@ try {
   await shot("11-admin-entry-qr");
   note(
     "Entry QR connects shoppers → this shop on Toto",
-    (await page.locator("#shop-qr-canvas").count()) > 0 && /shop=default/i.test(adminText),
+    (await page.locator("#shop-qr-canvas").count()) > 0 && /shop=default/i.test(ownerText),
   );
 
   await shot("12-admin-final");

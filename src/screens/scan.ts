@@ -430,7 +430,7 @@ export function renderScan(root: HTMLElement) {
           if (debug) {
             const dbg = root.querySelector("#scan-debug") as HTMLDivElement | null;
             if (dbg) {
-              const last = barcodes.length > 0 ? `[${barcodes[0].format}] ${barcodes[0].text}` : "—";
+              const last = barcodes.length > 0 ? `[${barcodes[0].format}] ${barcodes[0].text}` : "-";
               dbg.textContent = `${stats.backend} · ${stats.fps}fps · ${stats.lastDecodeMs}ms · frame:${barcodes.length} buf:${pinBuffer.size} · ${last}`;
             }
           }

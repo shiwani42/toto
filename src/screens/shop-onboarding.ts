@@ -66,7 +66,7 @@ function unconfiguredHTML(): string {
       <p class="admin-gate__sub">Shop signup needs Supabase first. Shopper screens still work with the bundled demo catalog.</p>
       <ol class="admin-gate__steps">
         <li>Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.</li>
-        <li>Run migrations <code>0001</code>–<code>0007</code> in the SQL Editor.</li>
+        <li>Run migrations <code>0001</code> to <code>0007</code> in the SQL Editor.</li>
         <li>Allow your origin under Authentication → Redirect URLs.</li>
       </ol>
       <p class="admin-gate__hint">See <code>HANDOFF.md</code> §4 for the full checklist.</p>
