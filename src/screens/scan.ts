@@ -445,7 +445,11 @@ export function renderScan(root: HTMLElement) {
             const p = getProduct(code.text);
             const label = p ? `Found: ${p.brand} ${p.name}` : `Found: ${code.text}`;
             announce(label);
-            track("scan_found", { code: code.text, in_list: true });
+            track("scan_found", {
+              code: code.text,
+              in_list: true,
+              category: p?.category ?? null,
+            });
             broadcastSessionEvent({ kind: "scan:found", code: code.text });
             renderCarousel();
             celebrateFind(code.text);
@@ -477,7 +481,12 @@ export function renderScan(root: HTMLElement) {
           } else {
             // Off-list barcode: muted tone, log for analytics.
             playOff();
-            track("scan_found", { code: code.text, in_list: false });
+            const off = getProduct(code.text);
+            track("scan_found", {
+              code: code.text,
+              in_list: false,
+              category: off?.category ?? null,
+            });
           }
         },
       });

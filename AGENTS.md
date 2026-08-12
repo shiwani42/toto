@@ -92,7 +92,7 @@ Archived Scandit research: `docs/barcode-sdk-alternatives.md`, `docs/scandit-web
 
 **Shops:** `src/lib/shops.ts` — active shop in sessionStorage; `fetchShopBySlug`, `fetchAllShops` (directory), `fetchShopsNear`, admin helpers. Screens: `shops`, `nearby`, `shop-onboarding`, `admin`.
 
-**Auth / admin:** magic link via Supabase; admin = legacy `admins` or `shop_admins`.
+**Auth / admin:** magic link via Supabase. **Shop owners** (`shop_admins`) see demand / intent insights on `?screen=dashboard` (legacy `?screen=admin` redirects). **Platform admins** (`public.admins`) see Toto product usage (sessions, funnel). Dual-role users get a Shop insights | Platform toggle. Funnel/screen metrics are platform-only — not retailer value.
 
 **AI:** optional `VITE_ANTHROPIC_API_KEY` for plan + Fit Check; weather via Open-Meteo (no key).
 
@@ -115,6 +115,7 @@ Demo shelf script (old Phase 5): **done** — `npm run demo-shelf`.
 | Hosting | Render Static Site | Free HTTPS; `render.yaml` |
 | Catalog fallback | Bundled `products.json` | Works offline / without shop context |
 | Symbologies | EAN-13, QR, Code128 (+ extras) | Catalog + demo-book SKUs |
+| Owner vs platform analytics | Separate layouts on `admin` | Owners need demand/intent; funnel is Toto product usage |
 
 ## Open questions / parked
 
@@ -213,3 +214,5 @@ Demo shelf script (old Phase 5): **done** — `npm run demo-shelf`.
     - Human checklist (migrations / Auth / Render env / shop bootstrap) still open — no `.env` or Supabase CLI in agent environment.
 
 - **2026-07-16 (PWA)** — Installable Progressive Web App via `vite-plugin-pwa` (Workbox, `autoUpdate`): web manifest (Toto / standalone / brand greens), 192+512 (+ maskable) + apple-touch icons from the paw favicon, SW precache of app shell + assets + WASM, Google Fonts runtime cache, mobile meta tags, dismissible Home install hint, Render `no-cache` headers for `sw.js` / manifest.
+
+- **2026-08-12 (owner vs platform analytics)** — Split dashboard by role: shop owners (`shop_admins`) get demand/intent insights (wanted, shelf finds, gaps, planning for, products they want); platform admins (`public.admins`) keep sessions/funnel/hourly. Dual-role toggle. Enriched `wizard_complete` (location, specifics), `list_added` (category/brand/stock), `list_search`, `scan_found` (category). RLS fix remains in `0008`. Production URL is `?screen=dashboard` (`admin` alias redirects).

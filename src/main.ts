@@ -44,6 +44,7 @@ const VALID_SCREENS: Screen[] = [
   "connected",
   "settings",
   "fit",
+  "dashboard",
   "admin",
   "shop-onboarding",
   "nearby",
@@ -51,7 +52,15 @@ const VALID_SCREENS: Screen[] = [
 ];
 
 function currentScreen(): Screen {
-  const requested = new URLSearchParams(location.search).get("screen");
+  const params = new URLSearchParams(location.search);
+  const requested = params.get("screen");
+  // Legacy alias: ?screen=admin → ?screen=dashboard (production URL).
+  if (requested === "admin") {
+    params.set("screen", "dashboard");
+    const next = `${location.pathname}?${params.toString()}${location.hash}`;
+    history.replaceState(null, "", next);
+    return "dashboard";
+  }
   if (requested && (VALID_SCREENS as string[]).includes(requested)) {
     return requested as Screen;
   }
@@ -274,7 +283,7 @@ function mount() {
       // dynamically import so the camera/Vision code doesn't load up front
       import("./screens/fit").then(({ renderFit }) => renderFit(root));
       break;
-    case "admin":
+    case "dashboard":
       renderAdmin(root);
       break;
     case "shop-onboarding":

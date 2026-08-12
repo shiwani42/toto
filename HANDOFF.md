@@ -50,12 +50,19 @@ Shopper context: `/?shop=<slug>` loads that shop's products into the in-memory c
 | Screen | Capability |
 |---|---|
 | `shop-onboarding` | Magic-link signup → create shop (no sign-in flicker via `waitForAuthUser`) |
-| `admin` | **Shop switcher** (multi-shop owners); KPIs / funnel; catalog seed + CSV (chunked 500, **column guide + sample download**) + row edit; **zone map upload + pin editor** (A–G / entry / checkout); **entry QR** (download PNG / print A4); **product photo** upload (`image_url`); clearer setup checklist when Supabase is missing |
+| `admin` (owner mode) | **Demand insights** — what shoppers plan for, categories they need, products wanted, shelf finds, demand gaps, who's shopping; **not** app-screen funnels. Shop switcher; catalog seed + CSV + row edit; zone map + pins; entry QR; product photos |
+
+### Platform admin (operators)
+
+| Screen | Capability |
+|---|---|
+| `admin` (platform mode) | Toto **product usage** — sessions, wizard→list→scan funnel, hourly usage. Shown when the user is on `public.admins`. Dual-role users get a **Shop insights \| Platform** toggle |
 
 ### Platform / data
 
-- Migrations `0001`–`0007` in repo (human must apply — see §4).
+- Migrations `0001`–`0008` in repo (human must apply — see §4).
 - Analytics events stamped with active shop UUID; views expose `shop_id` after `0006`.
+- Intent payloads: `wizard_complete` (location, specifics), `list_added` (category/brand/stock), `list_search`, `scan_found` (category).
 - Storage bucket `shop-assets` for zone maps + product images (`0005`).
 - Detail UI: `.detail-sheet*` is canonical; `.party-sheet*` kept as CSS aliases.
 - Demo shelf: `npm run demo-shelf` → `data/demo-shelf.html` (printable A4 EAN-13 grid).
@@ -76,7 +83,7 @@ src/integrations/        ai-planner, weather
 src/fixtures/            repair-programs
 data/                    products.json, store-map.png, sample-barcodes.pdf, demo-shelf.html
 scripts/make-demo-shelf.mjs
-supabase/migrations/     0001 … 0007 (apply in order)
+supabase/migrations/     0001 … 0008 (apply in order)
 ```
 
 ### Shops
@@ -94,8 +101,8 @@ supabase/migrations/     0001 … 0007 (apply in order)
 ### Auth / admin
 
 - `src/lib/auth.ts` — magic link via `signInWithEmail(email, landingScreen)`; `waitForAuthUser()` / `hasAuthCallback()` kill the post-redirect flicker.
-- `src/lib/admin.ts` — `isAdmin()` = legacy `admins` table **or** any `shop_admins` row.
-- Admin UI scopes catalog + analytics to `resolveAdminShop(myShops)`.
+- `src/lib/admin.ts` — `isShopOwner()` = `shop_admins`; `isPlatformAdmin()` = legacy `admins`; `isAdmin()` = either. Owner UI = demand insights; platform UI = Toto usage funnel/sessions; dual-role gets a mode toggle.
+- Admin UI scopes catalog + insights to `resolveAdminShop(myShops)`.
 
 ### Map pins + product art
 
@@ -142,6 +149,7 @@ Code cannot apply these to the remote Supabase / Render project from a typical a
    - [ ] `supabase/migrations/0005_shop_assets_storage.sql`
    - [ ] `supabase/migrations/0006_shop_scoped_analytics.sql`
    - [ ] `supabase/migrations/0007_zone_positions_image_url.sql`
+   - [ ] `supabase/migrations/0008_fix_admin_rls_jwt_email.sql`
 
 2. **Auth redirect URLs** (Authentication → URL Configuration):
    - [ ] Site URL = `https://toto-4xfl.onrender.com`
@@ -221,7 +229,7 @@ npm run dev            # http://localhost:5173
 | Check | URL / action |
 |---|---|
 | Onboarding | `/?screen=shop-onboarding` |
-| Admin | `/?screen=admin` (after magic link) |
+| Owner / platform dashboard | `/?screen=dashboard` (legacy `/?screen=admin` redirects; after magic link) |
 | Shopper shop context | `/?shop=<slug>` then list → map → scan |
 | Shop directory | `/?screen=shops` or Home → Browse all shops |
 | Nearby | Settings → Tools → Nearby, or Home nearby card |

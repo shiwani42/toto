@@ -1,11 +1,11 @@
-// Retailer admin dashboard. Reads from the SQL views in
-// supabase/migrations/0002_events_admin.sql (+ 0006 shop scoping).
-// Multi-shop admins pick a shop via the switcher; analytics + catalog
-// then filter to that shop_id.
+// Admin surface for two audiences:
+//   - Shop owners (shop_admins): demand / intent insights + catalog ops
+//   - Platform admins (public.admins): Toto product usage (funnel, sessions)
+// Reads SQL views from migrations 0002 + 0006; multi-shop owners switch shops.
 
 import { getSupabase, supabaseConfigured } from "../lib/supabase";
 import { authConfigured, waitForAuthUser, signInWithEmail } from "../lib/auth";
-import { isAdmin } from "../lib/admin";
+import { getAdminRoles, type AdminRoles } from "../lib/admin";
 import { getProduct } from "../lib/catalog";
 import {
   fetchMyShops,
@@ -90,12 +90,12 @@ export function renderAdmin(root: HTMLElement) {
       mountSignIn(main);
       return;
     }
-    const admin = await isAdmin();
-    if (!admin) {
+    const roles = await getAdminRoles();
+    if (!roles.platform && !roles.owner) {
       main.innerHTML = notAdminHTML(user.email ?? "");
       return;
     }
-    await mountDashboard(main);
+    await mountDashboard(main, roles);
   })();
 }
 
@@ -115,7 +115,7 @@ function unconfiguredHTML(): string {
       <p class="admin-gate__sub">The dashboard needs Supabase before it can load. Shopper screens still work with the bundled demo catalog.</p>
       <ol class="admin-gate__steps">
         <li>Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in <code>.env</code> (or Render env).</li>
-        <li>Run migrations <code>0001</code>–<code>0007</code> in the Supabase SQL Editor.</li>
+        <li>Run migrations <code>0001</code>–<code>0008</code> in the Supabase SQL Editor.</li>
         <li>Add your deploy URL under Authentication → Redirect URLs.</li>
         <li>Redeploy, then open <a href="?screen=shop-onboarding">shop onboarding</a>.</li>
       </ol>
@@ -132,7 +132,7 @@ function notAdminHTML(email: string): string {
         <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       </div>
       <h2 class="admin-gate__title">You're in, just not here</h2>
-      <p class="admin-gate__sub">Signed in as <strong>${escapeHTML(email)}</strong>. Ask the shop owner to add you to <code>public.admins</code> to unlock this view.</p>
+      <p class="admin-gate__sub">Signed in as <strong>${escapeHTML(email)}</strong>. List a shop via <a href="?screen=shop-onboarding">onboarding</a>, or ask an existing owner to add you on their team.</p>
       <a class="link-btn" href="?screen=home">Back to the app</a>
     </div>
   `;
@@ -144,8 +144,8 @@ function mountSignIn(host: HTMLElement) {
       <div class="admin-gate__art" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18v10H3z"/><path d="m3 7 9 6 9-6"/></svg>
       </div>
-      <h2 class="admin-gate__title">Shop dashboard</h2>
-      <p class="admin-gate__sub">A one-time link by email. Admins only.</p>
+      <h2 class="admin-gate__title">Shop insights</h2>
+      <p class="admin-gate__sub">A one-time link by email. For shop owners and platform operators.</p>
       <form id="admin-sign-in" class="admin-gate__form" novalidate>
         <input id="admin-email" type="email" required autocomplete="email"
                inputmode="email" placeholder="you@example.com" class="admin-gate__input" />
@@ -164,7 +164,7 @@ function mountSignIn(host: HTMLElement) {
     status.textContent = "Sending…";
     try {
       // Land them back on the admin dashboard after the link click.
-      await signInWithEmail(email, "admin");
+      await signInWithEmail(email, "dashboard");
       status.textContent = "Check your inbox for the sign-in link.";
     } catch (err) {
       status.textContent = err instanceof Error ? err.message : "Couldn't send the link. Try again.";
@@ -191,10 +191,28 @@ type CatalogRow = {
   image_url?: string | null;
 };
 
-async function mountDashboard(host: HTMLElement): Promise<void> {
+type DashMode = "owner" | "platform";
+const ADMIN_MODE_KEY = "toto.adminMode";
+
+function resolveDashMode(roles: AdminRoles): DashMode {
+  try {
+    const saved = sessionStorage.getItem(ADMIN_MODE_KEY);
+    if (saved === "owner" && roles.owner) return "owner";
+    if (saved === "platform" && roles.platform) return "platform";
+  } catch { /* ignore */ }
+  if (roles.owner) return "owner";
+  return "platform";
+}
+
+function setDashMode(mode: DashMode) {
+  try { sessionStorage.setItem(ADMIN_MODE_KEY, mode); } catch { /* ignore */ }
+}
+
+async function mountDashboard(host: HTMLElement, roles: AdminRoles): Promise<void> {
   const myShops = await fetchMyShops();
   const activeShop = resolveAdminShop(myShops);
   const shopId = activeShop?.id ?? null;
+  const mode = resolveDashMode(roles);
 
   const [
     headlines,
@@ -220,9 +238,6 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
     fetchMany<CatalogRow>("v_my_products", { limit: 2000 }),
   ]);
 
-  // Prefer per-shop rows (migration 0006). Fall back to unscoped rows
-  // when the migration hasn't been applied yet so the dashboard still
-  // renders for single-shop / legacy installs.
   const headline = pickForShop(headlines, shopId) ?? headlines[0] ?? null;
   const funnel = filterForShop(funnelAll, shopId).slice(0, 14);
   const topCategories = filterForShop(topCategoriesAll, shopId).slice(0, 10);
@@ -236,16 +251,173 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
     ? catalogAll.filter((r) => r.shop_id === shopId)
     : catalogAll;
 
-  const hero = headline?.sessions_7d ?? 0;
-  const totalStarted = funnel.reduce((n, r) => n + r.wizard_started, 0);
-  const totalAdded = funnel.reduce((n, r) => n + r.added_to_list, 0);
-  const overallConvPct = totalStarted > 0 ? Math.round((totalAdded / totalStarted) * 100) : null;
+  const insightsHTML = mode === "owner"
+    ? ownerInsightsHTML({
+        activeShop,
+        headline,
+        topCategories,
+        purposeMix,
+        activityMix,
+        profileMix,
+        productPerf,
+        demandGaps,
+        hourly,
+      })
+    : platformUsageHTML({
+        activeShop,
+        headline,
+        funnel,
+        hourly,
+      });
+
+  const opsHTML = roles.owner
+    ? ownerOpsHTML(catalog)
+    : "";
 
   host.innerHTML = `
+    ${modeToggleHTML(roles, mode)}
     ${shopSwitcherHTML(myShops, activeShop)}
+    ${insightsHTML}
+    ${opsHTML}
+    <a class="link-btn admin-back" href="?screen=home">Back to the app</a>
+  `;
 
+  wireModeToggle(host, roles);
+  wireShopSwitcher(host, myShops);
+  if (roles.owner) {
+    wireCatalogActions(host, catalog, shopId);
+    void mountShopSettings(host, activeShop);
+  }
+}
+
+function modeToggleHTML(roles: AdminRoles, mode: DashMode): string {
+  if (!(roles.owner && roles.platform)) return "";
+  return `
+    <div class="admin-mode-toggle" role="tablist" aria-label="Dashboard mode">
+      <button type="button" class="admin-mode-toggle__btn${mode === "owner" ? " is-active" : ""}"
+              data-admin-mode="owner" role="tab" aria-selected="${mode === "owner"}">Shop insights</button>
+      <button type="button" class="admin-mode-toggle__btn${mode === "platform" ? " is-active" : ""}"
+              data-admin-mode="platform" role="tab" aria-selected="${mode === "platform"}">Platform</button>
+    </div>
+  `;
+}
+
+function wireModeToggle(host: HTMLElement, roles: AdminRoles) {
+  host.querySelectorAll<HTMLButtonElement>("[data-admin-mode]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mode = btn.dataset.adminMode as DashMode;
+      if (mode !== "owner" && mode !== "platform") return;
+      if (mode === "owner" && !roles.owner) return;
+      if (mode === "platform" && !roles.platform) return;
+      setDashMode(mode);
+      window.location.reload();
+    });
+  });
+}
+
+type OwnerInsightData = {
+  activeShop: Shop | null;
+  headline: Headline | null;
+  topCategories: Array<{ category: string; appeared_in_plans: number }>;
+  purposeMix: Array<{ purpose: string | null; sessions: number }>;
+  activityMix: Array<{ activity: string | null; sessions: number }>;
+  profileMix: Array<{ gender: string | null; age: string | null; experience: string | null; sessions: number }>;
+  productPerf: ProductPerfRow[];
+  demandGaps: Array<{ category: string; sessions: number }>;
+  hourly: Array<{ hour_utc: number; sessions: number }>;
+};
+
+function ownerInsightsHTML(d: OwnerInsightData): string {
+  const topActivity = d.activityMix[0]?.activity ?? null;
+  const topPurpose = d.purposeMix[0]?.purpose ?? null;
+  const heroLine = topActivity
+    ? prettyActivity(topActivity)
+    : topPurpose
+      ? prettyPurpose(topPurpose)
+      : "What shoppers want";
+  const heroSub = topActivity || topPurpose
+    ? "Top interest this period"
+    : "Demand insights from Toto visits";
+  const gapCount = d.demandGaps.length;
+  const wanted = d.headline?.adds_7d ?? 0;
+  const shelfFinds = d.headline?.scans_7d ?? 0;
+
+  return `
     <header class="admin-hero">
-      <div class="admin-hero__eyebrow">${activeShop ? escapeHTML(activeShop.name) : "Shop dashboard"}</div>
+      <div class="admin-hero__eyebrow">${d.activeShop ? escapeHTML(d.activeShop.name) : "Shop insights"}</div>
+      <div class="admin-hero__metric">
+        <div class="admin-hero__value admin-hero__value--text">${escapeHTML(heroLine)}</div>
+        <div class="admin-hero__label">${escapeHTML(heroSub)}</div>
+      </div>
+    </header>
+
+    <section class="admin-kpis">
+      ${kpiCard("Wanted", wanted, "on lists · 7d")}
+      ${kpiCard("Shelf finds", shelfFinds, "matched · 7d")}
+      ${kpiCard("Demand gaps", gapCount, "categories")}
+      ${kpiTextCard("Top activity", topActivity ? prettyActivity(topActivity) : "None yet")}
+    </section>
+
+    <div class="admin-grid">
+      <section class="admin-card">
+        <h2>Planning for</h2>
+        ${barList(d.activityMix.map((r) => ({ label: prettyActivity(r.activity), value: r.sessions })))}
+      </section>
+
+      <section class="admin-card">
+        <h2>Why they're here</h2>
+        ${barList(d.purposeMix.map((r) => ({ label: prettyPurpose(r.purpose), value: r.sessions })))}
+      </section>
+
+      <section class="admin-card">
+        <h2>Categories they need</h2>
+        ${barList(d.topCategories.map((r) => ({ label: r.category, value: r.appeared_in_plans })))}
+      </section>
+
+      <section class="admin-card admin-card--alert">
+        <div class="admin-card__head">
+          <h2>Gaps in your offer</h2>
+          <span class="admin-card__pill admin-card__pill--alert">Stock signal</span>
+        </div>
+        ${d.demandGaps.length === 0
+          ? `<p class="admin-empty">Nothing missed yet.</p>`
+          : barList(d.demandGaps.map((r) => ({ label: r.category, value: r.sessions })), "alert")}
+      </section>
+
+      <section class="admin-card admin-card--wide">
+        <h2>Who's shopping</h2>
+        ${profileMixHTML(d.profileMix)}
+      </section>
+
+      <section class="admin-card admin-card--wide">
+        <h2>Products they want</h2>
+        ${productInterestTable(d.productPerf.slice(0, 25))}
+      </section>
+
+      <details class="admin-card admin-card--wide admin-card--muted">
+        <summary class="admin-card__summary">Busy hours <span class="admin-card__meta">staffing hint · UTC, last 14 days</span></summary>
+        ${hourlyHTML(d.hourly)}
+      </details>
+    </div>
+  `;
+}
+
+type PlatformData = {
+  activeShop: Shop | null;
+  headline: Headline | null;
+  funnel: FunnelRow[];
+  hourly: Array<{ hour_utc: number; sessions: number }>;
+};
+
+function platformUsageHTML(d: PlatformData): string {
+  const hero = d.headline?.sessions_7d ?? 0;
+  const totalStarted = d.funnel.reduce((n, r) => n + r.wizard_started, 0);
+  const totalAdded = d.funnel.reduce((n, r) => n + r.added_to_list, 0);
+  const overallConvPct = totalStarted > 0 ? Math.round((totalAdded / totalStarted) * 100) : null;
+
+  return `
+    <header class="admin-hero">
+      <div class="admin-hero__eyebrow">Platform · ${d.activeShop ? escapeHTML(d.activeShop.name) : "Toto usage"}</div>
       <div class="admin-hero__metric">
         <div class="admin-hero__value">${hero.toLocaleString()}</div>
         <div class="admin-hero__label">sessions, last 7 days</div>
@@ -253,63 +425,35 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
     </header>
 
     <section class="admin-kpis">
-      ${kpiCard("Today",        headline?.sessions_24h ?? 0, "sessions")}
-      ${kpiCard("30 days",      headline?.sessions_30d ?? 0, "sessions")}
-      ${kpiCard("Added to list", headline?.adds_7d ?? 0, "in 7d")}
-      ${kpiCard("Scanned",      headline?.scans_7d ?? 0, "in 7d")}
+      ${kpiCard("Today", d.headline?.sessions_24h ?? 0, "sessions")}
+      ${kpiCard("30 days", d.headline?.sessions_30d ?? 0, "sessions")}
+      ${kpiCard("List adds", d.headline?.adds_7d ?? 0, "in 7d")}
+      ${kpiCard("Scans", d.headline?.scans_7d ?? 0, "in 7d")}
     </section>
 
     <section class="admin-card">
       <div class="admin-card__head">
-        <h2>Funnel, last 14 days</h2>
+        <h2>Product funnel, last 14 days</h2>
         ${overallConvPct == null
           ? ""
           : `<span class="admin-card__pill">${overallConvPct}% reached list</span>`}
       </div>
-      ${funnelVisual(funnel)}
+      <p class="admin-card__note">App usage stages — for Toto operators, not shop-floor demand.</p>
+      ${funnelVisual(d.funnel)}
     </section>
 
     <div class="admin-grid">
-      <section class="admin-card">
-        <h2>Categories in demand</h2>
-        ${barList(topCategories.map((r) => ({ label: r.category, value: r.appeared_in_plans })))}
-      </section>
-
-      <section class="admin-card admin-card--alert">
-        <div class="admin-card__head">
-          <h2>Demand gaps</h2>
-          <span class="admin-card__pill admin-card__pill--alert">Stock signal</span>
-        </div>
-        ${demandGaps.length === 0
-          ? `<p class="admin-empty">Nothing missed yet.</p>`
-          : barList(demandGaps.map((r) => ({ label: r.category, value: r.sessions })), "alert")}
-      </section>
-
-      <section class="admin-card">
-        <h2>Trip purpose</h2>
-        ${barList(purposeMix.map((r) => ({ label: prettyPurpose(r.purpose), value: r.sessions })))}
-      </section>
-
-      <section class="admin-card">
-        <h2>Activity mix</h2>
-        ${barList(activityMix.map((r) => ({ label: prettyActivity(r.activity), value: r.sessions })))}
-      </section>
-
-      <section class="admin-card admin-card--wide">
-        <h2>Who's walking in</h2>
-        ${profileMixHTML(profileMix)}
-      </section>
-
-      <section class="admin-card admin-card--wide">
-        <h2>Product performance</h2>
-        ${productPerfTable(productPerf.slice(0, 25))}
-      </section>
-
       <section class="admin-card admin-card--wide">
         <h2>Usage by hour <span class="admin-card__meta">UTC, last 14 days</span></h2>
-        ${hourlyHTML(hourly)}
+        ${hourlyHTML(d.hourly)}
       </section>
+    </div>
+  `;
+}
 
+function ownerOpsHTML(catalog: CatalogRow[]): string {
+  return `
+    <div class="admin-grid admin-grid--ops">
       <section class="admin-card admin-card--wide" id="shop-settings-card">
         <div class="admin-card__head">
           <h2>Shop settings</h2>
@@ -341,13 +485,7 @@ async function mountDashboard(host: HTMLElement): Promise<void> {
         </details>
       </section>
     </div>
-
-    <a class="link-btn admin-back" href="?screen=home">Back to the app</a>
   `;
-
-  wireShopSwitcher(host, myShops);
-  wireCatalogActions(host, catalog, shopId);
-  void mountShopSettings(host, activeShop);
 }
 
 /** Filter rows that carry an optional shop_id. Rows without shop_id
@@ -1109,6 +1247,17 @@ function kpiCard(label: string, value: number, unit: string): string {
   `;
 }
 
+function kpiTextCard(label: string, value: string): string {
+  return `
+    <div class="admin-kpi">
+      <div class="admin-kpi__value admin-kpi__value--sm">${escapeHTML(value)}</div>
+      <div class="admin-kpi__label">
+        <span class="admin-kpi__label-main">${escapeHTML(label)}</span>
+      </div>
+    </div>
+  `;
+}
+
 /** Visual funnel: each step is a horizontal bar whose width reflects
  *  its absolute count relative to the top of funnel. Conversion %
  *  shown next to each bar. Reads top-to-bottom like a real funnel. */
@@ -1212,7 +1361,7 @@ type ProfileRow = {
 };
 
 function profileMixHTML(rows: ProfileRow[]): string {
-  if (rows.length === 0) return `<p class="admin-empty">No completed wizards yet.</p>`;
+  if (rows.length === 0) return `<p class="admin-empty">No shopper profiles yet.</p>`;
 
   // Roll up each dimension on its own.
   const sumBy = (key: keyof ProfileRow) => {
@@ -1244,8 +1393,9 @@ function profileMixHTML(rows: ProfileRow[]): string {
   `;
 }
 
-function productPerfTable(rows: ProductPerfRow[]): string {
-  if (rows.length === 0) return `<p class="admin-empty">No product interactions yet.</p>`;
+/** Owner-facing product interest (no app-usage jargon). */
+function productInterestTable(rows: ProductPerfRow[]): string {
+  if (rows.length === 0) return `<p class="admin-empty">No product interest yet.</p>`;
   return `
     <div class="admin-table-wrap">
       <table class="admin-table">
@@ -1253,11 +1403,10 @@ function productPerfTable(rows: ProductPerfRow[]): string {
           <tr>
             <th>Product</th>
             <th>Category</th>
-            <th>Views</th>
-            <th>Picks</th>
-            <th>Adds</th>
-            <th>Scans</th>
-            <th>Pick rate</th>
+            <th>Wanted</th>
+            <th>Swipe yes</th>
+            <th>Shelf finds</th>
+            <th>Interest</th>
           </tr>
         </thead>
         <tbody>
@@ -1270,9 +1419,8 @@ function productPerfTable(rows: ProductPerfRow[]): string {
               <tr>
                 <td>${escapeHTML(name)}</td>
                 <td>${escapeHTML(cat)}</td>
-                <td>${r.views}</td>
-                <td>${r.picks}</td>
                 <td>${r.adds}</td>
+                <td>${r.picks}</td>
                 <td>${r.scans}</td>
                 <td><strong>${rate}</strong></td>
               </tr>

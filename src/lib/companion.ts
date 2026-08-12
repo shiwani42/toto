@@ -190,7 +190,7 @@ export function mountCompanion(screen: Screen) {
   // ("Warming up the camera…" / "Shopping is more fun together") and
   // adds character, so the companion is welcome there.
   const noCompanion = new Set<Screen>([
-    "home", "admin",
+    "home", "admin", "dashboard",
     "scan", "compare", "repair", "fit",
     "connected",
   ]);

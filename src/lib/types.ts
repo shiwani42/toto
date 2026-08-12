@@ -38,6 +38,7 @@ export type Screen =
   | "connected"
   | "settings"
   | "fit"
+  | "dashboard"
   | "admin"
   | "shop-onboarding"
   | "nearby"

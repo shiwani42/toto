@@ -2,7 +2,7 @@
 //   * Signed out → send a magic link, on return land back here.
 //   * Signed in  → render a single calm form (name, slug, city) and
 //     create the shops + shop_admins rows on submit. After save we
-//     redirect to /?screen=admin which will now scope to this shop.
+//     redirect to /?screen=dashboard which will now scope to this shop.
 
 import { authConfigured, waitForAuthUser, signInWithEmail, onAuthChange } from "../lib/auth";
 import { createShop, slugify } from "../lib/shops";
@@ -197,7 +197,7 @@ function mountForm(host: HTMLElement, ownerEmail: string) {
       statusEl.textContent = "Done. Loading your dashboard…";
       // Land on the admin scoped to this shop.
       const url = new URL(window.location.href);
-      url.searchParams.set("screen", "admin");
+      url.searchParams.set("screen", "dashboard");
       url.searchParams.set("shop", shop.slug);
       window.location.href = url.toString();
     } catch (err) {

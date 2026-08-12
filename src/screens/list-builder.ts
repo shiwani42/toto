@@ -5,6 +5,7 @@ import { loadSession } from "../lib/session";
 import { pushSuggestion } from "../lib/companion";
 import { t } from "../lib/i18n";
 import { colorSwatch } from "../lib/colors";
+import { track } from "../lib/analytics";
 
 function escapeHTML(s: string): string {
   return s
@@ -189,9 +190,17 @@ export function renderListBuilder(root: HTMLElement) {
   }
 
   let debounce: number | undefined;
+  let lastTrackedQuery = "";
   qEl.addEventListener("input", () => {
     window.clearTimeout(debounce);
-    debounce = window.setTimeout(refreshResults, 120);
+    debounce = window.setTimeout(() => {
+      refreshResults();
+      const q = qEl.value.trim().slice(0, 40);
+      if (q.length >= 2 && q !== lastTrackedQuery) {
+        lastTrackedQuery = q;
+        track("list_search", { q, result_count: search(q, 20).length });
+      }
+    }, 120);
   });
 
   resultsEl.addEventListener("click", (e) => {

@@ -2,6 +2,7 @@ import { broadcastSessionEvent } from "./session";
 import { track } from "./analytics";
 import { totoReact } from "./companion";
 import { playAdded } from "./sounds";
+import { getProduct } from "./catalog";
 
 const KEY = "toto.list";
 
@@ -33,7 +34,14 @@ export function addToList(code: string, source: string = "manual"): StoredList {
   if (!list.includes(code)) {
     list.push(code);
     broadcast("list:added", code);
-    track("list_added", { code, source });
+    const p = getProduct(code);
+    track("list_added", {
+      code,
+      source,
+      category: p?.category ?? null,
+      brand: p?.brand ?? null,
+      in_stock: p ? p.stock_front > 0 : null,
+    });
     totoReact("wag"); // a real pet wags when you bring something home
     playAdded();
   }

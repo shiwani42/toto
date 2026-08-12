@@ -49,7 +49,7 @@ await ctx.addInitScript(() => {
 // Admin sign-in screen
 {
   const page = await ctx.newPage();
-  await page.goto(BASE + "/?screen=admin", { waitUntil: "domcontentloaded" });
+  await page.goto(BASE + "/?screen=dashboard", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2200);
   await page.screenshot({ path: join(OUT, "13-admin.png"), fullPage: true });
   console.log("✓ admin");

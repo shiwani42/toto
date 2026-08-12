@@ -345,6 +345,8 @@ export function renderPlan(root: HTMLElement) {
       track("wizard_complete", {
         purpose: answers.purpose,
         activity: answers.activity?.key ?? null,
+        location: answers.location ? answers.location.slice(0, 60) : null,
+        specifics: answers.specifics.slice(0, 12),
         gender: prefs.gender,
         age: prefs.age,
         experience: prefs.experience,
