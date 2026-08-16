@@ -1,0 +1,47 @@
+{
+  "name": "demo_build",
+  "version": "1.0.0",
+  "description": "Toto product demo film (Remotion)",
+  "repository": {},
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@remotion/cli": "4.0.509",
+    "@remotion/google-fonts": "4.0.509",
+    "@remotion/media": "4.0.509",
+    "@remotion/tailwind-v4": "4.0.509",
+    "@remotion/transitions": "4.0.509",
+    "@supabase/supabase-js": "^2.50.0",
+    "playwright": "^1.53.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.509",
+    "tailwindcss": "4.0.0"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.509",
+    "@types/node": "^26.2.0",
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "eslint": "9.19.0",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "scripts": {
+    "capture": "node capture_walkthrough.mjs",
+    "narration": "python3 scripts/generate_narration.py",
+    "assets": "python3 scripts/prepare_assets.py",
+    "dev": "npm run assets && remotion studio src/index.ts --no-open",
+    "test": "vitest run",
+    "lint": "eslint src && tsc --noEmit",
+    "compositions": "npm run assets && remotion compositions src/index.ts",
+    "check": "npm run test && npm run lint && npm run compositions",
+    "render": "npm run assets && OUT=$(node scripts/next-demo-path.mjs) && remotion render src/index.ts Demo \"$OUT\" --codec=h264 --audio-codec=aac --crf=16 --pixel-format=yuv420p && echo \"Wrote $OUT\"",
+    "poster": "npm run assets && remotion still src/index.ts Demo poster.png --frame=300"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}

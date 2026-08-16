@@ -1,0 +1,12 @@
+node_modules
+dist
+.DS_Store
+.env
+out
+public/
+recordings/_raw/
+*.partial.mp4
+demo-v*.mp4
+*-preview.png
+blender/*.blend
+blender/*.blend1

@@ -1,0 +1,19 @@
+Pexels stills (free license), used as live plates:
+
+empty-rack.jpg
+  https://www.pexels.com/photo/assorted-clothes-hanged-on-rack-996329/
+
+shopper.jpg
+  Woman at a clothing rack with a phone.
+  https://www.pexels.com/photo/7679720/
+
+boutique.jpg
+  https://www.pexels.com/photo/5709661/
+
+after-hours.jpg
+  https://www.pexels.com/photo/7671168/
+
+outing.jpg
+  Hiking still already in demo_build/public (Pexels 1271619).
+
+App screens are Toto captures from this repo, shown full-frame so letters stay real.

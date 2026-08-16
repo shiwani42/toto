@@ -1,0 +1,27 @@
+{
+  "output": "walkthrough.mp4",
+  "width": 390,
+  "height": 844,
+  "fps": 30,
+  "duration_seconds": 76.4,
+  "app_url": "http://127.0.0.1:5174",
+  "segments": {
+    "home": { "start": 0, "end": 6.603 },
+    "plan": { "start": 6.603, "end": 23.009 },
+    "floor": { "start": 23.009, "end": 34.611 },
+    "fit": { "start": 34.611, "end": 40.263 },
+    "repair": { "start": 40.263, "end": 43.402 },
+    "twin": { "start": 43.402, "end": 52.66 },
+    "dashboard": { "start": 52.66, "end": 76.417 }
+  },
+  "actions": [
+    { "at": 6.6, "label": "plan-open", "expect_text": "What kind of trip" },
+    { "at": 17.4, "label": "plan-list", "expect_text": "pack" },
+    { "at": 23.0, "label": "map", "expect_text": "plan" },
+    { "at": 26.3, "label": "scan", "expect_text": "scan" },
+    { "at": 34.6, "label": "fit", "expect_text": "photo" },
+    { "at": 40.3, "label": "repair", "expect_text": "Repair" },
+    { "at": 46.0, "label": "connected", "expect_text": "FAM-" },
+    { "at": 52.7, "label": "dashboard", "expect_text": "Shop insights" }
+  ]
+}
