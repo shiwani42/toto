@@ -65,6 +65,7 @@ body.no-tab-bar {
   max-width: 430px;
   margin: 0 auto;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  overflow-x: hidden;
 }
 
 /* ─── Skip link ──────────────────────────────────────────────────────────── */
@@ -4101,16 +4102,59 @@ body.has-cart .toto-companion {
   padding: 4px 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  flex: 1;
-  min-height: 120px;
-  max-height: 40vh;
-  overflow-y: auto;
+  gap: 10px;
+  flex: 0 1 auto;
+  min-height: 0;
 }
 .conn-stream__row {
   font-size: 13.5px;
   color: var(--fg);
   line-height: 1.45;
+}
+.conn-hint {
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--accent-border);
+  border-radius: 14px;
+  color: var(--fg);
+}
+.conn-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.conn-pick__art {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.conn-pick__art img,
+.conn-pick__art .product-art {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+.conn-pick__name {
+  font-weight: 600;
+  font-size: 13px;
+}
+.conn-pick__meta {
+  font-size: 12px;
+  color: var(--muted-fg);
+}
+.conn-pick__tag {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  white-space: nowrap;
 }
 .conn-stream__time {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -6335,29 +6379,104 @@ body.has-cart .toto-companion {
 }
 
 .home-greeting {
-  padding: 24px 16px 18px;
+  padding: 24px 0 18px;
   text-align: center;
-  background: linear-gradient(180deg, var(--bg-warm) 0%, transparent 100%);
+  background: #e4ded5;
   border-radius: 22px;
   margin-bottom: 4px;
+  overflow: hidden;
+}
+
+.toto-arrive {
+  width: 100%;
+  margin: 0 0 8px;
+  overflow: hidden;
+  background: #e4ded5;
 }
 .toto-hero {
-  display: flex;
-  justify-content: center;
-  margin: 0 auto 12px;
+  display: block;
+  width: 100%;
+  margin: 0;
   padding: 0;
-  background: transparent;
+  background: #e4ded5;
   border: none;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
   font: inherit;
   color: inherit;
   cursor: pointer;
-  transform-origin: 50% 100%;
-  /* Entrance hop, then a gentle floating idle. */
-  animation:
-    toto-enter 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both,
-    toto-float 4.5s ease-in-out 0.7s infinite;
+  overflow: hidden;
 }
-.toto-hero svg { display: block; }
+.toto-hero img,
+.toto-hero video { display: block; background: #e4ded5; }
+
+.toto-figure {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  line-height: 0;
+  max-width: min(280px, 78vw);
+  margin: 0 auto;
+  background: transparent;
+}
+.toto-figure--wide {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+}
+.toto-figure__vid {
+  width: 100%;
+  height: auto;
+  background: #e4ded5;
+  border: none;
+}
+.toto-figure__img {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  object-position: center bottom;
+  background: none;
+  border: none;
+}
+
+.toto-av {
+  display: block;
+  border-radius: 50%;
+  overflow: hidden;
+  line-height: 0;
+}
+.toto-av img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 28%;
+  transform: scale(1.18);
+}
+
+.toto-companion__breath .toto-av {
+  width: 56px;
+  height: 56px;
+}
+
+.toto-companion__avatar::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  background: #2C7A55;
+  -webkit-mask: url("/toto/sparkle.svg") center / contain no-repeat;
+  mask: url("/toto/sparkle.svg") center / contain no-repeat;
+  pointer-events: none;
+  animation: toto-sparkle-twinkle 2.6s ease-in-out infinite;
+}
+@keyframes toto-sparkle-twinkle {
+  0%, 100% { opacity: 0.15; transform: scale(0.7) rotate(0deg); }
+  40%      { opacity: 1; transform: scale(1) rotate(18deg); }
+  70%      { opacity: 0.35; transform: scale(0.85) rotate(-8deg); }
+}
 
 @keyframes toto-enter {
   0%   { transform: scale(0.4) translateY(60px); opacity: 0; }
@@ -6464,10 +6583,7 @@ body.has-cart .toto-companion {
   50%      { transform: translateY(-0.6px); }
 }
 
-/* Tap-to-wave: re-trigger the greeting + faster tail wag */
-.toto-hero--wave .toto-head { animation: toto-greet 1.4s ease-in-out both; }
-.toto-hero--wave .toto-tail { animation-duration: 0.7s !important; }
-.toto-hero--wave .toto-paw  { animation: toto-paw-wave 1.2s ease-in-out both; }
+.toto-hero--wave { animation: toto-paw-wave 0.9s cubic-bezier(0.34, 1.56, 0.64, 1); }
 @keyframes toto-paw-wave {
   0%   { transform: translateY(0); }
   20%  { transform: translateY(-6px) rotate(-3deg); }
@@ -6509,6 +6625,7 @@ body.has-cart .toto-companion {
 
 .home-greeting__hi {
   margin: 0;
+  padding: 0 16px;
   font-size: 34px;
   line-height: 1.1;
   letter-spacing: -0.03em;
@@ -6516,7 +6633,7 @@ body.has-cart .toto-companion {
   color: var(--fg);
 }
 .home-greeting__sub {
-  margin: 10px 0 0;
+  margin: 10px 16px 0;
   font-size: 17px;
   line-height: 1.4;
   color: var(--muted-fg);

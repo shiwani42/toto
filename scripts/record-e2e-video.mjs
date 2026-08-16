@@ -2,7 +2,7 @@
  * Record a narrated-paced E2E video: shopper on Toto → Default Shop →
  * list/plan/map → owner dashboard.
  *
- * Output: video/toto-e2e-shopper-admin.mp4
+ * Output: video/toto-e2e-shopper-admin-vN.mp4 (never overwrites prior versions)
  *
  *   node scripts/record-e2e-video.mjs
  */
@@ -17,8 +17,23 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const BASE = process.env.APP_URL || "http://127.0.0.1:5174";
 const RAW_DIR = path.join(ROOT, "video", "_raw");
-const OUT_MP4 = path.join(ROOT, "video", "toto-e2e-shopper-admin.mp4");
 fs.mkdirSync(RAW_DIR, { recursive: true });
+fs.mkdirSync(path.join(ROOT, "video"), { recursive: true });
+
+function nextVersionedMp4(dir, prefix) {
+  const re = new RegExp(`^${prefix}-v(\\d+)\\.mp4$`, "i");
+  let max = 0;
+  for (const name of fs.readdirSync(dir)) {
+    const m = name.match(re);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  // Treat legacy unversioned file as v1 already taken.
+  if (fs.existsSync(path.join(dir, `${prefix}.mp4`)) && max < 1) max = 1;
+  return path.join(dir, `${prefix}-v${max + 1}.mp4`);
+}
+
+const OUT_MP4 = nextVersionedMp4(path.join(ROOT, "video"), "toto-e2e-shopper-admin");
+console.log("Will write:", OUT_MP4);
 
 const env = Object.fromEntries(
   fs.readFileSync(path.join(ROOT, ".env"), "utf8")

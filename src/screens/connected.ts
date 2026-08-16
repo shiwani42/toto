@@ -54,6 +54,8 @@ export function renderConnected(root: HTMLElement) {
 
       <ul class="conn-roster" id="roster"></ul>
 
+      <div class="conn-board" id="board"></div>
+
       <ul class="conn-stream" id="stream"></ul>
 
       <form class="conn-chat" id="chat-form">
@@ -83,7 +85,13 @@ export function renderConnected(root: HTMLElement) {
   const shareBtn = root.querySelector("#share") as HTMLButtonElement;
   const leaveBtn = root.querySelector("#leave") as HTMLButtonElement;
 
-  let members: Member[] = [];
+  let members: Member[] = [
+    {
+      id: state.me.id,
+      name: state.me.name,
+      emoji: state.me.emoji,
+    },
+  ];
   // Single combined stream for activity and chat. Newest at the
   // bottom so the chat feel reads naturally and you can scroll back
   // through what people did/said.
@@ -226,7 +234,15 @@ export function renderConnected(root: HTMLElement) {
 
   session.listener = {
     onPresence: (m) => {
-      members = m;
+      members = m.length
+        ? m
+        : [
+            {
+              id: state.me.id,
+              name: state.me.name,
+              emoji: state.me.emoji,
+            },
+          ];
       renderRoster();
     },
     onEvent: (e) => {
@@ -263,14 +279,43 @@ export function renderConnected(root: HTMLElement) {
     },
   };
 
+  function seedOpenSession() {
+    const list = getList();
+    const who = `${state.me.emoji} ${state.me.name}`;
+    pushEvent(
+      `<div class="conn-hint">Share <strong>${escapeHTML(state.code)}</strong>. They see this list the moment they join.</div>`,
+    );
+    if (list.length > 0) {
+      pushEvent(
+        `<strong>${escapeHTML(who)}</strong> brought ${list.length} item${list.length > 1 ? "s" : ""}`,
+      );
+      for (const code of list.slice(0, 5)) {
+        const p = getProduct(code);
+        const name = p?.name ?? code;
+        const brand = p ? `${p.brand} · ${p.size}` : "";
+        const art = p ? illustrationForProduct(p) : "";
+        pushEvent(`
+          <div class="conn-pick">
+            ${art ? `<span class="conn-pick__art" aria-hidden="true">${art}</span>` : ""}
+            <div>
+              <div class="conn-pick__name">${escapeHTML(name)}</div>
+              ${brand ? `<div class="conn-pick__meta">${escapeHTML(brand)}</div>` : ""}
+            </div>
+            <span class="conn-pick__tag">on the list</span>
+          </div>
+        `);
+      }
+    } else {
+      pushEvent(
+        `<strong>${escapeHTML(who)}</strong> is waiting. Add a jacket, then they can vote.`,
+      );
+    }
+  }
+  seedOpenSession();
+
   // Quietly broadcast our presence + cart snapshot when the page mounts.
   setTimeout(async () => {
     const list = getList();
-    if (list.length > 0) {
-      pushEvent(
-        `<strong>${escapeHTML(`${state.me.emoji} ${state.me.name}`)}</strong> joined with ${list.length} item${list.length > 1 ? "s" : ""}`,
-      );
-    }
     await Promise.all([
       session.send({ kind: "list:request-snapshot", from: state.me.id }),
       list.length > 0

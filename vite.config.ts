@@ -13,6 +13,13 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: [
         "favicon.svg",
+        "toto/sit.png",
+        "toto/wink.png",
+        "toto/face.png",
+        "toto/enter.webm",
+        "toto/enter.mp4",
+        "toto/sit-plate.png",
+        "toto/sparkle.svg",
         "icons/apple-touch-icon.png",
         "icons/icon-192.png",
         "icons/icon-512.png",
@@ -60,7 +67,7 @@ export default defineConfig({
       },
       workbox: {
         // App shell + hashed assets + bundled catalog (via JS chunk) + WASM.
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,woff2,wasm,json,webmanifest}"],
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,webm,mp4,woff2,wasm,json,webmanifest}"],
         // Navigations: network-first so a deploy is picked up when online;
         // falls back to the cached shell offline.
         navigateFallback: "/index.html",

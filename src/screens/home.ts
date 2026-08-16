@@ -1,7 +1,7 @@
 import { loadSession } from "../lib/session";
 import { getList } from "../lib/list";
 import { icon } from "../lib/icons";
-import { totoMascot } from "../lib/toto";
+import { totoHeroWalk } from "../lib/toto";
 import { t } from "../lib/i18n";
 import { getInsights } from "../lib/history";
 import {
@@ -58,7 +58,9 @@ export function renderHome(root: HTMLElement) {
       ` : ""}
 
       <section class="home-greeting">
-        <button type="button" class="toto-hero" id="toto-hero" aria-label="Hi from Toto">${totoMascot(180)}</button>
+        <div class="toto-arrive toto-arrive--entering" id="toto-arrive">
+          <button type="button" class="toto-hero" id="toto-hero" aria-label="Hi from Toto">${totoHeroWalk()}</button>
+        </div>
         <h1 class="home-greeting__hi">${isReturning ? t("home.back") : t("home.hi")}</h1>
         <p class="home-greeting__sub">${
           isReturning && lastCategory
@@ -140,12 +142,27 @@ export function renderHome(root: HTMLElement) {
   const installSlot = root.querySelector("#pwa-install-slot") as HTMLElement | null;
   if (installSlot) mountInstallHint(installSlot);
 
-  // Tap Toto → re-trigger the greeting wiggle + a faster tail wag burst.
+  const stage = root.querySelector("#toto-arrive");
   const hero = root.querySelector("#toto-hero");
+  const vid = hero?.querySelector("video") as HTMLVideoElement | null;
+  const reduceMotion = document.documentElement.dataset.reduceMotion === "true";
+  if (reduceMotion && vid) {
+    vid.pause();
+    vid.removeAttribute("autoplay");
+    stage?.classList.remove("toto-arrive--entering");
+  } else {
+    vid?.addEventListener("ended", () => {
+      stage?.classList.remove("toto-arrive--entering");
+    });
+  }
   hero?.addEventListener("click", () => {
     hero.classList.remove("toto-hero--wave");
-    void (hero as HTMLElement).offsetWidth; // restart the animation
+    void (hero as HTMLElement).offsetWidth;
     hero.classList.add("toto-hero--wave");
+    if (vid && !reduceMotion) {
+      vid.currentTime = Math.max(0, (vid.duration || 0) - 0.08);
+      vid.pause();
+    }
     if ("vibrate" in navigator) navigator.vibrate(12);
   });
 

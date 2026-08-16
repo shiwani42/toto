@@ -131,7 +131,7 @@ export function renderDone(root: HTMLElement) {
     <main class="screen-done ${allFound ? "screen-done--celebrate" : ""}">
       ${allFound ? `<div class="paw-confetti" aria-hidden="true">${pawConfettiHTML()}</div>` : ""}
       <section class="done-card">
-        <div class="done-toto ${allFound ? "done-toto--celebrate" : ""}" aria-hidden="true">${totoMascot(120)}</div>
+        <div class="done-toto ${allFound ? "done-toto--celebrate" : ""}" aria-hidden="true">${totoMascot(168, allFound ? "wink" : "sit")}</div>
         <h1 class="done-headline">${escapeHTML(headline)}</h1>
         <p class="done-sub">${escapeHTML(sub)}</p>
       </section>
