@@ -280,6 +280,7 @@ export function renderConnected(root: HTMLElement) {
   };
 
   function seedOpenSession() {
+    if (!state) return;
     const list = getList();
     const who = `${state.me.emoji} ${state.me.name}`;
     pushEvent(
