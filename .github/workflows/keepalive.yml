@@ -4,10 +4,13 @@
 # Runs twice a week (safer than exactly every 7 days). Also runnable
 # by hand: Actions → Keepalive → Run workflow.
 #
-# Required repo secrets (Settings → Secrets and variables → Actions):
+# Secrets are optional. If SUPABASE_URL / SUPABASE_ANON_KEY are unset,
+# the job reads the public publishable config from the live app bundle
+# (same values already shipped to the browser).
+#
+# Optional repo secrets (Settings → Secrets and variables → Actions):
 #   SUPABASE_URL       — same value as VITE_SUPABASE_URL
 #   SUPABASE_ANON_KEY  — same value as VITE_SUPABASE_ANON_KEY
-# Optional:
 #   APP_URL            — defaults to https://toto-4xfl.onrender.com
 
 name: Keepalive
@@ -29,6 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           url="${APP_URL:-https://toto-4xfl.onrender.com}"
+          url="${url%/}"
           code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 30 "$url/")
           echo "Render HTTP $code ($url)"
           case "$code" in
@@ -38,26 +42,60 @@ jobs:
 
       - name: Ping Supabase REST
         env:
+          APP_URL: ${{ secrets.APP_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
-            echo "Missing SUPABASE_URL / SUPABASE_ANON_KEY secrets."
-            echo "Add them under Settings → Secrets and variables → Actions."
+          app="${APP_URL:-https://toto-4xfl.onrender.com}"
+          app="${app%/}"
+          base="${SUPABASE_URL:-}"
+          key="${SUPABASE_ANON_KEY:-}"
+
+          if [ -z "$base" ] || [ -z "$key" ]; then
+            echo "Secrets unset; reading public Supabase config from $app"
+            html=$(curl -sS --max-time 30 "$app/")
+            js_path=$(printf '%s' "$html" | grep -oE '/assets/index-[^"]+\.js' | head -1)
+            if [ -z "$js_path" ]; then
+              echo "Could not find the app JS bundle."
+              exit 1
+            fi
+            bundle=$(curl -sS --max-time 30 "$app$js_path")
+            if [ -z "$base" ]; then
+              base=$(printf '%s' "$bundle" | grep -oE 'https://[a-z0-9-]+\.supabase\.co' | head -1)
+            fi
+            if [ -z "$key" ]; then
+              key=$(printf '%s' "$bundle" | grep -oE 'sb_publishable_[A-Za-z0-9_-]+' | head -1)
+            fi
+            if [ -z "$key" ]; then
+              key=$(printf '%s' "$bundle" | grep -oE 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' | head -1)
+            fi
+          fi
+
+          if [ -z "$base" ]; then
+            echo "Could not resolve Supabase URL."
             exit 1
           fi
-          base="${SUPABASE_URL%/}"
-          # Light authenticated REST hit — enough to count as project activity.
-          code=$(curl -sS -o /tmp/sb-keepalive.out -w "%{http_code}" --max-time 30 \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            -H "Accept: application/json" \
-            "${base}/rest/v1/")
-          echo "Supabase REST HTTP $code"
-          # 200 OK, or 401/404 still prove the project answered (not paused).
+          base="${base%/}"
+
+          if [ -n "$key" ]; then
+            path="/rest/v1/shops?select=id&limit=1"
+            code=$(curl -sS -o /tmp/sb-keepalive.out -w "%{http_code}" --max-time 30 \
+              -H "apikey: ${key}" \
+              -H "Authorization: Bearer ${key}" \
+              -H "Accept: application/json" \
+              "${base}${path}")
+          else
+            path="/rest/v1/"
+            code=$(curl -sS -o /tmp/sb-keepalive.out -w "%{http_code}" --max-time 30 \
+              -H "Accept: application/json" \
+              "${base}${path}")
+          fi
+
+          echo "Supabase REST HTTP $code (${base}${path})"
+          # 2xx = query landed. 401/403/404/406 still prove the project answered.
           case "$code" in
-            200|401|404) ;;
+            2*|401|403|404|406) ;;
             *)
               echo "Supabase did not respond as expected (HTTP $code)."
               exit 1

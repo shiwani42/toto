@@ -166,7 +166,8 @@ Code cannot apply these to the remote Supabase / Render project from a typical a
 6. **Smoke walkthrough** — [ ] Seed catalog [ ] Upload zone map [ ] Place zone pins + Save [ ] Entry QR download/print [ ] Edit a product photo [ ] Open `/?shop=<slug>` and walk list → map → scan (use `data/sample-barcodes.pdf` or `data/demo-shelf.html`).
 
 7. **Keepalive (Supabase Free pause)** — free projects can pause after ~7 idle days. Render static cannot self-ping. Use the GitHub Action [`.github/workflows/keepalive.yml`](./.github/workflows/keepalive.yml) (Mon/Thu + manual run):
-   - [ ] Repo → Settings → Secrets and variables → Actions: add `SUPABASE_URL` and `SUPABASE_ANON_KEY` (same values as Render `VITE_SUPABASE_*`; optional `APP_URL`)
+   - Secrets are **optional**. If unset, the job reads the public publishable config from the live app.
+   - Optional: Repo → Settings → Secrets and variables → Actions: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `APP_URL`
    - [ ] Actions → Keepalive → Run workflow once; confirm both steps green
    - [ ] Leave the schedule enabled (Mon/Thu 09:00 UTC)
 
