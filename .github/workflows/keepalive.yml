@@ -33,14 +33,20 @@ jobs:
           set -euo pipefail
           url="${APP_URL:-https://toto-4xfl.onrender.com}"
           url="${url%/}"
-          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 30 "$url/")
-          echo "Render HTTP $code ($url)"
-          case "$code" in
-            2*|3*) ;;
-            *) echo "Unexpected status from app URL"; exit 1 ;;
-          esac
 
-      - name: Ping Supabase REST
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 45 "$url/" || true)
+            echo "Render attempt $attempt: HTTP $code ($url)"
+            case "$code" in
+              2*|3*) exit 0 ;;
+            esac
+            sleep 5
+          done
+
+          echo "Render did not return a success status."
+          exit 1
+
+      - name: Ping Supabase
         env:
           APP_URL: ${{ secrets.APP_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -54,22 +60,27 @@ jobs:
 
           if [ -z "$base" ] || [ -z "$key" ]; then
             echo "Secrets unset; reading public Supabase config from $app"
-            html=$(curl -sS --max-time 30 "$app/")
-            js_path=$(printf '%s' "$html" | grep -oE '/assets/index-[^"]+\.js' | head -1)
-            if [ -z "$js_path" ]; then
-              echo "Could not find the app JS bundle."
-              exit 1
-            fi
-            bundle=$(curl -sS --max-time 30 "$app$js_path")
-            if [ -z "$base" ]; then
-              base=$(printf '%s' "$bundle" | grep -oE 'https://[a-z0-9-]+\.supabase\.co' | head -1)
-            fi
-            if [ -z "$key" ]; then
-              key=$(printf '%s' "$bundle" | grep -oE 'sb_publishable_[A-Za-z0-9_-]+' | head -1)
-            fi
-            if [ -z "$key" ]; then
-              key=$(printf '%s' "$bundle" | grep -oE 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' | head -1)
-            fi
+            for attempt in 1 2 3; do
+              html=$(curl -sS --max-time 45 "$app/" || true)
+              js_path=$(printf '%s' "$html" | grep -oE '/assets/index-[^"]+\.js' | head -1 || true)
+              if [ -n "$js_path" ]; then
+                bundle=$(curl -sS --max-time 45 "$app$js_path" || true)
+                if [ -z "$base" ]; then
+                  base=$(printf '%s' "$bundle" | grep -oE 'https://[a-z0-9-]+\.supabase\.co' | head -1 || true)
+                fi
+                if [ -z "$key" ]; then
+                  key=$(printf '%s' "$bundle" | grep -oE 'sb_publishable_[A-Za-z0-9_-]+' | head -1 || true)
+                fi
+                if [ -z "$key" ]; then
+                  key=$(printf '%s' "$bundle" | grep -oE 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' | head -1 || true)
+                fi
+              fi
+              if [ -n "$base" ] && [ -n "$key" ]; then
+                break
+              fi
+              echo "Config scrape attempt $attempt did not resolve URL/key; retrying..."
+              sleep 5
+            done
           fi
 
           if [ -z "$base" ]; then
@@ -79,25 +90,36 @@ jobs:
           base="${base%/}"
 
           if [ -n "$key" ]; then
-            path="/rest/v1/shops?select=id&limit=1"
-            code=$(curl -sS -o /tmp/sb-keepalive.out -w "%{http_code}" --max-time 30 \
-              -H "apikey: ${key}" \
-              -H "Authorization: Bearer ${key}" \
-              -H "Accept: application/json" \
-              "${base}${path}")
+            path="/auth/v1/health"
+            for attempt in 1 2 3; do
+              code=$(curl -sS -o /tmp/sb-keepalive.out -w "%{http_code}" --max-time 45 \
+                -H "apikey: ${key}" \
+                -H "Authorization: Bearer ${key}" \
+                -H "Accept: application/json" \
+                "${base}${path}" || true)
+              echo "Supabase attempt $attempt: HTTP $code (${base}${path})"
+              case "$code" in
+                2*) exit 0 ;;
+              esac
+              sleep 5
+            done
           else
             path="/rest/v1/"
-            code=$(curl -sS -o /tmp/sb-keepalive.out -w "%{http_code}" --max-time 30 \
-              -H "Accept: application/json" \
-              "${base}${path}")
+            for attempt in 1 2 3; do
+              code=$(curl -sS -o /tmp/sb-keepalive.out -w "%{http_code}" --max-time 45 \
+                -H "Accept: application/json" \
+                "${base}${path}" || true)
+              echo "Supabase attempt $attempt: HTTP $code (${base}${path})"
+              case "$code" in
+                2*|401|403|404|406) exit 0 ;;
+              esac
+              sleep 5
+            done
           fi
 
-          echo "Supabase REST HTTP $code (${base}${path})"
-          # 2xx = query landed. 401/403/404/406 still prove the project answered.
-          case "$code" in
-            2*|401|403|404|406) ;;
-            *)
-              echo "Supabase did not respond as expected (HTTP $code)."
-              exit 1
-              ;;
-          esac
+          echo "Supabase did not respond as expected."
+          exit 1
+
+      - name: Summary
+        run: |
+          echo "Keepalive OK: Render app and Supabase both answered."
